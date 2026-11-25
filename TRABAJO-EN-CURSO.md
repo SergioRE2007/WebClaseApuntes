@@ -4,9 +4,18 @@ Rama: `wip/apuntes-curso-2dam`. **No está en producción.** La rama de producci
 
 Se paró el 25/11/2026 a las 20:05 para ahorrar uso. Antes de pasarla a producción hay que terminar lo pendiente y comprobar que `npm run build` pasa.
 
-## Material de origen (no está en el repo)
-- `C:/Users/sergi/Documents/TFG/Primeros pasos/TodoTFG-Apuntes`: los dos resúmenes "Lo dado en clase", `Clases/`, `Requisitos/` y `Material de clase/`.
-- `Extras para TodoTFG/`, en la raíz del repo. No está en git: "Contexto para la web.md" tiene las reglas del material (lo no dado, `[dudoso]`, versiones…).
+## Material de origen (NO está en el repo: cópialo al otro PC)
+- `TodoTFG-Apuntes/`: en el PC original está en `C:/Users/sergi/Documents/TFG/Primeros pasos/TodoTFG-Apuntes`. Tiene los dos resúmenes "Lo dado en clase", `Clases/`, `Requisitos/` y `Material de clase/`.
+- `Extras para TodoTFG/`: en el PC original está en la raíz del repo, sin añadir a git. Su "Contexto para la web.md" tiene las reglas del material.
+- Si continúas en otro PC, copia las dos carpetas y cambia sus rutas en los argumentos del workflow (`corpus` y `extras`). Sin ellas no se pueden revisar las páginas contra las fuentes. Los índices y el build sí se pueden hacer sin ellas.
+
+## Reglas del material (resumen de "Contexto para la web.md")
+- Lo que no se dio en clase va siempre marcado con `<NoDadoEnClase>`.
+- Las marcas `[dudoso]` se muestran con `<Dudoso>` y no se corrigen.
+- El código que no se vio no se inventa: se marca con `<NoSeVio>`.
+- Las "prácticas raras" de clase van como aviso con `<Comparar>`.
+- Las versiones no se cambian: Angular 19, Room 3, Retrofit 3 con Gson, Prisma 6, Zod 4 y Express 5.
+- Ni nombres de profesores ni emojis.
 
 ## Reparto de asignaturas
 | Asignatura | Carpeta | Bloques |

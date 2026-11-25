@@ -4,6 +4,16 @@ Web de apuntes interactivos para la clase de **2º DAM** (unos 20 alumnos). Los 
 
 Producción: https://web-clase-apuntes.vercel.app
 
+> **Trabajo a medias (rama `wip/apuntes-curso-2dam`):** antes de nada, lee `TRABAJO-EN-CURSO.md`. Ahí está el estado de cada bloque, lo que falta y cómo seguir. Esta rama **no** se publica; no la fusiones con la de producción hasta que `npm run build` pase y el dueño la haya revisado.
+
+## Asignaturas de 2º DAM (así las ha confirmado el dueño)
+
+- **Kotlin** (`2-dam/kotlin`): PMDM y PSP juntas, con Android, Compose, Hilt, Retrofit y Room.
+- **Acceso a Datos** (`2-dam/acceso-a-datos`): sobre todo Angular 19.
+- **Infraestructuras de Servicios y APIs** (`2-dam/apis`): el backend con Node, Express 5, Prisma 6, Zod 4 y PostgreSQL.
+- **Desarrollo de Interfaces** (`2-dam/desarrollo-de-interfaces`): C#.
+- **Proyecto Intermodular**: gestión de proyectos, Git, despliegue en Vercel y requisitos.
+
 ## Comandos
 
 ```bash

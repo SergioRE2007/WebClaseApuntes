@@ -14,7 +14,7 @@ export type AccionAdmin =
   | { tipo: 'borrar'; id: string };
 
 const boton =
-  'inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring focus-visible:ring-offset-1 focus-visible:ring-offset-fd-card disabled:pointer-events-none disabled:opacity-50';
+  'inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring focus-visible:ring-offset-1 focus-visible:ring-offset-fd-background disabled:pointer-events-none disabled:opacity-50';
 
 export function AportacionCard({
   a,
@@ -51,11 +51,11 @@ export function AportacionCard({
     <article
       aria-labelledby={`${uid}-titulo`}
       aria-busy={ocupado}
-      className={cn('rounded-2xl border bg-fd-card p-4 shadow-xs transition sm:p-5', ocupado && 'opacity-70')}
+      className={cn('rounded-md border bg-fd-background p-4 transition-opacity sm:p-5', ocupado && 'opacity-70')}
     >
       <header className="flex items-start gap-3">
-        <span className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-fd-muted text-fd-muted-foreground">
-          <Icon className="size-5" aria-hidden />
+        <span className="mt-0.5 shrink-0 text-fd-muted-foreground">
+          <Icon className="size-4" aria-hidden />
           <span className="sr-only">{info?.label ?? a.tipo}</span>
         </span>
         <div className="min-w-0 flex-1">
@@ -70,7 +70,7 @@ export function AportacionCard({
             {a.autor?.nombre && a.autor.email && <span className="break-all"> · {a.autor.email}</span>}
           </p>
           <p className="mt-0.5 flex flex-wrap gap-x-1.5 text-xs text-fd-muted-foreground">
-            <span className="rounded bg-fd-muted px-1.5 py-px font-medium">{nombreModulo}</span>
+            <span className="font-medium">{nombreModulo}</span>
             {a.tema && <span>· {a.tema}</span>}
             <span>·</span>
             <time dateTime={a.creado_en} title={formatFecha(a.creado_en)} suppressHydrationWarning>
@@ -109,6 +109,7 @@ export function AportacionCard({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.15 }}
             className="overflow-hidden"
           >
             <div className="space-y-1.5 pt-3">
@@ -136,7 +137,7 @@ export function AportacionCard({
             type="button"
             disabled={ocupado}
             onClick={() => cambiar('aprobada')}
-            className={cn(boton, 'bg-green-600 text-white hover:bg-green-700 dark:bg-green-600/90 dark:hover:bg-green-600')}
+            className={cn(boton, 'bg-fd-foreground text-fd-background hover:opacity-90')}
           >
             {ocupado ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : <Check className="size-4" aria-hidden />}
             Aprobar
@@ -147,7 +148,7 @@ export function AportacionCard({
             type="button"
             disabled={ocupado}
             onClick={() => cambiar('descartada')}
-            className={cn(boton, 'border border-red-500/40 text-red-700 hover:bg-red-500/10 dark:text-red-300')}
+            className={cn(boton, 'border text-fd-foreground hover:bg-fd-accent')}
           >
             <X className="size-4" aria-hidden />
             Descartar
@@ -158,7 +159,7 @@ export function AportacionCard({
             type="button"
             disabled={ocupado}
             onClick={() => cambiar('pendiente')}
-            className={cn(boton, 'border bg-fd-secondary text-fd-secondary-foreground hover:bg-fd-accent')}
+            className={cn(boton, 'border text-fd-foreground hover:bg-fd-accent')}
           >
             <RotateCcw className="size-4" aria-hidden />
             A pendientes
@@ -180,7 +181,7 @@ export function AportacionCard({
             type="button"
             disabled={ocupado}
             onClick={() => cambiar(a.estado)}
-            className={cn(boton, 'text-fd-primary hover:bg-fd-primary/10')}
+            className={cn(boton, 'text-fd-primary hover:bg-fd-accent')}
           >
             Guardar nota
           </button>
@@ -199,7 +200,7 @@ export function AportacionCard({
             boton,
             'ml-auto',
             confirmarBorrar
-              ? 'bg-red-600 text-white hover:bg-red-700'
+              ? 'bg-red-600 text-white hover:bg-red-700 dark:bg-red-500/90'
               : 'text-fd-muted-foreground hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400',
           )}
         >

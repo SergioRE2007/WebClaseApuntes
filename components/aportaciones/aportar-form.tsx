@@ -434,7 +434,7 @@ export function AportarForm({
               exit={{ opacity: 0, height: 0 }}
               className="overflow-hidden"
             >
-              <div className="rounded-lg border bg-fd-muted/50 p-3">
+              <div className="rounded-md border p-3">
                 <div className="mb-2 flex items-center justify-between gap-2 text-sm" aria-live="polite">
                   <span className="flex items-center gap-2 font-medium">
                     <LoaderCircle className="size-4 animate-spin" aria-hidden />
@@ -450,7 +450,7 @@ export function AportarForm({
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={fase === 'subiendo' && progreso != null ? Math.round(progreso * 100) : undefined}
-                  className="h-2 overflow-hidden rounded-full bg-fd-secondary"
+                  className="h-1 overflow-hidden rounded-full bg-fd-muted"
                 >
                   {fase === 'subiendo' && progreso != null ? (
                     <motion.div

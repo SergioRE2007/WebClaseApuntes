@@ -3,13 +3,13 @@ import { cn } from '@/lib/cn';
 import { ESTADOS_INFO, type EstadoAportacion } from '@/lib/aportaciones';
 
 export const inputClase =
-  'w-full rounded-lg border bg-fd-background px-3 py-2 text-sm text-fd-foreground shadow-xs outline-none transition placeholder:text-fd-muted-foreground/70 focus-visible:border-fd-primary focus-visible:ring-2 focus-visible:ring-fd-ring/40 disabled:cursor-not-allowed disabled:opacity-60 aria-[invalid=true]:border-red-500 aria-[invalid=true]:ring-red-500/30';
+  'w-full rounded-md border bg-fd-background px-3 py-2 text-sm text-fd-foreground outline-none transition-colors placeholder:text-fd-muted-foreground focus-visible:border-fd-primary focus-visible:ring-2 focus-visible:ring-fd-ring/25 disabled:cursor-not-allowed disabled:opacity-60 aria-[invalid=true]:border-red-500 aria-[invalid=true]:ring-red-500/25';
 
 export const botonPrimario =
-  'inline-flex items-center justify-center gap-2 rounded-lg bg-fd-primary px-4 py-2 text-sm font-medium text-fd-primary-foreground shadow-sm transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring focus-visible:ring-offset-2 focus-visible:ring-offset-fd-background disabled:pointer-events-none disabled:opacity-50';
+  'inline-flex h-10 items-center justify-center gap-2 rounded-md bg-fd-foreground px-4 text-sm font-medium text-fd-background sm:h-9 transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring focus-visible:ring-offset-2 focus-visible:ring-offset-fd-background disabled:pointer-events-none disabled:bg-fd-muted disabled:text-fd-muted-foreground disabled:opacity-100';
 
 export const botonSecundario =
-  'inline-flex items-center justify-center gap-2 rounded-lg border bg-fd-secondary px-3 py-2 text-sm font-medium text-fd-secondary-foreground transition hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring disabled:pointer-events-none disabled:opacity-50';
+  'inline-flex h-10 items-center justify-center gap-2 rounded-md border sm:h-9 bg-fd-background px-3 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring disabled:pointer-events-none disabled:opacity-50';
 
 export function Campo({
   id,
@@ -53,7 +53,7 @@ export function EstadoBadge({ estado, className }: { estado: EstadoAportacion; c
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset',
+        'inline-flex shrink-0 items-center gap-1.5 text-xs font-medium',
         info.badge,
         className,
       )}

@@ -3,7 +3,6 @@
 import { useOptimistic, useState, useTransition } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { toast } from 'sonner';
-import { Inbox, SearchX } from 'lucide-react';
 import { ESTADOS_INFO, type EstadoAportacion } from '@/lib/aportaciones';
 import { eliminarAportacion, revisarAportacion } from '@/app/admin/actions';
 import { AportacionCard, type AccionAdmin } from './aportacion-card';
@@ -66,20 +65,18 @@ export function ListaAportaciones({
   };
 
   if (optimistas.length === 0) {
-    const Icono = hayFiltros ? SearchX : Inbox;
     return (
-      <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed p-10 text-center">
-        <Icono className="size-8 text-fd-muted-foreground" aria-hidden />
-        <p className="font-medium">
+      <div className="rounded-md border border-dashed px-4 py-8 text-center">
+        <p className="text-sm font-medium">
           {hayFiltros
             ? 'Nada coincide con estos filtros'
             : filtroEstado === 'pendiente'
-              ? '¡Todo revisado! No hay aportaciones pendientes'
+              ? 'No hay aportaciones pendientes'
               : filtroEstado === 'todas'
                 ? 'Todavía no hay aportaciones'
                 : `No hay aportaciones ${ESTADOS_INFO[filtroEstado].plural.toLowerCase()}`}
         </p>
-        <p className="max-w-sm text-sm text-fd-muted-foreground">
+        <p className="mx-auto mt-1 max-w-sm text-sm text-fd-muted-foreground">
           {hayFiltros ? 'Prueba con otra búsqueda o quita el filtro de módulo.' : 'Cuando la clase envíe algo desde «Aportar», aparecerá aquí.'}
         </p>
       </div>
@@ -87,15 +84,16 @@ export function ListaAportaciones({
   }
 
   return (
-    <ul className="space-y-4">
+    <ul className="space-y-3">
       <AnimatePresence initial={false} mode="popLayout">
         {optimistas.map((a) => (
           <motion.li
             key={a.id}
             layout
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.18 } }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: { duration: 0.15 } }}
+            transition={{ duration: 0.15 }}
           >
             <AportacionCard
               a={a}

@@ -1,11 +1,10 @@
 'use client';
 
 import { Fragment, useId, useMemo, useRef, useState } from 'react';
-import { motion } from 'motion/react';
-import { Check, Eye, PencilLine, RotateCcw, X } from 'lucide-react';
+import { Check, Eye, RotateCcw, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { resaltar } from './resaltado';
-import { botonPrimario, botonSecundario } from './quiz';
+import { bloque, botonPrimario, botonSecundario, cabecera, etiqueta, malTexto, okTexto, tituloBloque } from './estilos';
 
 export interface CompletarCodigoProps {
   /**
@@ -106,18 +105,11 @@ export function CompletarCodigo({
   };
 
   return (
-    <section className="not-prose my-8 overflow-hidden rounded-2xl border bg-fd-card text-fd-card-foreground shadow-sm">
-      <div className="flex flex-wrap items-center gap-3 border-b bg-fd-muted/50 px-4 py-3 sm:px-5">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fd-primary text-fd-primary-foreground">
-          <PencilLine className="size-5" aria-hidden />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold leading-tight">{titulo ?? 'Completa el código'}</p>
-          <p className="text-sm text-fd-muted-foreground">{enunciado}</p>
-        </div>
-        <span className="rounded-full border bg-fd-background px-2.5 py-1 font-mono text-xs text-fd-muted-foreground">
-          {lenguaje}
-        </span>
+    <section className={bloque}>
+      <div className={cabecera}>
+        <p className={tituloBloque}>{titulo ?? 'Completa el código'}</p>
+        <span className={cn(etiqueta, 'ms-auto font-mono')}>{lenguaje}</span>
+        <p className="w-full text-sm text-fd-muted-foreground">{enunciado}</p>
       </div>
 
       <form
@@ -126,7 +118,7 @@ export function CompletarCodigo({
           comprobar();
         }}
       >
-        <pre className="overflow-x-auto bg-fd-secondary/40 px-4 py-4 font-mono text-[13px] leading-7 sm:px-5">
+        <pre className="overflow-x-auto bg-fd-muted/40 px-4 py-4 font-mono text-[13px] leading-9 sm:px-5 sm:leading-7">
           <code>
             {segmentos.map((s, k) => {
               if (s.tipo === 'texto') return <Fragment key={k}>{resaltar(s.valor, lenguaje)}</Fragment>;
@@ -154,9 +146,9 @@ export function CompletarCodigo({
                     aria-invalid={mal || undefined}
                     style={{ width: `${ancho + 1}ch` }}
                     className={cn(
-                      'mx-0.5 h-6 rounded-md border border-dashed border-fd-primary/60 bg-fd-primary/10 px-1 text-center font-mono text-[13px] text-fd-foreground outline-none transition-colors focus:border-solid focus:border-fd-primary focus-visible:ring-2 focus-visible:ring-fd-ring',
-                      ok && 'border-solid border-green-500 bg-green-500/10',
-                      mal && 'border-solid border-red-500 bg-red-500/10',
+                      'mx-0.5 h-8 rounded border sm:h-6 border-fd-muted-foreground/40 bg-fd-background px-1 text-center font-mono text-[13px] text-fd-foreground outline-none transition-colors focus:border-fd-primary focus-visible:ring-2 focus-visible:ring-fd-ring/40',
+                      ok && 'border-green-600/50 bg-green-600/[0.06] dark:border-green-400/50',
+                      mal && 'border-red-600/50 bg-red-600/[0.06] dark:border-red-400/50',
                     )}
                   />
                 </span>
@@ -169,16 +161,12 @@ export function CompletarCodigo({
           <p className="mr-auto flex items-center gap-1.5 text-sm" aria-live="polite">
             {comprobado ? (
               todo ? (
-                <motion.span
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  className="flex items-center gap-1.5 font-medium text-green-700 dark:text-green-400"
-                >
+                <span className={cn('flex items-center gap-1.5 font-medium', okTexto)}>
                   <Check className="size-4" aria-hidden />
-                  {solucion ? 'Esta es la solución.' : '¡Todo correcto!'}
-                </motion.span>
+                  {solucion ? 'Esta es la solución.' : 'Todo correcto.'}
+                </span>
               ) : (
-                <span className="flex items-center gap-1.5 text-red-700 dark:text-red-400">
+                <span className={cn('flex items-center gap-1.5', malTexto)}>
                   <X className="size-4" aria-hidden />
                   {aciertos} de {huecos.length} huecos correctos
                 </span>

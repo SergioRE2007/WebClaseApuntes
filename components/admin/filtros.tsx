@@ -60,7 +60,7 @@ export function FiltrosAdmin({ estado, modulo, q, contadores, modulos }: Filtros
   return (
     <div className="space-y-3">
       <nav aria-label="Filtrar por estado" className="-mx-1 overflow-x-auto px-1 pb-1">
-        <ul className="flex w-max gap-1 rounded-xl border bg-fd-muted/50 p-1">
+        <ul className="flex w-max gap-3 border-b sm:gap-4">
           {pestañas.map((p) => {
             const activo = p.id === estado;
             return (
@@ -74,21 +74,13 @@ export function FiltrosAdmin({ estado, modulo, q, contadores, modulos }: Filtros
                     navegar({ estado: p.id });
                   }}
                   className={cn(
-                    'flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium text-fd-muted-foreground transition',
+                    '-mb-px flex min-h-10 items-center gap-1.5 border-b-2 border-transparent px-0.5 text-sm font-medium text-fd-muted-foreground transition-colors',
                     'hover:text-fd-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring',
-                    activo && 'bg-fd-background text-fd-foreground shadow-sm',
+                    activo && 'border-fd-foreground text-fd-foreground',
                   )}
                 >
-                  {p.id !== 'todas' && (
-                    <span className={cn('size-2 rounded-full', ESTADOS_INFO[p.id].dot)} aria-hidden />
-                  )}
                   {p.label}
-                  <span
-                    className={cn(
-                      'rounded-full px-1.5 text-xs tabular-nums',
-                      activo ? 'bg-fd-muted text-fd-foreground' : 'bg-fd-background/60',
-                    )}
-                  >
+                  <span className="hidden text-xs tabular-nums text-fd-muted-foreground sm:inline">
                     {p.n}
                   </span>
                 </Link>

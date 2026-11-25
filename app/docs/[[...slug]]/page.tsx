@@ -24,7 +24,14 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
   const conMarcar = tema && !(await page.data.getText('raw')).includes('<MarcarCompletado');
 
   return (
-    <DocsPage toc={page.data.toc} full={page.data.full}>
+    <DocsPage
+      toc={page.data.toc}
+      full={page.data.full}
+      // Miga de pan en gris (el acento queda para enlaces y foco)
+      breadcrumb={{ className: '[&_.text-fd-primary]:text-fd-muted-foreground [&_.text-fd-primary]:font-normal' }}
+      // Anterior/siguiente: solo nombre y flecha, sin la descripción
+      footer={{ className: '[&_a>p:last-child]:hidden [&_a]:gap-0 [&_a]:px-4 [&_a]:py-3' }}
+    >
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription className={tema ? 'mb-0' : undefined}>{page.data.description}</DocsDescription>
       {tema ? (

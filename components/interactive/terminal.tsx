@@ -66,32 +66,27 @@ export function Terminal({ titulo = 'Terminal', prompt, children, contenido }: T
   };
 
   return (
-    <figure className="not-prose my-6 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950 text-neutral-100 shadow-lg">
-      <div className="flex items-center gap-2 border-b border-white/10 bg-white/5 px-3 py-2">
-        <span className="flex gap-1.5" aria-hidden>
-          <span className="size-3 rounded-full bg-[#ff5f57]" />
-          <span className="size-3 rounded-full bg-[#febc2e]" />
-          <span className="size-3 rounded-full bg-[#28c840]" />
-        </span>
-        <figcaption className="flex-1 truncate text-center font-mono text-xs text-neutral-400">{titulo}</figcaption>
+    <figure className="not-prose my-6 overflow-hidden rounded-lg border bg-fd-muted/40 text-fd-foreground dark:bg-fd-muted/50">
+      <div className="flex items-center gap-2 border-b px-3 py-1.5">
+        <figcaption className="flex-1 truncate font-mono text-xs text-fd-muted-foreground">{titulo}</figcaption>
         <button
           type="button"
           onClick={copiar}
           aria-label={comandos.length ? 'Copiar comandos' : 'Copiar salida'}
           title={comandos.length ? 'Copiar comandos' : 'Copiar'}
-          className="rounded-md p-1 text-neutral-400 transition hover:bg-white/10 hover:text-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
+          className="rounded-md p-2.5 text-fd-muted-foreground transition-colors hover:bg-fd-accent sm:p-1 hover:text-fd-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
         >
-          {copiado ? <Check className="size-3.5 text-green-400" /> : <Copy className="size-3.5" />}
+          {copiado ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
         </button>
       </div>
       <pre className="overflow-x-auto px-4 py-3 font-mono text-[13px] leading-6">
         <code>
           {analizadas.map((l, i) => (
-            <span key={i} className={cn('block min-h-6 whitespace-pre', l.tipo === 'out' && 'text-neutral-300')}>
+            <span key={i} className={cn('block min-h-6 whitespace-pre', l.tipo === 'out' && 'text-fd-muted-foreground')}>
               {l.tipo === 'cmd' ? (
                 <>
-                  <span className="select-none text-green-400">{l.prompt} </span>
-                  <span className="text-neutral-50">{l.texto}</span>
+                  <span className="select-none text-fd-muted-foreground">{l.prompt} </span>
+                  <span className="text-fd-foreground">{l.texto}</span>
                 </>
               ) : (
                 l.texto || ' '

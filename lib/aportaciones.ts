@@ -128,19 +128,19 @@ export const ESTADOS_INFO: Record<
   pendiente: {
     label: 'Pendiente',
     plural: 'Pendientes',
-    badge: 'bg-amber-500/15 text-amber-700 ring-amber-500/30 dark:text-amber-300',
+    badge: 'text-amber-700 dark:text-amber-400',
     dot: 'bg-amber-500',
   },
   aprobada: {
     label: 'Aprobada',
     plural: 'Aprobadas',
-    badge: 'bg-green-500/15 text-green-700 ring-green-500/30 dark:text-green-300',
+    badge: 'text-green-700 dark:text-green-400',
     dot: 'bg-green-500',
   },
   descartada: {
     label: 'Descartada',
     plural: 'Descartadas',
-    badge: 'bg-red-500/15 text-red-700 ring-red-500/30 dark:text-red-300',
+    badge: 'text-red-700 dark:text-red-400',
     dot: 'bg-red-500',
   },
 };

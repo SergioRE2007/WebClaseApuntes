@@ -22,7 +22,6 @@ export function baseOptions(): BaseLayoutProps {
         url: docsRoute,
         active: 'nested-url',
         icon: <BookOpen />,
-        on: 'nav',
       },
       {
         text: 'Aportar',

@@ -34,7 +34,7 @@ function crearComponentes(enStreaming: boolean, onNavegar?: () => void): Compone
   return {
     a({ href = '', children, node: _node, ...rest }) {
       const clase =
-        'font-medium text-fd-primary underline decoration-fd-primary/40 underline-offset-2 hover:decoration-fd-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring rounded-sm';
+        'text-fd-primary underline decoration-fd-primary/40 underline-offset-2 hover:decoration-fd-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring rounded-sm';
       if (esInterno(href) || href.startsWith('#')) {
         return (
           <Link href={href} className={clase} onClick={() => onNavegar?.()}>
@@ -61,7 +61,7 @@ function crearComponentes(enStreaming: boolean, onNavegar?: () => void): Compone
       const code = textoDe(props.children).replace(/\n$/, '');
       if (enStreaming) {
         return (
-          <pre className="my-2 overflow-x-auto rounded-lg border bg-fd-secondary p-3 font-mono text-[12.5px] leading-relaxed">
+          <pre className="my-2 overflow-x-auto rounded-md border bg-fd-muted p-3 font-mono text-[12.5px] leading-relaxed">
             <code>{code}</code>
           </pre>
         );
@@ -76,7 +76,7 @@ function crearComponentes(enStreaming: boolean, onNavegar?: () => void): Compone
       return (
         <code
           {...rest}
-          className={cn('rounded bg-fd-muted px-1 py-0.5 font-mono text-[0.85em]', className)}
+          className={cn('rounded border bg-fd-muted px-1 py-px font-mono text-[0.85em]', className)}
         >
           {children}
         </code>
@@ -84,7 +84,7 @@ function crearComponentes(enStreaming: boolean, onNavegar?: () => void): Compone
     },
     table({ children }) {
       return (
-        <div className="my-2 overflow-x-auto rounded-lg border">
+        <div className="my-2 overflow-x-auto rounded-md border">
           <table className="w-full border-collapse text-left text-[13px]">{children}</table>
         </div>
       );

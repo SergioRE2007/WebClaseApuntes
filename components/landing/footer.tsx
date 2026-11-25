@@ -1,27 +1,20 @@
 import Link from 'next/link';
-import { LogoMark } from '@/components/layout/logo';
 
 export function Footer({ logueado = false }: { logueado?: boolean }) {
-  const anio = new Date().getFullYear();
+  const enlace = 'inline-flex min-h-10 items-center hover:text-fd-foreground sm:min-h-0';
   return (
     <footer className="mt-auto border-t">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <div className="flex items-center gap-3">
-          <LogoMark className="size-8" />
-          <div>
-            <p className="text-sm font-semibold">DAM Apuntes</p>
-            <p className="text-xs text-fd-muted-foreground">Hecho por y para la clase de DAM · {anio}</p>
-          </div>
-        </div>
-        <nav aria-label="Pie de página" className="-mx-2 flex flex-wrap gap-x-2 gap-y-1 text-sm text-fd-muted-foreground">
-          <Link href="/docs" className="inline-flex min-h-10 items-center rounded px-2 transition-colors hover:text-fd-foreground">
+      <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-x-5 gap-y-1 px-4 py-5 sm:py-6 text-sm text-fd-muted-foreground sm:px-6">
+        <span>DAM Apuntes · {new Date().getFullYear()}</span>
+        <nav aria-label="Pie de página" className="ms-auto flex gap-5">
+          <Link href="/docs" className={enlace}>
             Apuntes
           </Link>
-          <Link href="/aportar" className="inline-flex min-h-10 items-center rounded px-2 transition-colors hover:text-fd-foreground">
+          <Link href="/aportar" className={enlace}>
             Aportar
           </Link>
           {logueado ? null : (
-            <Link href="/login" className="inline-flex min-h-10 items-center rounded px-2 transition-colors hover:text-fd-foreground">
+            <Link href="/login" className={enlace}>
               Entrar
             </Link>
           )}

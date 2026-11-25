@@ -6,7 +6,7 @@ import { formatBytes, youtubeId } from '@/lib/aportaciones';
 import type { AportacionAdmin } from './datos';
 
 const enlaceBoton =
-  'inline-flex items-center gap-1.5 rounded-lg border bg-fd-background px-3 py-1.5 text-sm font-medium transition hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring';
+  'inline-flex h-8 items-center gap-1.5 rounded-md border bg-fd-background px-3 text-sm font-medium transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring';
 
 function Lightbox({ src, alt, abierto, onCerrar }: { src: string; alt: string; abierto: boolean; onCerrar: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -25,13 +25,13 @@ function Lightbox({ src, alt, abierto, onCerrar }: { src: string; alt: string; a
       onClick={(e) => {
         if (e.target === e.currentTarget) onCerrar();
       }}
-      className="m-auto max-h-none max-w-none bg-transparent p-0 backdrop:bg-black/80 backdrop:backdrop-blur-sm"
+      className="m-auto max-h-none max-w-none bg-transparent p-0 backdrop:bg-black/80"
     >
       <div className="relative flex h-dvh w-screen items-center justify-center p-4" onClick={onCerrar}>
         <img
           src={src}
           alt={alt}
-          className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+          className="max-h-full max-w-full rounded-md object-contain"
           onClick={(e) => e.stopPropagation()}
         />
         <div className="absolute right-4 top-4 flex gap-2">
@@ -64,7 +64,7 @@ function YouTube({ id, url }: { id: string; url: string }) {
   const [reproducir, setReproducir] = useState(false);
   if (reproducir) {
     return (
-      <div className="aspect-video w-full overflow-hidden rounded-lg border bg-black">
+      <div className="aspect-video w-full overflow-hidden rounded-md border bg-black">
         <iframe
           src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1`}
           title="Vídeo de YouTube"
@@ -80,17 +80,17 @@ function YouTube({ id, url }: { id: string; url: string }) {
       <button
         type="button"
         onClick={() => setReproducir(true)}
-        className="group relative block aspect-video w-full overflow-hidden rounded-lg border bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
+        className="group relative block aspect-video w-full overflow-hidden rounded-md border bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
         aria-label="Reproducir vídeo de YouTube aquí"
       >
         <img
           src={`https://i.ytimg.com/vi/${id}/hqdefault.jpg`}
           alt=""
           loading="lazy"
-          className="size-full object-cover opacity-90 transition group-hover:scale-[1.02] group-hover:opacity-100"
+          className="size-full object-cover opacity-90 transition-opacity group-hover:opacity-100"
         />
         <span className="absolute inset-0 flex items-center justify-center">
-          <span className="flex size-14 items-center justify-center rounded-full bg-red-600 text-white shadow-lg transition group-hover:scale-110">
+          <span className="flex size-12 items-center justify-center rounded-full bg-black/70 text-white transition-colors group-hover:bg-black/85">
             <Play className="ml-0.5 size-6 fill-current" aria-hidden />
           </span>
         </span>
@@ -112,11 +112,9 @@ function EnlaceExterno({ url }: { url: string }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer nofollow"
-      className="flex min-w-0 items-center gap-3 rounded-lg border bg-fd-background p-3 transition hover:bg-fd-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
+      className="flex min-w-0 items-center gap-3 rounded-md border bg-fd-background p-3 transition-colors hover:bg-fd-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
     >
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-fd-primary/10 text-fd-primary">
-        <Link2 className="size-4" aria-hidden />
-      </span>
+      <Link2 className="size-4 shrink-0 text-fd-muted-foreground" aria-hidden />
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-medium">{host}</span>
         <span className="block truncate text-xs text-fd-muted-foreground">{url}</span>
@@ -135,7 +133,7 @@ export function Adjunto({ a }: { a: AportacionAdmin }) {
   if (a.archivo_path) {
     if (!a.archivoUrl) {
       partes.push(
-        <p key="err" className="flex items-center gap-2 rounded-lg bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+        <p key="err" className="flex items-center gap-2 rounded-md border border-amber-600/25 bg-amber-500/[0.06] p-3 text-sm text-amber-800 dark:border-amber-400/25 dark:text-amber-300">
           <TriangleAlert className="size-4 shrink-0" aria-hidden />
           No se ha podido generar el enlace al archivo ({a.archivo_nombre}).
         </p>,
@@ -147,7 +145,7 @@ export function Adjunto({ a }: { a: AportacionAdmin }) {
           <button
             type="button"
             onClick={() => setZoom(true)}
-            className="group relative block w-full overflow-hidden rounded-lg border bg-fd-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
+            className="group relative block w-full overflow-hidden rounded-md border bg-fd-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
             aria-label={`Ampliar imagen ${alt}`}
           >
             <img src={a.archivoUrl} alt={alt} loading="lazy" className="mx-auto max-h-80 w-auto object-contain" />
@@ -160,7 +158,7 @@ export function Adjunto({ a }: { a: AportacionAdmin }) {
       );
     } else if (mime.startsWith('video/')) {
       partes.push(
-        <video key="video" src={a.archivoUrl} controls preload="metadata" className="max-h-96 w-full rounded-lg border bg-black">
+        <video key="video" src={a.archivoUrl} controls preload="metadata" className="max-h-96 w-full rounded-md border bg-black">
           Tu navegador no puede reproducir este vídeo.
         </video>,
       );
@@ -169,10 +167,8 @@ export function Adjunto({ a }: { a: AportacionAdmin }) {
     if (a.archivoUrl) {
       const Icono = mime.includes('zip') ? FileArchive : FileText;
       partes.push(
-        <div key="file" className="flex flex-wrap items-center gap-3 rounded-lg border bg-fd-background p-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-fd-muted text-fd-muted-foreground">
-            <Icono className="size-4" aria-hidden />
-          </span>
+        <div key="file" className="flex flex-wrap items-center gap-3 rounded-md border bg-fd-background p-3">
+          <Icono className="size-4 shrink-0 text-fd-muted-foreground" aria-hidden />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium" title={a.archivo_nombre ?? undefined}>
               {a.archivo_nombre}

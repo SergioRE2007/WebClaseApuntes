@@ -1,11 +1,11 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { AnimatePresence, motion } from 'motion/react';
-import { CheckCircle2, Circle, Undo2 } from 'lucide-react';
+import { Check, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/cn';
 import { normalizarUrl, useProgreso } from '@/lib/progreso';
+import { botonPrimario, botonSecundario } from './estilos';
 
 export interface MarcarCompletadoProps {
   /** URL de la página a marcar. Por defecto, la página actual. */
@@ -25,50 +25,22 @@ export function MarcarCompletado({ url }: MarcarCompletadoProps) {
   const onClick = () => {
     const ahora = alternar(pagina);
     if (ahora) {
-      toast.success('¡Tema completado!', { description: 'Tu progreso se guarda en este navegador.' });
+      toast('Tema completado', { description: 'Tu progreso se guarda en este navegador.' });
     } else {
       toast('Tema marcado como pendiente');
     }
   };
 
   return (
-    <div
-      className={cn(
-        'not-prose my-10 flex flex-col items-center gap-3 rounded-2xl border p-5 text-center transition-colors sm:flex-row sm:text-left',
-        hecho ? 'border-green-500/40 bg-green-500/5' : 'border-dashed bg-fd-card',
-      )}
-    >
-      <div className="relative flex size-11 shrink-0 items-center justify-center">
-        <AnimatePresence mode="wait" initial={false}>
-          {hecho ? (
-            <motion.span
-              key="si"
-              initial={{ scale: 0.3, rotate: -45, opacity: 0 }}
-              animate={{ scale: 1, rotate: 0, opacity: 1 }}
-              exit={{ scale: 0.3, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 15 }}
-              className="text-green-600 dark:text-green-400"
-            >
-              <CheckCircle2 className="size-10" aria-hidden />
-            </motion.span>
-          ) : (
-            <motion.span
-              key="no"
-              initial={{ scale: 0.6, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.6, opacity: 0 }}
-              className="text-fd-muted-foreground"
-            >
-              <Circle className="size-10" aria-hidden />
-            </motion.span>
-          )}
-        </AnimatePresence>
-      </div>
+    <div className="not-prose my-10 flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1" aria-live="polite">
-        <p className="font-semibold">{hecho ? '¡Tema completado!' : '¿Has terminado este tema?'}</p>
-        <p className="text-sm text-fd-muted-foreground">
+        <p className="flex items-center gap-1.5 text-sm font-medium">
+          {hecho ? <Check className="size-4 text-green-700 dark:text-green-400" aria-hidden /> : null}
+          {hecho ? 'Tema completado' : '¿Has terminado este tema?'}
+        </p>
+        <p className="mt-0.5 text-sm text-fd-muted-foreground">
           {hecho && fecha
-            ? `Lo marcaste el ${formatoFecha.format(new Date(fecha))}.`
+            ? `Lo marcaste el ${formatoFecha.format(new Date(fecha))}. Se guarda en este navegador.`
             : 'Márcalo para llevar la cuenta de lo que ya has estudiado.'}
         </p>
       </div>
@@ -76,13 +48,7 @@ export function MarcarCompletado({ url }: MarcarCompletadoProps) {
         type="button"
         onClick={onClick}
         disabled={!listo}
-        aria-pressed={hecho}
-        className={cn(
-          'inline-flex min-h-10 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring focus-visible:ring-offset-2 focus-visible:ring-offset-fd-background disabled:opacity-50',
-          hecho
-            ? 'border bg-fd-background text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-accent-foreground'
-            : 'bg-fd-primary text-fd-primary-foreground hover:opacity-90',
-        )}
+        className={cn(hecho ? botonSecundario : botonPrimario, 'self-start sm:self-auto')}
       >
         {hecho ? (
           <>
@@ -91,7 +57,7 @@ export function MarcarCompletado({ url }: MarcarCompletadoProps) {
           </>
         ) : (
           <>
-            <CheckCircle2 className="size-4" aria-hidden />
+            <Check className="size-4" aria-hidden />
             Marcar como completado
           </>
         )}

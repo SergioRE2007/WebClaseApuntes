@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ClipboardPaste, CloudUpload, FileArchive, FileText, X } from 'lucide-react';
+import { CloudUpload, FileArchive, FileText, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import {
   ACCEPT_ARCHIVOS,
@@ -91,10 +91,11 @@ export function Dropzone({
         {archivo ? (
           <motion.div
             key="preview"
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}
-            className={cn('overflow-hidden rounded-xl border bg-fd-card', error && 'border-red-500')}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.12 }}
+            className={cn('overflow-hidden rounded-md border bg-fd-background', error && 'border-red-500')}
           >
             {url && mime.startsWith('image/') && (
               <div className="flex max-h-80 justify-center bg-fd-muted/50">
@@ -106,7 +107,7 @@ export function Dropzone({
             )}
             <div className="flex items-center gap-3 p-3">
               {!mime.startsWith('image/') && !mime.startsWith('video/') && (
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-fd-muted text-fd-muted-foreground">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-md border text-fd-muted-foreground">
                   {mime.includes('zip') ? <FileArchive className="size-5" aria-hidden /> : <FileText className="size-5" aria-hidden />}
                 </span>
               )}
@@ -145,6 +146,7 @@ export function Dropzone({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.12 }}
             disabled={disabled}
             onClick={() => inputRef.current?.click()}
             onDragEnter={(e) => {
@@ -165,24 +167,18 @@ export function Dropzone({
             aria-describedby={error ? `${id}-error` : `${id}-ayuda`}
             aria-invalid={Boolean(error)}
             className={cn(
-              'flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-8 text-center transition',
-              'hover:border-fd-primary/60 hover:bg-fd-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring focus-visible:ring-offset-2 focus-visible:ring-offset-fd-background',
+              'flex w-full flex-col items-center justify-center gap-1.5 rounded-md border border-dashed px-4 py-8 text-center transition-colors',
+              'hover:border-fd-muted-foreground/50 hover:bg-fd-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring focus-visible:ring-offset-2 focus-visible:ring-offset-fd-background',
               'disabled:cursor-not-allowed disabled:opacity-60',
-              arrastrando && 'border-fd-primary bg-fd-primary/10',
+              arrastrando && 'border-fd-primary bg-fd-primary/[0.04]',
               error && 'border-red-500/70',
             )}
           >
-            <motion.span
-              animate={arrastrando ? { y: -4, scale: 1.08 } : { y: 0, scale: 1 }}
-              className="flex size-12 items-center justify-center rounded-full bg-fd-primary/10 text-fd-primary"
-            >
-              <CloudUpload className="size-6" aria-hidden />
-            </motion.span>
+            <CloudUpload className="size-5 text-fd-muted-foreground" aria-hidden />
             <span className="text-sm font-medium text-fd-foreground">
               {arrastrando ? 'Suelta el archivo aquí' : 'Arrastra un archivo o haz clic para elegirlo'}
             </span>
             <span className="hidden flex-wrap items-center justify-center gap-1 text-xs text-fd-muted-foreground [@media(pointer:fine)]:inline-flex">
-              <ClipboardPaste className="size-3.5" aria-hidden />
               También puedes pegar una captura con
               <span className="whitespace-nowrap">
                 <kbd className="rounded border bg-fd-muted px-1 font-mono text-[11px]">Ctrl</kbd>+

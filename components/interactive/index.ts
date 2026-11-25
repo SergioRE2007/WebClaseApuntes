@@ -6,4 +6,4 @@ export { CompletarCodigo } from './completar-codigo';
 export { Terminal } from './terminal';
 export { Concepto, Glosario, Termino } from './concepto';
 export { MarcarCompletado } from './marcar-completado';
-export { Icono, Card } from './icono';
+export { Icono, Card, Cards } from './icono';

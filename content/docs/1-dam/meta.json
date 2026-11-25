@@ -1,7 +1,6 @@
 {
   "title": "1º DAM",
   "description": "Primer curso del ciclo",
-  "icon": "GraduationCap",
   "root": true,
   "pages": [
     "index",

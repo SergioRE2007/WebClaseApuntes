@@ -24,7 +24,7 @@ function iniciales(nombre: string | null, email: string): string {
 }
 
 const itemClass =
-  'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-fd-popover-foreground transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:bg-fd-accent focus-visible:outline-none [&_svg]:size-4 [&_svg]:text-fd-muted-foreground';
+  'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm text-fd-popover-foreground transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:bg-fd-accent focus-visible:outline-none [&_svg]:size-4 [&_svg]:text-fd-muted-foreground';
 
 export function UserMenuCliente({ nombre, email, esAdmin, enClase, demo }: UserMenuClienteProps) {
   const [open, setOpen] = useState(false);
@@ -37,7 +37,7 @@ export function UserMenuCliente({ nombre, email, esAdmin, enClase, demo }: UserM
       <PopoverTrigger
         aria-label={`Menú de usuario de ${visible}`}
         className={cn(
-          'group inline-flex h-8 max-w-full items-center gap-2 rounded-full border bg-fd-card/70 ps-0.5 pe-2 text-sm font-medium transition-colors',
+          'group inline-flex h-8 max-w-full items-center gap-2 rounded-md ps-1 pe-1.5 text-sm font-medium transition-colors',
           'hover:bg-fd-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring data-[state=open]:bg-fd-accent',
         )}
       >
@@ -48,8 +48,8 @@ export function UserMenuCliente({ nombre, email, esAdmin, enClase, demo }: UserM
           className="size-3.5 text-fd-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180"
         />
       </PopoverTrigger>
-      <PopoverContent align="end" sideOffset={8} className="w-64 p-1.5">
-        <div className="flex items-center gap-3 px-2.5 pt-2 pb-3">
+      <PopoverContent align="end" sideOffset={8} className="w-60 p-1">
+        <div className="flex items-center gap-3 px-2 pt-2 pb-2.5">
           <Avatar texto={iniciales(nombre, email)} grande />
           <div className="min-w-0">
             <p className="truncate font-medium">{visible}</p>
@@ -57,18 +57,9 @@ export function UserMenuCliente({ nombre, email, esAdmin, enClase, demo }: UserM
           </div>
         </div>
         {(esAdmin || demo) && (
-          <div className="flex gap-1.5 px-2.5 pb-2">
-            {esAdmin && (
-              <span className="rounded-full bg-fd-primary/12 px-2 py-0.5 text-[11px] font-medium text-fd-primary">
-                Admin
-              </span>
-            )}
-            {demo && (
-              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
-                Modo demo
-              </span>
-            )}
-          </div>
+          <p className="px-2 pb-2 text-xs text-fd-muted-foreground">
+            {[esAdmin && 'Admin', demo && 'Modo demo'].filter(Boolean).join(' · ')}
+          </p>
         )}
         <div role="separator" className="my-1 h-px bg-fd-border" />
         <nav aria-label="Cuenta" className="flex flex-col">
@@ -110,7 +101,7 @@ function BotonSalir() {
       disabled={pending}
       className={cn(
         itemClass,
-        'text-red-600 hover:text-red-600 disabled:opacity-60 dark:text-red-400 dark:hover:text-red-400 [&_svg]:text-current',
+        'disabled:opacity-60',
       )}
     >
       {pending ? <Loader2 aria-hidden className="animate-spin" /> : <LogOut aria-hidden />}
@@ -124,8 +115,8 @@ function Avatar({ texto, grande }: { texto: string; grande?: boolean }) {
     <span
       aria-hidden
       className={cn(
-        'bg-brand-gradient inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white shadow-sm',
-        grande ? 'size-10 text-sm' : 'size-7 text-[11px]',
+        'inline-flex shrink-0 items-center justify-center rounded-full border bg-fd-muted font-medium text-fd-foreground',
+        grande ? 'size-9 text-xs' : 'size-6 text-[10px]',
       )}
     >
       {texto}

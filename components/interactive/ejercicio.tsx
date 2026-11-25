@@ -1,18 +1,39 @@
 'use client';
 
-import { createContext, use, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  use,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Bot, Dumbbell, Eye, EyeOff, Lightbulb, PartyPopper } from 'lucide-react';
+import { Eye, EyeOff, Lightbulb, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useRegistroOrdenado } from './utils';
-import { botonPrimario, botonSecundario } from './quiz';
+import {
+  avisoCaja,
+  avisoTexto,
+  botonPrimario,
+  botonSecundario,
+  cabecera,
+  etiqueta,
+  okCaja,
+  okTexto,
+  tituloBloque,
+} from './estilos';
 
 type Dificultad = 'facil' | 'media' | 'dificil';
 
-const DIFICULTADES: Record<Dificultad, { etiqueta: string; clase: string; puntos: number }> = {
-  facil: { etiqueta: 'Fácil', clase: 'bg-green-500/15 text-green-700 dark:text-green-400', puntos: 1 },
-  media: { etiqueta: 'Media', clase: 'bg-amber-500/15 text-amber-700 dark:text-amber-400', puntos: 2 },
-  dificil: { etiqueta: 'Difícil', clase: 'bg-red-500/15 text-red-700 dark:text-red-400', puntos: 3 },
+const DIFICULTADES: Record<Dificultad, { etiqueta: string }> = {
+  facil: { etiqueta: 'Fácil' },
+  media: { etiqueta: 'Media' },
+  dificil: { etiqueta: 'Difícil' },
 };
 
 interface EjercicioCtx {
@@ -21,6 +42,9 @@ interface EjercicioCtx {
   registrarPista: () => () => void;
   solucionVisible: boolean;
   registrarSolucion: () => () => void;
+  solucionId: string;
+  /** Si es true, la solución toma el foco al aparecer (tras confirmar). */
+  enfocarSolucion: RefObject<boolean>;
 }
 
 const EjercicioContext = createContext<EjercicioCtx | null>(null);
@@ -45,6 +69,20 @@ export function Ejercicio({ titulo, dificultad = 'media', pregunta, tutor = true
   const [numSoluciones, setNumSoluciones] = useState(0);
   const [fase, setFase] = useState<'oculta' | 'confirmar' | 'visible'>('oculta');
   const tituloId = useId();
+  const solucionId = useId();
+  const enfocarSolucion = useRef(false);
+  // Al volver de la confirmación, el foco regresa al botón «Ver solución».
+  const enfocarTrigger = useRef(false);
+  const triggerRef = useCallback((el: HTMLButtonElement | null) => {
+    if (el && enfocarTrigger.current) {
+      enfocarTrigger.current = false;
+      el.focus();
+    }
+  }, []);
+  const cancelarConfirmacion = () => {
+    enfocarTrigger.current = true;
+    setFase('oculta');
+  };
   const dif = DIFICULTADES[dificultad] ?? DIFICULTADES.media;
 
   const registrarSolucion = useCallback(() => {
@@ -61,8 +99,10 @@ export function Ejercicio({ titulo, dificultad = 'media', pregunta, tutor = true
       registrarPista,
       solucionVisible: fase === 'visible',
       registrarSolucion,
+      solucionId,
+      enfocarSolucion,
     }),
-    [pistasVisibles, indicePista, registrarPista, fase, registrarSolucion],
+    [pistasVisibles, indicePista, registrarPista, fase, registrarSolucion, solucionId],
   );
 
   const quedanPistas = pistasVisibles < pistas.length;
@@ -77,27 +117,24 @@ export function Ejercicio({ titulo, dificultad = 'media', pregunta, tutor = true
   return (
     <section
       aria-labelledby={tituloId}
-      className="my-8 overflow-hidden rounded-2xl border bg-fd-card text-fd-card-foreground shadow-sm"
+      className="my-8 overflow-hidden rounded-lg border bg-fd-background text-fd-foreground"
     >
-      <div className="not-prose flex flex-wrap items-center gap-3 border-b bg-fd-muted/50 px-4 py-3 sm:px-5">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fd-primary text-fd-primary-foreground">
-          <Dumbbell className="size-5" aria-hidden />
-        </span>
-        <p id={tituloId} className="min-w-0 flex-1 font-semibold leading-tight">
-          <span className="block text-[0.7rem] font-medium uppercase tracking-wider text-fd-muted-foreground">Ejercicio</span>
+      <div className={cn('not-prose', cabecera)}>
+        <span className={etiqueta}>Ejercicio</span>
+        <p id={tituloId} className={cn(tituloBloque, 'min-w-0 flex-1')}>
           {titulo}
         </p>
-        <span className={cn('rounded-full px-2.5 py-1 text-xs font-semibold', dif.clase)}>
+        <span className={etiqueta}>
           <span className="sr-only">Dificultad: </span>
           {dif.etiqueta}
-          <span aria-hidden className="ml-1 tracking-tighter">
-            {'●'.repeat(dif.puntos)}
-            <span className="opacity-30">{'●'.repeat(3 - dif.puntos)}</span>
-          </span>
         </span>
       </div>
 
-      <div ref={contenedor} data-registro-raiz="" className="px-4 py-4 sm:px-5 [&>:first-child]:mt-0 [&>:last-child]:mb-0">
+      <div
+        ref={contenedor}
+        data-registro-raiz=""
+        className="px-4 py-4 sm:px-5 [&>:first-child]:mt-0 [&>:last-child]:mb-0"
+      >
         <EjercicioContext value={ctx}>{children}</EjercicioContext>
       </div>
 
@@ -106,23 +143,36 @@ export function Ejercicio({ titulo, dificultad = 'media', pregunta, tutor = true
           {fase === 'confirmar' ? (
             <motion.div
               key="confirmar"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
               className="flex flex-col gap-3 sm:flex-row sm:items-center"
               role="alertdialog"
               aria-label="Confirmar ver la solución"
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.stopPropagation();
+                  cancelarConfirmacion();
+                }
+              }}
             >
               <p className="flex-1 text-sm">
-                <strong>¿Seguro?</strong> Inténtalo primero un poco más: equivocarte ahora es la mejor forma de aprenderlo.
+                <strong className="font-medium">¿Ver ya la solución?</strong> Intentarlo un poco más ayuda a fijarlo.
                 {quedanPistas && ' Aún te quedan pistas.'}
               </p>
               <div className="flex gap-2">
-                <button type="button" autoFocus onClick={() => setFase('oculta')} className={botonPrimario}>
+                <button type="button" autoFocus onClick={cancelarConfirmacion} className={botonPrimario}>
                   Vale, lo intento
                 </button>
-                <button type="button" onClick={() => setFase('visible')} className={botonSecundario}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    enfocarSolucion.current = true;
+                    setFase('visible');
+                  }}
+                  className={botonSecundario}
+                >
                   Ver solución
                 </button>
               </div>
@@ -141,9 +191,11 @@ export function Ejercicio({ titulo, dificultad = 'media', pregunta, tutor = true
                   type="button"
                   onClick={() => setPistasVisibles((n) => Math.min(n + 1, pistas.length))}
                   disabled={!quedanPistas}
+                  aria-controls={pistas[Math.min(pistasVisibles, pistas.length - 1)]}
+                  aria-expanded={pistasVisibles > 0}
                   className={botonSecundario}
                 >
-                  <Lightbulb className="size-4 text-amber-500" aria-hidden />
+                  <Lightbulb className="size-4 text-fd-muted-foreground" aria-hidden />
                   {quedanPistas
                     ? `Ver pista ${pistasVisibles + 1} de ${pistas.length}`
                     : `Pistas: ${pistas.length}/${pistas.length}`}
@@ -151,12 +203,25 @@ export function Ejercicio({ titulo, dificultad = 'media', pregunta, tutor = true
               )}
               {numSoluciones > 0 &&
                 (fase === 'visible' ? (
-                  <button type="button" onClick={() => setFase('oculta')} className={botonSecundario}>
+                  <button
+                    type="button"
+                    onClick={() => setFase('oculta')}
+                    aria-expanded
+                    aria-controls={solucionId}
+                    className={botonSecundario}
+                  >
                     <EyeOff className="size-4" aria-hidden />
                     Ocultar solución
                   </button>
                 ) : (
-                  <button type="button" onClick={() => setFase('confirmar')} className={botonSecundario}>
+                  <button
+                    ref={triggerRef}
+                    type="button"
+                    onClick={() => setFase('confirmar')}
+                    aria-expanded={false}
+                    aria-controls={solucionId}
+                    className={botonSecundario}
+                  >
                     <Eye className="size-4" aria-hidden />
                     Ver solución
                   </button>
@@ -165,9 +230,9 @@ export function Ejercicio({ titulo, dificultad = 'media', pregunta, tutor = true
                 <button
                   type="button"
                   onClick={preguntarTutor}
-                  className="ml-auto inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-fd-primary transition hover:bg-fd-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
+                  className="ml-auto inline-flex min-h-10 items-center sm:min-h-8 gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-fd-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
                 >
-                  <Bot className="size-4" aria-hidden />
+                  <MessageCircle className="size-4" aria-hidden />
                   Pregúntale al tutor
                 </button>
               )}
@@ -190,20 +255,18 @@ export function Pista({ children }: { children: ReactNode }) {
   const visible = !ej || (indice >= 0 && indice < ej.pistasVisibles);
 
   return (
-    <div data-pista={id} hidden={!visible}>
+    <div data-pista={id} id={id} hidden={!visible}>
       <AnimatePresence initial={false}>
         {visible && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.15 }}
             className="overflow-hidden"
           >
-            <div className="my-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm [&_p]:my-1">
-              <p className="not-prose mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
-                <Lightbulb className="size-3.5" aria-hidden />
-                Pista {indice + 1}
-              </p>
+            <div className={cn('my-3 rounded-md border px-4 py-3 text-sm [&_p]:my-1', avisoCaja)}>
+              <p className={cn('not-prose mb-1 text-xs font-medium', avisoTexto)}>Pista {indice + 1}</p>
               {children}
             </div>
           </motion.div>
@@ -219,25 +282,41 @@ export function Solucion({ children }: { children: ReactNode }) {
   const registrar = ej?.registrarSolucion;
   useEffect(() => registrar?.(), [registrar]);
   const visible = !ej || ej.solucionVisible;
+  const enfocar = ej?.enfocarSolucion;
+  const refSolucion = useCallback(
+    (el: HTMLDivElement | null) => {
+      if (el && enfocar?.current) {
+        enfocar.current = false;
+        el.focus();
+      }
+    },
+    [enfocar],
+  );
 
   return (
-    <AnimatePresence initial={false}>
-      {visible && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          className="overflow-hidden"
-        >
-          <div className="my-3 rounded-xl border border-green-500/30 bg-green-500/5 px-4 py-3 [&>:last-child]:mb-0">
-            <p className="not-prose mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-400">
-              <PartyPopper className="size-3.5" aria-hidden />
-              Solución
-            </p>
-            {children}
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <div id={ej?.solucionId}>
+      <AnimatePresence initial={false}>
+        {visible && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.15 }}
+            className="overflow-hidden"
+          >
+            <div
+              ref={refSolucion}
+              tabIndex={-1}
+              aria-label="Solución"
+              role="region"
+              className={cn('my-3 rounded-md border px-4 py-3 outline-none [&>:last-child]:mb-0', okCaja)}
+            >
+              <p className={cn('not-prose mb-2 text-xs font-medium', okTexto)}>Solución</p>
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }

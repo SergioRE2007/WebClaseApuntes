@@ -16,7 +16,7 @@ export function TextoEnriquecido({ texto }: { texto: string }) {
         p.startsWith('`') && p.endsWith('`') && p.length > 2 ? (
           <code
             key={i}
-            className="rounded-md border bg-fd-muted px-1 py-0.5 font-mono text-[0.88em] text-fd-foreground"
+            className="rounded border bg-fd-muted px-1 py-px font-mono text-[0.88em] text-fd-foreground"
           >
             {p.slice(1, -1)}
           </code>

@@ -9,6 +9,7 @@ import type { ComponentProps } from 'react';
 import type { MDXComponents } from 'mdx/types';
 import {
   Card,
+  Cards,
   CompletarCodigo,
   Concepto,
   Ejercicio,
@@ -39,6 +40,7 @@ export function getMDXComponents(components?: MDXComponents) {
     img: (props: ComponentProps<'img'>) => <ImageZoom {...(props as ComponentProps<typeof ImageZoom>)} />,
     // Fumadocs
     Card,
+    Cards,
     Accordion,
     Accordions,
     Step,

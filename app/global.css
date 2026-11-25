@@ -3,9 +3,11 @@
 @import 'fumadocs-ui/css/preset.css';
 
 /* ==========================================================================
-   DAM Apuntes · identidad visual
-   Paleta índigo/violeta → cian. Todo se expresa como variables de Fumadocs
-   (--color-fd-*) para que docs, landing, chat y paneles compartan tema.
+   DAM Apuntes · estilo "documentación limpia"
+   Grises neutros, fondo blanco / casi negro y un único color de acento (azul)
+   para enlaces, elemento activo, botón principal y foco. Todo se expresa con
+   las variables de Fumadocs (--color-fd-*) para que docs, inicio, chat y
+   paneles compartan tema.
    ========================================================================== */
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -14,124 +16,88 @@
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 
-  /* Colores de marca (para degradados y detalles). */
-  --color-brand-violet: oklch(0.58 0.24 285);
-  --color-brand-indigo: oklch(0.55 0.22 268);
-  --color-brand-cyan: oklch(0.78 0.14 210);
-
-  --radius-xl: 0.875rem;
-  --radius-2xl: 1.125rem;
-  --radius-3xl: 1.5rem;
-
-  --animate-aurora: aurora 18s ease-in-out infinite alternate;
-  --animate-shimmer: shimmer 2.4s linear infinite;
-  --animate-float: float 6s ease-in-out infinite;
-
-  @keyframes aurora {
-    0% {
-      transform: translate3d(-6%, -4%, 0) rotate(0deg) scale(1);
-    }
-    50% {
-      transform: translate3d(4%, 3%, 0) rotate(8deg) scale(1.08);
-    }
-    100% {
-      transform: translate3d(-2%, 6%, 0) rotate(-6deg) scale(1.02);
-    }
-  }
-
-  @keyframes shimmer {
-    from {
-      background-position: 200% 0;
-    }
-    to {
-      background-position: -200% 0;
-    }
-  }
-
-  @keyframes float {
-    0%,
-    100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(-8px);
-    }
-  }
+  /* Radios pequeños en todo el sitio (también en los componentes de Fumadocs). */
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.625rem;
+  --radius-3xl: 0.75rem;
 }
 
 /* ---------- Tema claro ---------- */
 :root {
-  --color-fd-background: oklch(0.99 0.004 280);
-  --color-fd-foreground: oklch(0.2 0.03 275);
-  --color-fd-muted: oklch(0.965 0.008 280);
-  --color-fd-muted-foreground: oklch(0.5 0.025 275);
-  --color-fd-popover: oklch(0.995 0.003 280);
-  --color-fd-popover-foreground: oklch(0.22 0.03 275);
-  --color-fd-card: oklch(0.982 0.006 280);
-  --color-fd-card-foreground: oklch(0.2 0.03 275);
-  --color-fd-border: oklch(0.88 0.018 280 / 0.7);
-  --color-fd-primary: oklch(0.53 0.23 278);
-  --color-fd-primary-foreground: oklch(0.99 0.005 280);
-  --color-fd-secondary: oklch(0.955 0.012 280);
-  --color-fd-secondary-foreground: oklch(0.25 0.04 275);
-  --color-fd-accent: oklch(0.93 0.03 280 / 0.75);
-  --color-fd-accent-foreground: oklch(0.3 0.12 278);
-  --color-fd-ring: oklch(0.6 0.2 278);
-  --color-fd-overlay: oklch(0.2 0.03 275 / 0.25);
+  --color-fd-background: #ffffff;
+  --color-fd-foreground: #18181b;
+  --color-fd-muted: #f4f4f5;
+  --color-fd-muted-foreground: #6b6b74;
+  --color-fd-popover: #ffffff;
+  --color-fd-popover-foreground: #18181b;
+  --color-fd-card: #ffffff;
+  --color-fd-card-foreground: #18181b;
+  --color-fd-border: #e4e4e7;
+  --color-fd-primary: #2563eb;
+  --color-fd-primary-foreground: #ffffff;
+  --color-fd-secondary: #f4f4f5;
+  --color-fd-secondary-foreground: #18181b;
+  --color-fd-accent: #f4f4f5;
+  --color-fd-accent-foreground: #18181b;
+  --color-fd-ring: #2563eb;
+  --color-fd-overlay: rgb(0 0 0 / 0.2);
+  /* Avisos informativos en gris; ámbar/rojo/verde solo cuando significan algo. */
+  --color-fd-info: var(--color-fd-muted-foreground);
+  --color-fd-idea: var(--color-fd-muted-foreground);
+  --color-fd-warning: #b45309;
+  --color-fd-error: #dc2626;
+  --color-fd-success: #15803d;
 
-  --dam-glow-1: oklch(0.65 0.22 285 / 0.35);
-  --dam-glow-2: oklch(0.8 0.13 210 / 0.3);
-  --dam-grid: oklch(0.5 0.05 280 / 0.08);
-  --dam-selection: oklch(0.75 0.13 278 / 0.35);
+  --dam-selection: rgb(37 99 235 / 0.18);
 
   color-scheme: light;
 }
 
 /* ---------- Tema oscuro ---------- */
 .dark {
-  --color-fd-background: oklch(0.155 0.018 278);
-  --color-fd-foreground: oklch(0.94 0.01 280);
-  --color-fd-muted: oklch(0.205 0.022 278);
-  --color-fd-muted-foreground: oklch(0.72 0.025 278);
-  --color-fd-popover: oklch(0.185 0.022 278);
-  --color-fd-popover-foreground: oklch(0.93 0.01 280);
-  --color-fd-card: oklch(0.185 0.02 278);
-  --color-fd-card-foreground: oklch(0.95 0.01 280);
-  --color-fd-border: oklch(0.6 0.04 280 / 0.18);
-  --color-fd-primary: oklch(0.74 0.16 282);
-  --color-fd-primary-foreground: oklch(0.16 0.03 278);
-  --color-fd-secondary: oklch(0.225 0.025 278);
-  --color-fd-secondary-foreground: oklch(0.92 0.01 280);
-  --color-fd-accent: oklch(0.3 0.05 280 / 0.6);
-  --color-fd-accent-foreground: oklch(0.92 0.04 282);
-  --color-fd-ring: oklch(0.72 0.16 282);
-  --color-fd-overlay: oklch(0 0 0 / 0.45);
+  --color-fd-background: #0a0a0b;
+  --color-fd-foreground: #ededef;
+  --color-fd-muted: #18181b;
+  --color-fd-muted-foreground: #a1a1aa;
+  --color-fd-popover: #111113;
+  --color-fd-popover-foreground: #ededef;
+  --color-fd-card: #0a0a0b;
+  --color-fd-card-foreground: #ededef;
+  --color-fd-border: #27272a;
+  --color-fd-primary: #60a5fa;
+  --color-fd-primary-foreground: #0a0a0b;
+  --color-fd-secondary: #18181b;
+  --color-fd-secondary-foreground: #ededef;
+  --color-fd-accent: #1c1c1f;
+  --color-fd-accent-foreground: #ededef;
+  --color-fd-ring: #60a5fa;
+  --color-fd-overlay: rgb(0 0 0 / 0.5);
+  --color-fd-info: var(--color-fd-muted-foreground);
+  --color-fd-idea: var(--color-fd-muted-foreground);
+  --color-fd-warning: #fbbf24;
+  --color-fd-error: #f87171;
+  --color-fd-success: #4ade80;
 
-  --dam-glow-1: oklch(0.55 0.24 285 / 0.4);
-  --dam-glow-2: oklch(0.7 0.14 210 / 0.28);
-  --dam-grid: oklch(0.85 0.04 280 / 0.06);
-  --dam-selection: oklch(0.6 0.18 282 / 0.45);
+  --dam-selection: rgb(96 165 250 / 0.28);
 
   color-scheme: dark;
 }
 
-/* neutral.css trae grises puros para la barra lateral en oscuro: los teñimos. */
+/* neutral.css trae sus propios grises para la barra lateral en oscuro: usamos los nuestros. */
 .dark #nd-sidebar {
-  --color-fd-muted: oklch(0.22 0.024 278);
-  --color-fd-secondary: oklch(0.24 0.026 278);
-  --color-fd-muted-foreground: oklch(0.74 0.025 278);
+  --color-fd-muted: #18181b;
+  --color-fd-secondary: #18181b;
+  --color-fd-muted-foreground: #a1a1aa;
 }
 
 /* ---------- Base ---------- */
 html {
   scrollbar-gutter: stable;
   -webkit-text-size-adjust: 100%;
-  text-rendering: optimizeLegibility;
 }
 
 body {
   font-family: var(--font-sans);
-  font-feature-settings: 'cv11', 'ss01';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--color-fd-background);
@@ -150,39 +116,13 @@ body {
   }
 }
 
-/* En móvil, deja hueco al final para que el botón flotante del tutor no tape el contenido */
+/* En móvil, deja hueco al final para que el botón del tutor no tape el contenido */
 @layer base {
   @media (max-width: 639px) {
     body:has(.dam-chat-fab) :is(#nd-page, main) {
-      padding-bottom: 5rem;
+      padding-bottom: 4.5rem;
     }
   }
-}
-
-/* Scrollbar fina y teñida */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklch, var(--color-fd-muted-foreground) 35%, transparent) transparent;
-}
-
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: color-mix(in oklch, var(--color-fd-muted-foreground) 30%, transparent);
-  border-radius: 999px;
-  border: 3px solid transparent;
-  background-clip: content-box;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background-color: color-mix(in oklch, var(--color-fd-muted-foreground) 55%, transparent);
 }
 
 code,
@@ -196,104 +136,119 @@ samp {
 /* ---------- Contenido de apuntes ---------- */
 .prose {
   --tw-prose-links: var(--color-fd-primary);
+  line-height: 1.7;
+}
+
+.prose :where(h1, h2, h3, h4):not(:where([class~='not-prose'] *)) {
+  font-weight: 600;
+  letter-spacing: -0.012em;
 }
 
 .prose :where(a):not(:where([class~='not-prose'] *)) {
+  font-weight: 450;
   text-underline-offset: 3px;
-  text-decoration-color: color-mix(in oklch, var(--color-fd-primary) 40%, transparent);
-  transition: text-decoration-color 150ms ease;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--color-fd-primary) 35%, transparent);
 }
 
 .prose :where(a):not(:where([class~='not-prose'] *)):hover {
   text-decoration-color: var(--color-fd-primary);
 }
 
-/* Código en línea */
+/* Los títulos llevan dentro un enlace de ancla: que no herede el peso de los enlaces */
+.prose :where(h1, h2, h3, h4, h5, h6) a {
+  font-weight: inherit;
+}
+
+/* Código en línea: gris, sin color de marca */
 .prose :where(:not(pre) > code):not(:where([class~='not-prose'] *)) {
-  border-radius: 0.375rem;
-  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
+  padding: 0.1em 0.3em;
   font-size: 0.875em;
-  background-color: color-mix(in oklch, var(--color-fd-primary) 9%, var(--color-fd-muted));
-  border: 1px solid color-mix(in oklch, var(--color-fd-primary) 14%, transparent);
+  background-color: var(--color-fd-muted);
+  border: 1px solid var(--color-fd-border);
 }
 
-/* Bloques de código: mismo radio y borde que las tarjetas */
+/* Ancho de lectura: ~70 caracteres por línea en los apuntes */
+#nd-page:not([data-full='true']) {
+  max-width: calc(44rem + 4rem);
+}
+
+/* Bloques de código: borde de 1px, sin sombra */
 figure.shiki {
-  border-radius: var(--radius-xl);
-  box-shadow: 0 1px 2px oklch(0.2 0.03 275 / 0.04);
+  box-shadow: none;
 }
 
-/* ---------- Utilidades de la marca ---------- */
-@utility text-gradient {
-  background-image: linear-gradient(
-    100deg,
-    var(--color-fd-foreground) 10%,
-    color-mix(in oklch, var(--color-brand-violet) 85%, var(--color-fd-foreground)) 45%,
-    var(--color-brand-cyan) 95%
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+/* ---------- Ajustes sobre Fumadocs ---------- */
+
+/* Elemento activo de la barra lateral: neutro (negrita), sin fondo azul. */
+#nd-sidebar a[data-active='true'] {
+  background-color: var(--color-fd-accent);
+  color: var(--color-fd-foreground);
+  font-weight: 500;
+}
+#nd-sidebar a[data-active='true']::before {
+  background-color: var(--color-fd-foreground);
 }
 
-/* Variante solo de marca, para frases cortas (sin tramo del color de texto que parta palabras) */
-@utility text-gradient-brand {
-  background-image: linear-gradient(
-    100deg,
-    var(--color-brand-indigo),
-    var(--color-brand-violet) 55%,
-    color-mix(in oklch, var(--color-brand-cyan) 60%, var(--color-brand-violet))
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+/* Enlace activo de la cabecera de inicio: texto oscuro, no azul. */
+#nd-nav a[data-active='true'] {
+  color: var(--color-fd-foreground);
+  font-weight: 500;
 }
 
-@utility bg-brand-gradient {
-  background-image: linear-gradient(135deg, var(--color-brand-indigo), var(--color-brand-violet) 50%, var(--color-brand-cyan));
+/* Sin desenfoques: cabeceras y superposiciones con fondo sólido. */
+*,
+::before,
+::after {
+  backdrop-filter: none !important;
+}
+#nd-nav > div,
+#nd-subnav {
+  background-color: var(--color-fd-background) !important;
+}
+.bg-fd-popover\/60 {
+  background-color: var(--color-fd-popover);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+}
+@media (max-width: 1023px) {
+  #nd-nav > div {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
 }
 
-/* Rejilla de puntos sutil (solo landing / auth) */
-@utility bg-dots {
-  background-image: radial-gradient(var(--dam-grid) 1px, transparent 1px);
-  background-size: 22px 22px;
+/* Avisos informativos (info/idea/tip): sin icono, solo la barra gris. */
+#nd-page [style*='--color-fd-info'] > svg,
+#nd-page [style*='--color-fd-idea'] > svg {
+  display: none;
+}
+#nd-page [style*='--color-fd-info'],
+#nd-page [style*='--color-fd-idea'] {
+  padding-inline-start: 0.25rem;
+  gap: 0.75rem;
 }
 
-@utility bg-grid {
-  background-image:
-    linear-gradient(to right, var(--dam-grid) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--dam-grid) 1px, transparent 1px);
-  background-size: 48px 48px;
+/* Comentarios de código en oscuro con contraste AA (github-dark usa #6A737D). */
+.dark .shiki span[style*='#6A737D' i] {
+  color: #8b949e !important;
 }
 
-/* Tarjeta "glass" */
-@utility glass {
-  background-color: color-mix(in oklch, var(--color-fd-card) 72%, transparent);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
-  backdrop-filter: blur(16px) saturate(140%);
+/* Objetivos táctiles de 40px en las cabeceras de Fumadocs en móvil. */
+@media (max-width: 767px) {
+  #nd-subnav button,
+  #nd-nav button {
+    min-width: 40px;
+    min-height: 40px;
+  }
 }
 
-/* Borde degradado: usa con `relative` */
-@utility ring-gradient {
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    padding: 1px;
-    border-radius: inherit;
-    background: linear-gradient(
-      135deg,
-      color-mix(in oklch, var(--color-brand-violet) 70%, transparent),
-      transparent 40%,
-      transparent 60%,
-      color-mix(in oklch, var(--color-brand-cyan) 70%, transparent)
-    );
-    -webkit-mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
+/* En móvil, el botón flotante del tutor no tapa el contenido: se oculta en los
+   temas (ya tienen «Preguntar al tutor» en la cabecera) y mientras escribes. */
+@media (max-width: 639px) {
+  body:has(.dam-preguntar-tutor) .dam-chat-fab,
+  body:has(:is(input, textarea, select):focus) .dam-chat-fab {
+    display: none;
   }
 }
 

@@ -15,14 +15,14 @@ export default async function LoginPage(props: PageProps<'/login'>) {
 
   return (
     <AuthShell
-      titulo="Entrar a DAM Apuntes"
-      subtitulo="Te enviamos un enlace a tu correo. Sin contraseñas."
-      pie="Solo para la clase de DAM. La primera vez te pediremos el código de clase."
+      titulo="Entrar"
+      subtitulo="Los apuntes son públicos. Entrar solo hace falta para usar el tutor y aportar material: te enviamos un enlace a tu correo, sin contraseñas."
+      pie="La primera vez te pediremos el código de clase. El correo solo sirve para identificarte."
     >
       {typeof sp.error === 'string' && ERRORES[sp.error] && (
         <p
           role="alert"
-          className="mt-5 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300"
+          className="mt-5 rounded-md border border-red-600/20 bg-red-600/5 p-3 text-sm text-red-800 dark:text-red-300"
         >
           {ERRORES[sp.error]}
         </p>

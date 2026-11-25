@@ -1,6 +1,7 @@
 import { icons, type LucideProps } from 'lucide-react';
-import { Card as FdCard, type CardProps } from 'fumadocs-ui/components/card';
-import type { ReactNode } from 'react';
+import { Card as FdCard, Cards as FdCards, type CardProps } from 'fumadocs-ui/components/card';
+import { cn } from '@/lib/cn';
+import type { ComponentProps, ReactNode } from 'react';
 
 export interface IconoProps extends LucideProps {
   /** Nombre del icono de Lucide en PascalCase, p. ej. "Code", "Database" (https://lucide.dev/icons). */
@@ -15,9 +16,24 @@ export function Icono({ nombre, ...props }: IconoProps) {
 }
 
 /**
- * <Card> de Fumadocs que además acepta `icon` como nombre de Lucide:
+ * <Card> de Fumadocs. Acepta `icon` (nombre de Lucide) por compatibilidad con
+ * el contenido existente, pero no lo pinta: filas con título y texto, separadas por una línea.
  *   <Card icon="Code" title="Programación" href="/docs/1-dam/programacion" />
  */
-export function Card({ icon, ...props }: Omit<CardProps, 'icon'> & { icon?: ReactNode | string }) {
-  return <FdCard icon={typeof icon === 'string' ? <Icono nombre={icon} /> : icon} {...props} />;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function Card({ icon, className, ...props }: Omit<CardProps, 'icon'> & { icon?: ReactNode | string }) {
+  return (
+    <FdCard
+      className={cn(
+        'rounded-none border-0 border-b bg-transparent px-0 py-3 shadow-none hover:bg-transparent hover:[&_h3]:text-fd-primary [&_h3]:text-[15px] [&_h3]:transition-colors',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+/** Rejilla de <Card>: lista a dos columnas con líneas finas, sin cajas. */
+export function Cards({ className, ...props }: ComponentProps<typeof FdCards>) {
+  return <FdCards className={cn('not-prose my-6 gap-x-8 gap-y-0 border-t', className)} {...props} />;
 }

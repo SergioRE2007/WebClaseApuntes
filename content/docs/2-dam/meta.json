@@ -1,7 +1,6 @@
 {
   "title": "2º DAM",
   "description": "Segundo curso del ciclo",
-  "icon": "Rocket",
   "root": true,
   "pages": [
     "index",

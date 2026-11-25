@@ -12,11 +12,11 @@ const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans', dis
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono', display: 'swap' });
 
 const descripcion =
-  'Apuntes interactivos de DAM (Desarrollo de Aplicaciones Multiplataforma): tests, flashcards, tutor IA y recursos de toda la clase.';
+  'Apuntes de DAM (Desarrollo de Aplicaciones Multiplataforma) con ejercicios, tests y un tutor para resolver dudas.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(env.siteUrl),
-  title: { default: `${appName} · Todo DAM en un solo sitio`, template: `%s · ${appName}` },
+  title: { default: appName, template: `%s · ${appName}` },
   description: descripcion,
   applicationName: appName,
   openGraph: {
@@ -31,8 +31,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#fbfbff' },
-    { media: '(prefers-color-scheme: dark)', color: '#0f1020' },
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#0a0a0b' },
   ],
   colorScheme: 'light dark',
 };
@@ -93,7 +93,7 @@ export default function Layout({ children }: LayoutProps<'/'>) {
         <RootProvider i18n={{ locale: 'es', translations: traducciones }}>
           {children}
           <ChatWidget />
-          <Toaster richColors position="top-center" closeButton />
+          <Toaster position="top-center" closeButton />
         </RootProvider>
       </body>
     </html>

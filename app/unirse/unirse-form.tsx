@@ -1,13 +1,16 @@
 'use client';
 
-import { useActionState } from 'react';
-import { CircleAlert, KeyRound, Loader2 } from 'lucide-react';
+import { useActionState, useState } from 'react';
+import { CircleAlert, Loader2 } from 'lucide-react';
 import { authBoton, authInput } from '@/components/layout/auth-estilos';
 import { cn } from '@/lib/cn';
 import { unirseClase, type UnirseState } from './actions';
 
 export function UnirseForm({ next }: { next: string }) {
   const [state, action, pending] = useActionState<UnirseState, FormData>(unirseClase, null);
+  // Controlados: React 19 vacía los campos tras enviar el formulario.
+  const [nombre, setNombre] = useState('');
+  const [codigo, setCodigo] = useState('');
   return (
     <form action={action} className="mt-6 space-y-4">
       <input type="hidden" name="next" value={next} />
@@ -22,6 +25,8 @@ export function UnirseForm({ next }: { next: string }) {
           maxLength={60}
           autoComplete="name"
           placeholder="Nombre y apellido"
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
           className={authInput}
         />
       </div>
@@ -36,19 +41,22 @@ export function UnirseForm({ next }: { next: string }) {
           autoComplete="off"
           autoCapitalize="characters"
           spellCheck={false}
+          value={codigo}
+          onChange={(e) => setCodigo(e.target.value)}
+          aria-invalid={state ? true : undefined}
           aria-describedby={state ? 'unirse-estado' : undefined}
           className={cn(authInput, 'font-mono uppercase tracking-[0.25em]')}
         />
       </div>
       <button type="submit" disabled={pending} className={authBoton}>
-        {pending ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <KeyRound aria-hidden className="size-4" />}
+        {pending ? <Loader2 aria-hidden className="size-4 animate-spin" /> : null}
         {pending ? 'Comprobando…' : 'Entrar a la clase'}
       </button>
       {state && (
         <p
           id="unirse-estado"
           role="alert"
-          className="flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300"
+          className="flex items-start gap-2 rounded-md border border-red-600/20 bg-red-600/5 p-3 text-sm text-red-800 dark:text-red-300"
         >
           <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
           {state.mensaje}

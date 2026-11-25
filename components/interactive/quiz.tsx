@@ -13,9 +13,19 @@ import {
   type ReactNode,
 } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, ChevronRight, CircleHelp, RotateCcw, Trophy, X } from 'lucide-react';
+import { Check, ChevronRight, RotateCcw, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { Celebracion } from './celebracion';
+import {
+  bloque,
+  botonPrimario,
+  botonSecundario,
+  cabecera,
+  malCaja,
+  malTexto,
+  okCaja,
+  okTexto,
+  tituloBloque,
+} from './estilos';
 import { Contenido, TextoEnriquecido, useRegistroOrdenado } from './utils';
 
 /* -------------------------------------------------------------------------- */
@@ -60,10 +70,10 @@ export interface QuizProps {
 
 function mensajeResultado(aciertos: number, total: number) {
   const ratio = total ? aciertos / total : 0;
-  if (ratio === 1) return { titulo: '¡Pleno! Lo dominas', texto: 'Has acertado todas. Puedes pasar al siguiente tema con tranquilidad.' };
-  if (ratio >= 0.7) return { titulo: '¡Muy bien!', texto: 'Vas por buen camino. Repasa las que has fallado y vuelve a intentarlo.' };
-  if (ratio >= 0.4) return { titulo: 'Casi, casi', texto: 'Hay conceptos que conviene repasar. Lee las explicaciones y prueba otra vez.' };
-  return { titulo: 'Toca repasar', texto: 'No pasa nada: vuelve a leer el tema con calma y repite el test.' };
+  if (ratio === 1) return 'Has acertado todas.';
+  if (ratio >= 0.7) return 'Repasa las que has fallado y vuelve a intentarlo.';
+  if (ratio >= 0.4) return 'Conviene repasar algunos conceptos. Lee las explicaciones y prueba otra vez.';
+  return 'Vuelve a leer el tema con calma y repite el test.';
 }
 
 export function Quiz({ titulo = 'Comprueba lo que sabes', descripcion, children }: QuizProps) {
@@ -74,7 +84,7 @@ export function Quiz({ titulo = 'Comprueba lo que sabes', descripcion, children 
   const [intento, setIntento] = useState(0);
   const [terminado, setTerminado] = useState(false);
   const tituloId = useId();
-  const cabecera = useRef<HTMLDivElement>(null);
+  const cabeceraRef = useRef<HTMLDivElement>(null);
 
   const activa = terminado ? null : (ids[indice] ?? null);
   const total = ids.length;
@@ -93,7 +103,7 @@ export function Quiz({ titulo = 'Comprueba lo que sabes', descripcion, children 
     [activa, total, registrar, responder, numero],
   );
 
-  const enfocarCabecera = () => requestAnimationFrame(() => cabecera.current?.focus({ preventScroll: true }));
+  const enfocarCabecera = () => requestAnimationFrame(() => cabeceraRef.current?.focus({ preventScroll: true }));
 
   const siguiente = () => {
     if (esUltima) setTerminado(true);
@@ -110,31 +120,18 @@ export function Quiz({ titulo = 'Comprueba lo que sabes', descripcion, children 
   };
 
   const resultado = mensajeResultado(aciertos, total);
-  const perfecto = terminado && total > 0 && aciertos === total;
 
   return (
-    <section
-      aria-labelledby={tituloId}
-      className="not-prose relative my-8 overflow-hidden rounded-2xl border bg-fd-card text-fd-card-foreground shadow-sm"
-    >
+    <section aria-labelledby={tituloId} className={cn(bloque, 'relative')}>
       {/* Cabecera */}
-      <div
-        ref={cabecera}
-        tabIndex={-1}
-        className="flex flex-wrap items-center gap-3 border-b bg-fd-muted/50 px-4 py-3 outline-none sm:px-5"
-      >
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fd-primary text-fd-primary-foreground">
-          <CircleHelp className="size-5" aria-hidden />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p id={tituloId} className="font-semibold leading-tight">
-            {titulo}
-          </p>
-          {descripcion && <p className="text-sm text-fd-muted-foreground">{descripcion}</p>}
-        </div>
+      <div ref={cabeceraRef} tabIndex={-1} className={cn(cabecera, 'outline-none')}>
+        <p id={tituloId} className={cn(tituloBloque, 'min-w-0 flex-1')}>
+          {titulo}
+          {descripcion && <span className="ms-2 font-normal text-fd-muted-foreground">{descripcion}</span>}
+        </p>
         {total > 0 && (
-          <span className="rounded-full border bg-fd-background px-2.5 py-1 text-xs font-medium tabular-nums text-fd-muted-foreground">
-            {terminado ? `${aciertos}/${total} aciertos` : `Pregunta ${Math.min(indice + 1, total)} de ${total}`}
+          <span className="text-xs tabular-nums text-fd-muted-foreground">
+            {terminado ? `${aciertos}/${total} aciertos` : `${Math.min(indice + 1, total)} de ${total}`}
           </span>
         )}
       </div>
@@ -142,7 +139,7 @@ export function Quiz({ titulo = 'Comprueba lo que sabes', descripcion, children 
       {/* Barra de progreso */}
       {total > 0 && (
         <div
-          className="h-1 w-full bg-fd-muted"
+          className="h-px w-full bg-fd-border"
           role="progressbar"
           aria-label="Progreso del test"
           aria-valuemin={0}
@@ -150,10 +147,10 @@ export function Quiz({ titulo = 'Comprueba lo que sabes', descripcion, children 
           aria-valuenow={terminado ? total : indice + (respondidaActual ? 1 : 0)}
         >
           <motion.div
-            className="h-full bg-fd-primary"
+            className="h-full bg-fd-foreground"
             initial={false}
             animate={{ width: `${((terminado ? total : indice + (respondidaActual ? 1 : 0)) / total) * 100}%` }}
-            transition={{ type: 'spring', stiffness: 200, damping: 30 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
           />
         </div>
       )}
@@ -166,74 +163,49 @@ export function Quiz({ titulo = 'Comprueba lo que sabes', descripcion, children 
         {total === 0 && (
           <div className="space-y-3" aria-hidden>
             <div className="h-5 w-2/3 animate-pulse rounded bg-fd-muted" />
-            <div className="h-11 animate-pulse rounded-xl bg-fd-muted" />
-            <div className="h-11 animate-pulse rounded-xl bg-fd-muted" />
+            <div className="h-10 animate-pulse rounded-md bg-fd-muted" />
+            <div className="h-10 animate-pulse rounded-md bg-fd-muted" />
           </div>
         )}
 
-        <AnimatePresence>
-          {terminado && (
-            <motion.div
-              key="resultado"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="relative flex flex-col items-center gap-3 py-6 text-center"
-              role="status"
-            >
-              {perfecto && <Celebracion />}
-              <motion.span
-                initial={{ scale: 0.4, rotate: -20 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: 'spring', stiffness: 260, damping: 14 }}
-                className={cn(
-                  'flex size-16 items-center justify-center rounded-full',
-                  perfecto
-                    ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                    : 'bg-fd-primary/10 text-fd-primary',
-                )}
-              >
-                <Trophy className="size-8" aria-hidden />
-              </motion.span>
-              <p className="text-3xl font-bold tabular-nums">
-                {aciertos}
-                <span className="text-fd-muted-foreground">/{total}</span>
-              </p>
-              <p className="text-lg font-semibold">{resultado.titulo}</p>
-              <p className="max-w-md text-sm text-fd-muted-foreground">{resultado.texto}</p>
-              <div className="mt-2 flex flex-wrap justify-center gap-1.5" aria-label="Resumen por pregunta">
-                {ids.map((id, i) => (
-                  <span
-                    key={id}
-                    title={`Pregunta ${i + 1}: ${respuestas[id] ? 'acierto' : 'fallo'}`}
-                    className={cn(
-                      'flex size-7 items-center justify-center rounded-full text-xs font-semibold',
-                      respuestas[id]
-                        ? 'bg-green-500/15 text-green-700 dark:text-green-400'
-                        : 'bg-red-500/15 text-red-700 dark:text-red-400',
-                    )}
-                  >
-                    {i + 1}
-                  </span>
-                ))}
-              </div>
-              <button type="button" onClick={reintentar} className={cn(botonSecundario, 'mt-3')}>
-                <RotateCcw className="size-4" aria-hidden />
-                Reintentar
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {terminado && (
+          <div className="py-2" role="status">
+            <p className="text-2xl font-semibold tabular-nums">
+              {aciertos}
+              <span className="text-fd-muted-foreground">/{total}</span>
+            </p>
+            <p className="mt-1 text-sm text-fd-muted-foreground">{resultado}</p>
+            <ol className="mt-4 flex flex-wrap gap-1.5" aria-label="Resumen por pregunta">
+              {ids.map((id, i) => (
+                <li
+                  key={id}
+                  title={`Pregunta ${i + 1}: ${respuestas[id] ? 'acierto' : 'fallo'}`}
+                  className={cn(
+                    'flex size-7 items-center justify-center rounded-md border text-xs font-medium tabular-nums',
+                    respuestas[id] ? cn(okCaja, okTexto) : cn(malCaja, malTexto),
+                  )}
+                >
+                  {i + 1}
+                  <span className="sr-only">{respuestas[id] ? ': acierto' : ': fallo'}</span>
+                </li>
+              ))}
+            </ol>
+            <button type="button" onClick={reintentar} className={cn(botonSecundario, 'mt-5')}>
+              <RotateCcw className="size-3.5" aria-hidden />
+              Reintentar
+            </button>
+          </div>
+        )}
       </div>
 
       {!terminado && total > 0 && (
-        <div className="flex items-center justify-between gap-3 border-t px-4 py-3 sm:px-5">
+        <div className="flex items-center justify-between gap-3 border-t px-4 py-2.5 sm:px-5">
           <p className="text-xs text-fd-muted-foreground" aria-live="polite">
             {respondidaActual ? 'Lee la explicación y continúa.' : 'Elige una respuesta.'}
           </p>
           <button type="button" onClick={siguiente} disabled={!respondidaActual} className={botonPrimario}>
             {esUltima ? 'Ver resultado' : 'Siguiente'}
-            <ChevronRight className="size-4" aria-hidden />
+            <ChevronRight className="size-3.5" aria-hidden />
           </button>
         </div>
       )}
@@ -245,10 +217,7 @@ export function Quiz({ titulo = 'Comprueba lo que sabes', descripcion, children 
 /*                                   Pregunta                                 */
 /* -------------------------------------------------------------------------- */
 
-export const botonPrimario =
-  'inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-fd-primary px-3.5 py-2 text-sm font-medium text-fd-primary-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring focus-visible:ring-offset-2 focus-visible:ring-offset-fd-background disabled:pointer-events-none disabled:opacity-40';
-export const botonSecundario =
-  'inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border bg-fd-secondary px-3.5 py-2 text-sm font-medium text-fd-secondary-foreground transition hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring focus-visible:ring-offset-2 focus-visible:ring-offset-fd-background disabled:pointer-events-none disabled:opacity-40';
+export { botonPrimario, botonSecundario };
 
 export interface PreguntaProps {
   /** Enunciado. Admite `código` entre comillas invertidas. */
@@ -274,7 +243,14 @@ function normalizar(s: string, exacta: boolean) {
   return exacta ? t : t.replace(/\s+/g, ' ').toLowerCase();
 }
 
-export function Pregunta({ enunciado, tipo = 'opciones', respuesta, explicacion, exacta = false, children }: PreguntaProps) {
+export function Pregunta({
+  enunciado,
+  tipo = 'opciones',
+  respuesta,
+  explicacion,
+  exacta = false,
+  children,
+}: PreguntaProps) {
   const quiz = use(QuizContext);
   const id = useId();
   const enunciadoId = useId();
@@ -329,14 +305,15 @@ export function Pregunta({ enunciado, tipo = 'opciones', respuesta, explicacion,
   );
 
   const comprobarMultiple = () => {
-    const ok =
-      Object.entries(correctas).every(([opId, c]) => c === seleccionadas.has(opId)) && seleccionadas.size > 0;
+    const ok = Object.entries(correctas).every(([opId, c]) => c === seleccionadas.has(opId)) && seleccionadas.size > 0;
     finalizar(ok);
   };
 
   const comprobarTexto = () => {
     if (!texto.trim()) return;
-    const validas = (Array.isArray(respuesta) ? respuesta : [String(respuesta ?? '')]).map((r) => normalizar(r, exacta));
+    const validas = (Array.isArray(respuesta) ? respuesta : [String(respuesta ?? '')]).map((r) =>
+      normalizar(r, exacta),
+    );
     finalizar(validas.includes(normalizar(texto, exacta)));
   };
 
@@ -365,8 +342,13 @@ export function Pregunta({ enunciado, tipo = 'opciones', respuesta, explicacion,
   return (
     <div data-quiz-pregunta={id} hidden={!visible} role="group" aria-labelledby={enunciadoId}>
       <AnimatePresence mode="wait" initial={false}>
-        <motion.div key={visible ? 'v' : 'h'} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2 }}>
-          <p id={enunciadoId} className="mb-1 text-base font-semibold leading-snug sm:text-lg">
+        <motion.div
+          key={visible ? 'v' : 'h'}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.15 }}
+        >
+          <p id={enunciadoId} className="mb-1 text-[15px] font-semibold leading-snug sm:text-base">
             {numero ? <span className="sr-only">Pregunta {numero}. </span> : null}
             <TextoEnriquecido texto={enunciado} />
           </p>
@@ -414,9 +396,9 @@ export function Pregunta({ enunciado, tipo = 'opciones', respuesta, explicacion,
                   placeholder="Tu respuesta…"
                   aria-invalid={respondida && acierto === false ? true : undefined}
                   className={cn(
-                    'min-h-10 flex-1 rounded-lg border bg-fd-background px-3 font-mono text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-fd-ring',
-                    respondida && acierto && 'border-green-500 bg-green-500/10',
-                    respondida && acierto === false && 'border-red-500 bg-red-500/10',
+                    'min-h-9 flex-1 rounded-md border bg-fd-background px-3 font-mono text-sm outline-none transition-colors focus-visible:border-fd-primary',
+                    respondida && acierto && okCaja,
+                    respondida && acierto === false && malCaja,
                   )}
                 />
                 {!respondida && (
@@ -428,7 +410,12 @@ export function Pregunta({ enunciado, tipo = 'opciones', respuesta, explicacion,
             )}
 
             {multiple && !respondida && (
-              <button type="button" onClick={comprobarMultiple} disabled={seleccionadas.size === 0} className={cn(botonPrimario, 'mt-3')}>
+              <button
+                type="button"
+                onClick={comprobarMultiple}
+                disabled={seleccionadas.size === 0}
+                className={cn(botonPrimario, 'mt-3')}
+              >
                 Comprobar
               </button>
             )}
@@ -439,33 +426,24 @@ export function Pregunta({ enunciado, tipo = 'opciones', respuesta, explicacion,
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
+                    transition={{ duration: 0.15 }}
                     className="overflow-hidden"
                   >
                     <div
-                      className={cn(
-                        'mt-4 rounded-xl border p-3.5 text-sm',
-                        acierto
-                          ? 'border-green-500/40 bg-green-500/10'
-                          : 'border-red-500/40 bg-red-500/10',
-                      )}
+                      className={cn('mt-4 rounded-md border p-3 text-sm leading-relaxed', acierto ? okCaja : malCaja)}
                     >
-                      <p
-                        className={cn(
-                          'flex items-center gap-1.5 font-semibold',
-                          acierto ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400',
-                        )}
-                      >
+                      <p className={cn('flex items-center gap-1.5 font-medium', acierto ? okTexto : malTexto)}>
                         {acierto ? <Check className="size-4" aria-hidden /> : <X className="size-4" aria-hidden />}
-                        {acierto ? '¡Correcto!' : 'No exactamente'}
+                        {acierto ? 'Correcto' : 'Incorrecto'}
                       </p>
                       {tipo === 'texto' && !acierto && solucionTexto && (
                         <p className="mt-1">
                           Respuesta correcta:{' '}
-                          <code className="rounded border bg-fd-background px-1.5 py-0.5 font-mono">{solucionTexto}</code>
+                          <code className="rounded border bg-fd-background px-1 py-px font-mono">{solucionTexto}</code>
                         </p>
                       )}
                       {explicacion && (
-                        <p className="mt-1.5 text-fd-foreground/90">
+                        <p className="mt-1 text-fd-foreground/90">
                           <TextoEnriquecido texto={explicacion} />
                         </p>
                       )}
@@ -502,12 +480,20 @@ export function Opcion({ correcta = false, children }: OpcionProps) {
 
   if (!pregunta) {
     // Fuera de una <Pregunta>: se muestra como un elemento de lista simple.
-    return <div className="rounded-lg border px-3 py-2">{children}</div>;
+    return <div className="rounded-md border px-3 py-2">{children}</div>;
   }
 
   const { respondida, multiple, seleccionadas, elegir, letra } = pregunta;
   const elegida = seleccionadas.has(id);
-  const estado = !respondida ? (elegida ? 'elegida' : 'normal') : correcta ? 'correcta' : elegida ? 'fallada' : 'apagada';
+  const estado = !respondida
+    ? elegida
+      ? 'elegida'
+      : 'normal'
+    : correcta
+      ? 'correcta'
+      : elegida
+        ? 'fallada'
+        : 'apagada';
 
   return (
     <button
@@ -517,30 +503,30 @@ export function Opcion({ correcta = false, children }: OpcionProps) {
       aria-pressed={elegida}
       aria-disabled={respondida || undefined}
       className={cn(
-        'group flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring [&_p]:m-0',
-        estado === 'normal' && 'bg-fd-background hover:border-fd-primary/50 hover:bg-fd-accent/60',
-        estado === 'elegida' && 'border-fd-primary bg-fd-primary/10',
-        estado === 'correcta' && 'border-green-500/60 bg-green-500/10',
-        estado === 'fallada' && 'border-red-500/60 bg-red-500/10',
-        estado === 'apagada' && 'opacity-60',
+        'group flex w-full items-start gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring [&_p]:m-0',
+        estado === 'normal' && 'bg-fd-background hover:bg-fd-muted/60',
+        estado === 'elegida' && 'border-fd-foreground/50 bg-fd-accent',
+        estado === 'correcta' && okCaja,
+        estado === 'fallada' && malCaja,
+        estado === 'apagada' && 'text-fd-muted-foreground',
         respondida && 'cursor-default',
       )}
     >
       <span
         aria-hidden
         className={cn(
-          'mt-px flex size-6 shrink-0 items-center justify-center border text-xs font-semibold transition-colors',
-          multiple ? 'rounded-md' : 'rounded-full',
-          estado === 'elegida' && 'border-fd-primary bg-fd-primary text-fd-primary-foreground',
-          estado === 'correcta' && 'border-green-600 bg-green-600 text-white',
-          estado === 'fallada' && 'border-red-600 bg-red-600 text-white',
+          'mt-px flex size-5 shrink-0 items-center justify-center border font-mono text-[11px] font-medium transition-colors',
+          multiple ? 'rounded-sm' : 'rounded-full',
+          estado === 'elegida' && 'border-fd-foreground bg-fd-foreground text-fd-background',
+          estado === 'correcta' && cn('border-current', okTexto),
+          estado === 'fallada' && cn('border-current', malTexto),
           (estado === 'normal' || estado === 'apagada') && 'text-fd-muted-foreground',
         )}
       >
         {estado === 'correcta' ? (
-          <Check className="size-3.5" />
+          <Check className="size-3" />
         ) : estado === 'fallada' ? (
-          <X className="size-3.5" />
+          <X className="size-3" />
         ) : (
           letra(id)
         )}
@@ -567,11 +553,12 @@ export function Explicacion({ children }: { children: ReactNode }) {
   if (pregunta && !pregunta.respondida) return null;
   return (
     <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="mt-3 rounded-xl border border-dashed bg-fd-muted/40 p-3.5 text-sm leading-relaxed [&_p]:my-1.5"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.15 }}
+      className="mt-3 rounded-md border bg-fd-muted/40 p-3 text-sm leading-relaxed [&_p]:my-1.5"
     >
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-fd-muted-foreground">Explicación</p>
+      <p className="mb-1 text-xs font-medium text-fd-muted-foreground">Explicación</p>
       {children}
     </motion.div>
   );

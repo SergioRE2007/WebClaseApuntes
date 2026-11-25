@@ -13,14 +13,14 @@ import {
   type ReactNode,
 } from 'react';
 import { motion } from 'motion/react';
-import { Check, ChevronLeft, ChevronRight, Layers, RefreshCw, RotateCcw, Shuffle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RotateCcw, Shuffle } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { barajar, Contenido, TextoEnriquecido, useRegistroOrdenado, usePrefiereMenosMovimiento } from './utils';
-import { botonSecundario } from './quiz';
+import { bloque, botonSecundario, cabecera, etiqueta, tituloBloque } from './estilos';
 
 type Marca = 'sabida' | 'repasar';
 
-const kbd = 'rounded border bg-fd-muted px-1.5 py-0.5 font-mono text-[0.7rem] text-fd-foreground';
+const kbd = 'rounded border bg-fd-muted px-1 py-px font-mono text-[0.7rem] text-fd-foreground';
 
 interface MazoCtx {
   activa: string | null;
@@ -97,7 +97,7 @@ export function Flashcards({ titulo = 'Tarjetas de repaso', children }: Flashcar
     setOrden(pendientes);
     setPos(0);
     setGirada(false);
-    setAnuncio(`Repasando ${pendientes.length} tarjetas marcadas`);
+    setAnuncio(`Repasando ${pendientes.length} ${pendientes.length === 1 ? 'tarjeta marcada' : 'tarjetas marcadas'}`);
   };
 
   const reiniciar = () => {
@@ -146,135 +146,145 @@ export function Flashcards({ titulo = 'Tarjetas de repaso', children }: Flashcar
 
   const filtrado = orden !== null && orden.length < ids.length;
 
+  const enlaceFiltro =
+    'text-sm text-fd-muted-foreground underline-offset-4 hover:text-fd-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring rounded-sm';
+
   return (
-    <section
-      aria-labelledby={tituloId}
-      aria-describedby={ayudaId}
-      className="not-prose my-8 rounded-2xl border bg-fd-card p-4 text-fd-card-foreground shadow-sm sm:p-5"
-    >
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-fd-primary text-fd-primary-foreground">
-          <Layers className="size-5" aria-hidden />
+    <section aria-labelledby={tituloId} aria-describedby={ayudaId} className={bloque}>
+      <div className={cabecera}>
+        <p id={tituloId} className={tituloBloque}>
+          {titulo}
+        </p>
+        <p className={cn(etiqueta, 'tabular-nums')}>
+          {total ? `${indice + 1} / ${total}` : 'Cargando…'}
+          {filtrado ? ' · solo las marcadas' : ''}
+        </p>
+        <p className={cn(etiqueta, 'ms-auto tabular-nums')}>
+          {sabidas} {sabidas === 1 ? 'sabida' : 'sabidas'} · {repasar} por repasar
+        </p>
+      </div>
+
+      <div className="p-4 sm:p-5">
+        {/* Zona de tarjetas: enfocable para usar el teclado */}
+        <div
+          ref={contenedor}
+          data-registro-raiz=""
+          tabIndex={0}
+          onKeyDown={onKeyDown}
+          role="group"
+          aria-roledescription="mazo de tarjetas"
+          aria-label={`Tarjeta ${indice + 1} de ${total}. ${girada ? 'Mostrando respuesta' : 'Mostrando pregunta'}`}
+          className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-fd-ring focus-visible:ring-offset-2 focus-visible:ring-offset-fd-background"
+        >
+          <MazoContext value={ctx}>{children}</MazoContext>
+          {total === 0 && <div className="h-44 rounded-md border bg-fd-muted/40" aria-hidden />}
+        </div>
+
+        <span className="sr-only" aria-live="polite">
+          {anuncio}
         </span>
-        <div className="min-w-0 flex-1">
-          <p id={tituloId} className="font-semibold leading-tight">
-            {titulo}
-          </p>
-          <p className="text-xs text-fd-muted-foreground tabular-nums">
-            {total ? `Tarjeta ${indice + 1} de ${total}` : 'Cargando…'}
-            {filtrado ? ' · solo las marcadas' : ''}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 text-xs font-medium tabular-nums">
-          <span className="rounded-full bg-green-500/15 px-2 py-1 text-green-700 dark:text-green-400" title="Me las sé">
-            <Check className="mr-0.5 inline size-3.5" aria-hidden />
-            {sabidas}
-            <span className="sr-only"> sabidas</span>
-          </span>
-          <span className="rounded-full bg-amber-500/15 px-2 py-1 text-amber-700 dark:text-amber-400" title="Para repasar">
-            <RefreshCw className="mr-0.5 inline size-3.5" aria-hidden />
-            {repasar}
-            <span className="sr-only"> para repasar</span>
-          </span>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => ir(-1)}
+              className={cn(botonSecundario, 'px-2')}
+              aria-label="Tarjeta anterior"
+            >
+              <ChevronLeft className="size-4" aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={() => ir(1)}
+              className={cn(botonSecundario, 'px-2')}
+              aria-label="Tarjeta siguiente"
+            >
+              <ChevronRight className="size-4" aria-hidden />
+            </button>
+          </div>
+          <div className="order-last flex w-full gap-1.5 sm:order-none sm:w-auto">
+            <button
+              type="button"
+              onClick={() => marcar('repasar')}
+              aria-pressed={Boolean(activa && marcas[activa] === 'repasar')}
+              className={cn(
+                botonSecundario,
+                'flex-1 whitespace-nowrap sm:flex-none',
+                activa &&
+                  marcas[activa] === 'repasar' &&
+                  'border-amber-600/30 bg-amber-500/[0.07] text-amber-800 dark:border-amber-400/30 dark:text-amber-300',
+              )}
+            >
+              Repasar
+            </button>
+            <button
+              type="button"
+              onClick={() => marcar('sabida')}
+              aria-pressed={Boolean(activa && marcas[activa] === 'sabida')}
+              className={cn(
+                botonSecundario,
+                'flex-1 whitespace-nowrap sm:flex-none',
+                activa &&
+                  marcas[activa] === 'sabida' &&
+                  'border-green-600/30 bg-green-600/[0.06] text-green-800 dark:border-green-400/30 dark:text-green-300',
+              )}
+            >
+              Me la sé
+            </button>
+          </div>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={mezclar}
+              className={cn(botonSecundario, 'px-2')}
+              aria-label="Barajar"
+              title="Barajar"
+            >
+              <Shuffle className="size-4" aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={reiniciar}
+              className={cn(botonSecundario, 'px-2')}
+              aria-label="Reiniciar mazo"
+              title="Reiniciar"
+            >
+              <RotateCcw className="size-4" aria-hidden />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Zona de tarjetas: enfocable para usar el teclado */}
       <div
-        ref={contenedor}
-        data-registro-raiz=""
-        tabIndex={0}
-        onKeyDown={onKeyDown}
-        role="group"
-        aria-roledescription="mazo de tarjetas"
-        aria-label={`Tarjeta ${indice + 1} de ${total}. ${girada ? 'Mostrando respuesta' : 'Mostrando pregunta'}`}
-        className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-fd-ring focus-visible:ring-offset-2 focus-visible:ring-offset-fd-card"
+        className={cn(
+          'flex-wrap items-center gap-x-4 gap-y-1 border-t px-4 py-2 sm:px-5',
+          repasar > 0 || filtrado ? 'flex' : 'hidden [@media(hover:hover)]:flex',
+        )}
       >
-        <MazoContext value={ctx}>{children}</MazoContext>
-        {total === 0 && <div className="h-48 animate-pulse rounded-xl bg-fd-muted" aria-hidden />}
+        <p id={ayudaId} className="hidden text-xs text-fd-muted-foreground [@media(hover:hover)]:block">
+          <kbd className={kbd}>Espacio</kbd> girar · <kbd className={kbd}>←</kbd> <kbd className={kbd}>→</kbd> moverte ·{' '}
+          <kbd className={kbd}>S</kbd> me la sé · <kbd className={kbd}>R</kbd> repasar
+        </p>
+        {repasar > 0 && !filtrado && (
+          <button type="button" onClick={soloRepasar} className={cn(enlaceFiltro, 'sm:ms-auto')}>
+            {repasar === 1 ? 'Repasar solo la marcada' : `Repasar solo las ${repasar} marcadas`}
+          </button>
+        )}
+        {filtrado && (
+          <button
+            type="button"
+            onClick={() => {
+              setOrden(null);
+              setPos(0);
+              setGirada(false);
+            }}
+            className={cn(enlaceFiltro, 'sm:ms-auto')}
+          >
+            Volver a todas las tarjetas
+          </button>
+        )}
       </div>
-
-      <p id={ayudaId} className="mt-2 hidden text-center text-xs text-fd-muted-foreground sm:block">
-        Teclado: <kbd className={kbd}>Espacio</kbd> girar · <kbd className={kbd}>←</kbd> <kbd className={kbd}>→</kbd>{' '}
-        moverte · <kbd className={kbd}>S</kbd> me la sé · <kbd className={kbd}>R</kbd> repasar
-      </p>
-      <span className="sr-only" aria-live="polite">
-        {anuncio}
-      </span>
-
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex gap-2">
-          <button type="button" onClick={() => ir(-1)} className={cn(botonSecundario, 'px-2.5')} aria-label="Tarjeta anterior">
-            <ChevronLeft className="size-4" aria-hidden />
-          </button>
-          <button type="button" onClick={() => ir(1)} className={cn(botonSecundario, 'px-2.5')} aria-label="Tarjeta siguiente">
-            <ChevronRight className="size-4" aria-hidden />
-          </button>
-        </div>
-        <div className="flex flex-1 justify-center gap-2 sm:flex-none">
-          <button
-            type="button"
-            onClick={() => marcar('repasar')}
-            className={cn(
-              botonSecundario,
-              'flex-1 border-amber-500/40 sm:flex-none',
-              activa && marcas[activa] === 'repasar' && 'bg-amber-500/15',
-            )}
-          >
-            <RefreshCw className="size-4 text-amber-600 dark:text-amber-400" aria-hidden />
-            Repasar
-          </button>
-          <button
-            type="button"
-            onClick={() => marcar('sabida')}
-            className={cn(
-              botonSecundario,
-              'flex-1 border-green-500/40 sm:flex-none',
-              activa && marcas[activa] === 'sabida' && 'bg-green-500/15',
-            )}
-          >
-            <Check className="size-4 text-green-600 dark:text-green-400" aria-hidden />
-            Me la sé
-          </button>
-        </div>
-        <div className="flex gap-2">
-          <button type="button" onClick={mezclar} className={cn(botonSecundario, 'px-2.5')} aria-label="Barajar" title="Barajar">
-            <Shuffle className="size-4" aria-hidden />
-          </button>
-          <button
-            type="button"
-            onClick={reiniciar}
-            className={cn(botonSecundario, 'px-2.5')}
-            aria-label="Reiniciar mazo"
-            title="Reiniciar"
-          >
-            <RotateCcw className="size-4" aria-hidden />
-          </button>
-        </div>
-      </div>
-
-      {repasar > 0 && !filtrado && (
-        <button
-          type="button"
-          onClick={soloRepasar}
-          className="mt-3 w-full rounded-lg border border-dashed px-3 py-2 text-sm text-fd-muted-foreground transition hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
-        >
-          Repasar solo las {repasar} marcadas
-        </button>
-      )}
-      {filtrado && (
-        <button
-          type="button"
-          onClick={() => {
-            setOrden(null);
-            setPos(0);
-            setGirada(false);
-          }}
-          className="mt-3 w-full rounded-lg border border-dashed px-3 py-2 text-sm text-fd-muted-foreground transition hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
-        >
-          Volver a todas las tarjetas
-        </button>
-      )}
     </section>
   );
 }
@@ -295,7 +305,7 @@ export function Tarjeta({ frente, children }: TarjetaProps) {
 
   if (!mazo) {
     return (
-      <div className="my-3 rounded-xl border p-4">
+      <div className="my-3 rounded-md border p-4">
         <p className="font-semibold">
           <TextoEnriquecido texto={frente} />
         </p>
@@ -313,7 +323,7 @@ export function Tarjeta({ frente, children }: TarjetaProps) {
         className="grid cursor-pointer [transform-style:preserve-3d]"
         initial={false}
         animate={{ rotateY: girada ? 180 : 0 }}
-        transition={mazo.reducir ? { duration: 0 } : { type: 'spring', stiffness: 180, damping: 22 }}
+        transition={mazo.reducir ? { duration: 0 } : { duration: 0.2, ease: 'easeOut' }}
         onClick={(e) => {
           if ((e.target as HTMLElement).closest('a, button')) return;
           mazo.girar();
@@ -322,22 +332,20 @@ export function Tarjeta({ frente, children }: TarjetaProps) {
         {/* Frente */}
         <div
           aria-hidden={girada}
-          className="col-start-1 row-start-1 flex min-h-48 flex-col items-center justify-center rounded-xl border bg-gradient-to-br from-fd-background to-fd-muted/60 p-6 text-center [backface-visibility:hidden]"
+          className="col-start-1 row-start-1 flex min-h-44 flex-col items-center justify-center rounded-md border bg-fd-background p-6 text-center [backface-visibility:hidden]"
         >
-          <span className="mb-3 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-fd-muted-foreground">
-            Pregunta
-          </span>
-          <p className="text-lg font-semibold leading-snug sm:text-xl">
+          <span className="mb-2 text-xs font-medium text-fd-muted-foreground">Pregunta</span>
+          <p className="text-base font-semibold leading-snug sm:text-lg">
             <TextoEnriquecido texto={frente} />
           </p>
-          <span className="mt-4 text-xs text-fd-muted-foreground">Toca o pulsa espacio para girar</span>
+          <span className="mt-4 text-xs text-fd-muted-foreground">Pulsa para ver la respuesta</span>
         </div>
         {/* Reverso */}
         <div
           aria-hidden={!girada}
-          className="col-start-1 row-start-1 flex min-h-48 flex-col items-center justify-center rounded-xl border border-fd-primary/40 bg-fd-primary/5 p-6 text-center [backface-visibility:hidden] [transform:rotateY(180deg)]"
+          className="col-start-1 row-start-1 flex min-h-44 flex-col items-center justify-center rounded-md border bg-fd-muted/40 p-6 text-center [backface-visibility:hidden] [transform:rotateY(180deg)]"
         >
-          <span className="mb-3 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-fd-primary">Respuesta</span>
+          <span className="mb-2 text-xs font-medium text-fd-muted-foreground">Respuesta</span>
           <div className="max-w-prose text-sm leading-relaxed sm:text-base [&_code]:rounded [&_code]:border [&_code]:bg-fd-muted [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.9em] [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:text-left">
             <Contenido>{children}</Contenido>
           </div>

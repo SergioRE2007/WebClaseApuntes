@@ -98,7 +98,6 @@ export function Dropzone({
           >
             {url && mime.startsWith('image/') && (
               <div className="flex max-h-80 justify-center bg-fd-muted/50">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={url} alt={`Vista previa de ${archivo.name}`} className="max-h-80 w-auto object-contain" />
               </div>
             )}

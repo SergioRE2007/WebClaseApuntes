@@ -49,7 +49,6 @@ export function FiltrosAdmin({ estado, modulo, q, contadores, modulos }: Filtros
       if (texto.trim() !== q) navegar({ q: texto.trim() });
     }, 300);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [texto]);
 
   const total = ESTADOS.reduce((a, e) => a + contadores[e], 0);

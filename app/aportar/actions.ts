@@ -9,6 +9,7 @@ import {
   BUCKET_APORTACIONES,
   MAX_BYTES,
   MIMES_PERMITIDOS,
+  MODULO_OTRO,
   erroresPorCampo,
   mimeAdmitido,
   nuevaAportacionSchema,
@@ -17,7 +18,6 @@ import {
   type ResultadoAccion,
 } from '@/lib/aportaciones';
 import { getModulos } from '@/components/aportaciones/modulos';
-import { MODULO_OTRO } from '@/lib/aportaciones';
 
 const DEMO: ResultadoAccion = {
   ok: false,
@@ -77,7 +77,7 @@ export async function crearAportacion(input: NuevaAportacion): Promise<Resultado
     // Metadatos reales del objeto en Storage (no nos fiamos de lo que diga el cliente)
     const { data: info, error } = await supabase.storage.from(BUCKET_APORTACIONES).info(d.archivo.path);
     if (error || !info) {
-      return { ok: false, error: 'No encuentro el archivo subido. Vuelve a intentarlo.' };
+      return fallar({ ok: false, error: 'No encuentro el archivo subido. Vuelve a intentarlo.' });
     }
     const bytes = Number(info.size ?? 0);
     const mime = resolverMime(d.archivo.nombre, info.contentType);

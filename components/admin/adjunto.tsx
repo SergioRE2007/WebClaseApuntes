@@ -28,7 +28,6 @@ function Lightbox({ src, alt, abierto, onCerrar }: { src: string; alt: string; a
       className="m-auto max-h-none max-w-none bg-transparent p-0 backdrop:bg-black/80 backdrop:backdrop-blur-sm"
     >
       <div className="relative flex h-dvh w-screen items-center justify-center p-4" onClick={onCerrar}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={src}
           alt={alt}
@@ -84,7 +83,6 @@ function YouTube({ id, url }: { id: string; url: string }) {
         className="group relative block aspect-video w-full overflow-hidden rounded-lg border bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
         aria-label="Reproducir vídeo de YouTube aquí"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={`https://i.ytimg.com/vi/${id}/hqdefault.jpg`}
           alt=""
@@ -152,7 +150,6 @@ export function Adjunto({ a }: { a: AportacionAdmin }) {
             className="group relative block w-full overflow-hidden rounded-lg border bg-fd-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
             aria-label={`Ampliar imagen ${alt}`}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={a.archivoUrl} alt={alt} loading="lazy" className="mx-auto max-h-80 w-auto object-contain" />
             <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
               <ZoomIn className="size-3.5" aria-hidden /> Ampliar

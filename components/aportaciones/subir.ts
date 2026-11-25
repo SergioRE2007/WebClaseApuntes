@@ -3,11 +3,6 @@
 import { createClient } from '@/lib/supabase/client';
 import { BUCKET_APORTACIONES } from '@/lib/aportaciones';
 
-export interface SubidaEnCurso {
-  promesa: Promise<void>;
-  cancelar: () => void;
-}
-
 export class SubidaCancelada extends Error {
   constructor() {
     super('Subida cancelada');

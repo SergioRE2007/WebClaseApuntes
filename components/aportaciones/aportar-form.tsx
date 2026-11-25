@@ -257,11 +257,23 @@ export function AportarForm({
               <option value="" disabled>
                 Elige un módulo…
               </option>
-              {modulos.map((m) => (
-                <option key={m.slug} value={m.slug}>
-                  {m.nombre}
-                </option>
-              ))}
+              {agruparModulos(modulos).map(([grupo, lista]) =>
+                grupo ? (
+                  <optgroup key={grupo} label={grupo}>
+                    {lista.map((m) => (
+                      <option key={m.slug} value={m.slug}>
+                        {m.nombre}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : (
+                  lista.map((m) => (
+                    <option key={m.slug} value={m.slug}>
+                      {m.nombre}
+                    </option>
+                  ))
+                ),
+              )}
               <option value={MODULO_OTRO}>Otro</option>
             </select>
           </Campo>
@@ -482,4 +494,13 @@ export function AportarForm({
       </div>
     </form>
   );
+}
+
+function agruparModulos(modulos: Modulo[]): [string, Modulo[]][] {
+  const grupos = new Map<string, Modulo[]>();
+  for (const m of modulos) {
+    const k = m.grupo ?? '';
+    grupos.set(k, [...(grupos.get(k) ?? []), m]);
+  }
+  return [...grupos];
 }

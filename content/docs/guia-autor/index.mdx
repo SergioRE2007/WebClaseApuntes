@@ -1,0 +1,236 @@
+---
+title: Cómo añadir apuntes
+description: Dónde van los archivos, cómo se escribe el frontmatter, cómo se ordena el menú lateral y las reglas de MDX que conviene recordar.
+icon: PenLine
+---
+
+Esta guía es para quien mantiene la web. Todo el contenido vive en archivos **MDX** (Markdown + componentes) dentro de `content/docs`. No hay base de datos ni panel de edición: añades o editas un archivo, haces *commit* y, al desplegar, aparece en la web, en el buscador y en el contexto del Tutor DAM.
+
+<Callout type="idea" title="Atajos de esta guía">
+  - [Catálogo de componentes](/docs/guia-autor/componentes): ejemplo copiable de **cada** componente interactivo con todas sus props.
+  - [Plantilla de tema](/docs/guia-autor/plantilla): un tema vacío listo para copiar y rellenar.
+</Callout>
+
+## Dónde va cada archivo
+
+<Files>
+  <Folder name="content/docs" defaultOpen>
+    <File name="index.mdx  ← portada /docs" />
+    <File name="meta.json  ← orden de primer nivel" />
+    <Folder name="1-dam  ← pestaña «1º DAM»" defaultOpen>
+      <File name="meta.json  ← root: true" />
+      <File name="index.mdx  ← /docs/1-dam" />
+      <Folder name="programacion  ← un módulo" defaultOpen>
+        <File name="meta.json  ← título, icono y orden de los temas" />
+        <File name="index.mdx  ← portada del módulo" />
+        <File name="poo-clases-objetos.mdx  ← /docs/1-dam/programacion/poo-clases-objetos" />
+      </Folder>
+      <Folder name="bases-de-datos" />
+    </Folder>
+    <Folder name="2-dam  ← pestaña «2º DAM»" />
+    <Folder name="guia-autor  ← esta guía" />
+  </Folder>
+  <Folder name="public">
+    <Folder name="apuntes">
+      <File name="programacion/diagrama-memoria.png  ← imágenes" />
+    </Folder>
+  </Folder>
+</Files>
+
+- La **URL** de cada página sale de su ruta: `content/docs/1-dam/programacion/herencia.mdx` → `/docs/1-dam/programacion/herencia`.
+- Usa nombres de archivo **en minúsculas, sin tildes ni espacios**, con guiones: `herencia-y-polimorfismo.mdx`.
+- Los `index.mdx` son la página de la propia carpeta (`/docs/1-dam/programacion`).
+
+## Añadir un tema nuevo paso a paso
+
+<Steps>
+  <Step>
+
+### Crea el archivo
+
+  Dentro de la carpeta del módulo, por ejemplo `content/docs/1-dam/programacion/herencia.mdx`. Lo más rápido es copiar la [plantilla](/docs/guia-autor/plantilla).
+
+  </Step>
+  <Step>
+
+### Rellena el frontmatter
+
+  Las líneas entre `---` del principio: como mínimo `title` y `description` (ver abajo).
+
+  </Step>
+  <Step>
+
+### Escribe el contenido
+
+  Markdown normal (títulos con `##`, listas, tablas, código) y los [componentes interactivos](/docs/guia-autor/componentes) que quieras, **sin importar nada**. Termina el tema con `<MarcarCompletado />`.
+
+  </Step>
+  <Step>
+
+### Colócalo en el menú
+
+  Añade el nombre del archivo (sin `.mdx`) al `pages` del `meta.json` del módulo, en la posición que quieras. Si no lo añades, aparecerá igualmente al final gracias a `"..."`.
+
+  </Step>
+  <Step>
+
+### Actualiza la portada del módulo
+
+  En el `index.mdx` del módulo, enlaza el tema en la lista de **Temas** y añade una `<Card>` en "Apuntes disponibles".
+
+  </Step>
+  <Step>
+
+### Compruébalo en local
+
+  Ejecuta `npm run dev`, abre `http://localhost:3000/docs` y revisa la página. Si hay un error de sintaxis MDX, la terminal te dirá el archivo y la línea.
+
+  </Step>
+</Steps>
+
+## Frontmatter de una página
+
+```mdx title="content/docs/1-dam/programacion/herencia.mdx"
+---
+title: Herencia y polimorfismo
+description: Cómo reutilizar código con extends, sobrescribir métodos y tratar objetos de forma polimórfica.
+icon: GitFork
+---
+
+Aquí empieza el contenido...
+```
+
+<TypeTable
+  type={{
+    title: { type: 'string', required: true, description: 'Título de la página (aparece como h1, en el menú y en el buscador). No repitas un "# Título" en el contenido.' },
+    description: { type: 'string', description: 'Resumen de una línea. Sale bajo el título, en el buscador y en las tarjetas. Si contiene ":" ponlo entre comillas.' },
+    icon: { type: 'string', description: 'Nombre de un icono de lucide.dev en PascalCase (Code, Database, GitFork…). Se muestra en el menú.' },
+    full: { type: 'boolean', default: 'false', description: 'Usa todo el ancho y oculta la tabla de contenidos de la derecha.' },
+  }}
+/>
+
+<Callout type="warn" title="Comillas en el frontmatter">
+  El frontmatter es YAML: si el título o la descripción contienen dos puntos seguidos de espacio (`Tema 4: Arrays`), ponlo entre comillas: `title: "Tema 4: Arrays"`.
+</Callout>
+
+## Ordenar el menú con meta.json
+
+Cada carpeta puede tener un `meta.json` que define su título, su icono y el orden de sus páginas:
+
+```json title="content/docs/1-dam/programacion/meta.json"
+{
+  "title": "Programación",
+  "icon": "Code",
+  "pages": [
+    "---Unidad 1: Fundamentos---",
+    "introduccion",
+    "variables-y-tipos",
+    "---Unidad 2: POO---",
+    "poo-clases-objetos",
+    "herencia",
+    "[Documentación de Java](https://docs.oracle.com/en/java/javase/21/docs/api/)",
+    "..."
+  ]
+}
+```
+
+| Entrada en `pages` | Qué hace |
+| --- | --- |
+| `"herencia"` | Página `herencia.mdx` o subcarpeta `herencia/` |
+| `"..."` | El resto de páginas que no hayas listado, por orden alfabético |
+| `"z...a"` | Igual, pero en orden alfabético inverso |
+| `"!borrador"` | Oculta esa página del menú (sigue accesible por URL) |
+| `"---Título---"` | Separador con texto. Con icono: `"---[Code]Título---"` |
+| `"[Texto](url)"` | Enlace en el menú (externo o interno) |
+| `"...carpeta"` | Inserta el contenido de una subcarpeta sin anidarla |
+
+Otras claves útiles del `meta.json`: `"defaultOpen": true` (la carpeta sale desplegada) y `"root": true` (la carpeta es una **pestaña** del menú, como `1-dam`, `2-dam` y esta guía).
+
+<Callout type="info" title="No listes «index» en un módulo">
+  En las carpetas de módulo **no** pongas `"index"` en `pages`: así el propio nombre de la carpeta en el menú lleva a su portada. Solo las carpetas raíz (`1-dam`, `2-dam`, `guia-autor`) lo listan para que su portada salga como primera entrada.
+</Callout>
+
+### Añadir un módulo nuevo
+
+1. Crea la carpeta dentro del curso, por ejemplo `content/docs/2-dam/optativa-ia`.
+2. Crea su `meta.json` con `title`, `icon` y `"pages": ["..."]`.
+3. Crea su `index.mdx` (puedes copiar el de otro módulo).
+4. Añade el nombre de la carpeta al `pages` del `meta.json` del curso y una `<Card>` en el `index.mdx` del curso.
+
+El resto de la web (formulario de aportaciones, buscador, tutor) obtiene la lista de módulos del contenido, así que no hay que tocar código.
+
+## Bloques de código
+
+Indica siempre el lenguaje tras las tres comillas invertidas (`java`, `sql`, `kotlin`, `python`, `xml`, `bash`…). Después del lenguaje puedes añadir opciones, y dentro del código, comentarios especiales que resaltan líneas:
+
+| Escribe… | Para… |
+| --- | --- |
+| ` ```java title="Main.java" ` | Mostrar el nombre del archivo en la cabecera del bloque |
+| ` ```java lineNumbers ` | Mostrar números de línea |
+| ` ```java noCopy ` | Quitar el botón de copiar |
+| `// [!code highlight]` al final de una línea | Resaltar esa línea |
+| `// [!code highlight:3]` | Resaltar esa línea y las 2 siguientes |
+| `// [!code ++]` / `// [!code --]` | Marcar la línea como añadida / eliminada |
+| `// [!code focus]` | Difuminar todo menos esa línea |
+| `// [!code word:nombre]` | Resaltar todas las apariciones de la palabra `nombre` |
+
+En SQL, Python o Bash usa su propio comentario: `-- [!code highlight]`, `# [!code highlight]`. El comentario especial desaparece al mostrarse. Así queda un bloque con `title="Main.java" lineNumbers`, una línea resaltada, una eliminada y una añadida:
+
+```java title="Main.java" lineNumbers
+public class Main {
+    public static void main(String[] args) {
+        int x = 5; // [!code highlight]
+        System.out.println(x);
+        int viejo = 1; // [!code --]
+        int nuevo = 2; // [!code ++]
+    }
+}
+```
+
+Para mostrar el mismo ejemplo en varios lenguajes, usa `<Tabs>` (ver el [catálogo](/docs/guia-autor/componentes#pestañas-tabs)).
+
+## Imágenes
+
+Guarda las imágenes en `public/apuntes/<modulo>/` y enlázalas con Markdown normal. Al pulsarlas se amplían:
+
+```mdx
+![Diagrama de la pila y el heap](/apuntes/programacion/memoria.png)
+```
+
+Usa nombres descriptivos y escribe siempre el texto alternativo (lo que va entre corchetes): lo leen los lectores de pantalla y el buscador. Para diagramas, mejor `<Mermaid>`: se adapta al modo oscuro y se puede editar.
+
+## Reglas de MDX que hay que recordar
+
+MDX es más estricto que Markdown. Estos son los errores más habituales:
+
+<Accordions type="multiple">
+  <Accordion title="Las llaves { } y el signo < en el texto">
+    Fuera de los bloques de código, `{` abre una expresión JavaScript y `<` abre una etiqueta. Si quieres escribirlos en un párrafo, mételos en código en línea con comillas invertidas (`` `List<String>` ``, `` `{ }` ``) o escápalos: `\{`, `\}` y `&lt;`.
+  </Accordion>
+  <Accordion title="Cierra siempre las etiquetas">
+    `<Pista>...</Pista>`, y las que no llevan contenido con `/>`: `<MarcarCompletado />`. Los nombres distinguen mayúsculas: `<Quiz>`, no `<quiz>`.
+  </Accordion>
+  <Accordion title="Deja líneas en blanco alrededor del Markdown dentro de componentes">
+    Para que el Markdown (listas, código, negritas en varios párrafos) funcione **dentro** de un componente, deja una línea en blanco tras la etiqueta de apertura y antes de la de cierre. Los bloques de código con tres comillas invertidas deben empezar en la columna 0 o con muy poca sangría.
+  </Accordion>
+  <Accordion title="Textos largos en props: plantillas de JavaScript">
+    Para `chart`, `codigo` o el contenido de `<Terminal>` usa una plantilla entre comillas invertidas dentro de llaves: `` chart={`...`} ``. Dentro de una plantilla, `${` y la barra invertida `\` tienen significado especial: si tu código los usa (por ejemplo `"\n"` en Java), escribe `\\n` o usa `` String.raw`...` ``.
+  </Accordion>
+  <Accordion title="Comillas dentro de props">
+    Si el texto de una prop lleva comillas dobles, usa comillas simples por fuera o llaves: `enunciado='¿Qué imprime "Hola"?'` o `` enunciado={`¿Qué imprime "Hola"?`} ``.
+  </Accordion>
+  <Accordion title="No uses # Título">
+    El título h1 ya lo pone el `title` del frontmatter. Empieza tus secciones con `##` y subsecciones con `###`: así aparecen en la tabla de contenidos.
+  </Accordion>
+</Accordions>
+
+## De una aportación de un alumno a los apuntes
+
+Cuando un compañero sube material desde [Aportar](/aportar), te llega al panel de administración. Para incorporarlo:
+
+1. Revisa la aportación en `/admin` y descárgala si es un archivo o captura.
+2. Pásala a MDX en el tema que corresponda (las capturas, a `public/apuntes/...`).
+3. Si es útil, conviértela en algo interactivo: una pregunta del `<Quiz>`, una `<Tarjeta>` o un `<Ejercicio>`.
+4. Marca la aportación como aprobada en el panel.
+
+<MarcarCompletado />

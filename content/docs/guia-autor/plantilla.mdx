@@ -1,0 +1,163 @@
+---
+title: Plantilla de tema
+description: Un tema vacío con la estructura recomendada, listo para copiar en un archivo nuevo y rellenar.
+icon: FileText
+---
+
+Copia este bloque entero en un archivo nuevo (por ejemplo `content/docs/1-dam/programacion/arrays.mdx`), cambia el frontmatter y ve sustituyendo cada sección. Borra lo que no necesites: no hace falta usar todos los componentes en todos los temas.
+
+<Callout type="idea" title="Estructura recomendada">
+  1. Introducción corta: qué se aprende y por qué importa.
+  2. Teoría en secciones `##` con ejemplos de código.
+  3. Un diagrama si ayuda a entenderlo.
+  4. Práctica: completar código, test y tarjetas.
+  5. Ejercicios de dificultad creciente con pistas y solución.
+  6. Resumen y `<MarcarCompletado />`.
+</Callout>
+
+````mdx title="content/docs/1-dam/programacion/arrays.mdx"
+---
+title: Arrays en Java
+description: Cómo declarar, recorrer y manipular arrays unidimensionales y bidimensionales.
+icon: Brackets
+---
+
+Un **array** es una estructura que guarda varios valores del mismo tipo en posiciones consecutivas...
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Declarar y crear arrays.
+  - Recorrerlos con `for` y `for-each`.
+  - Usar la clase `Arrays`.
+</Callout>
+
+## Declarar y crear un array
+
+Explicación...
+
+```java title="Ejemplo.java"
+int[] notas = new int[5];
+String[] nombres = {"Ana", "Luis", "Marta"};
+```
+
+<Callout type="warn" title="Los índices empiezan en 0">
+  Acceder a `notas[5]` en un array de 5 posiciones lanza `ArrayIndexOutOfBoundsException`.
+</Callout>
+
+## Recorrer un array
+
+<Tabs items={['for clásico', 'for-each']}>
+  <Tab value="for clásico">
+
+```java
+for (int i = 0; i < notas.length; i++) {
+    System.out.println(notas[i]);
+}
+```
+
+  </Tab>
+  <Tab value="for-each">
+
+```java
+for (int nota : notas) {
+    System.out.println(nota);
+}
+```
+
+  </Tab>
+</Tabs>
+
+<Terminal titulo="bash">
+{`$ java Ejemplo
+7
+5
+9`}
+</Terminal>
+
+## Practica
+
+<CompletarCodigo
+  titulo="Suma de un array"
+  codigo={`int suma = 0;
+for (int n : [[notas]]) {
+    suma [[+=]] n;
+}`}
+/>
+
+<Quiz titulo="Test: arrays">
+  <Pregunta enunciado="¿Cuál es el índice del primer elemento?" explicacion="En Java los índices empiezan en 0.">
+    <Opcion correcta>0</Opcion>
+    <Opcion>1</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Un array puede cambiar de tamaño después de crearlo." respuesta={false} explicacion="Su tamaño es fijo. Para listas que crecen usa `ArrayList`." />
+  <Pregunta tipo="texto" enunciado="¿Cuánto vale `new int[3].length`?" respuesta="3" />
+</Quiz>
+
+<Flashcards titulo="Repaso: arrays">
+  <Tarjeta frente="¿Qué devuelve `array.length`?">El número de posiciones del array.</Tarjeta>
+  <Tarjeta frente="Valor por defecto de un `int[]`">Todas las posiciones valen `0`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Nota máxima" dificultad="facil">
+  Dado un array de notas, muestra la nota más alta.
+
+  <Pista>Guarda la primera nota como máximo provisional y recorre el resto.</Pista>
+
+  <Solucion>
+
+```java
+int max = notas[0];
+for (int nota : notas) {
+    if (nota > max) max = nota;
+}
+System.out.println(max);
+```
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Array">Colección de tamaño fijo de elementos del mismo tipo.</Termino>
+  <Termino nombre="length">Atributo con el número de posiciones.</Termino>
+</Glosario>
+
+<MarcarCompletado />
+````
+
+Después, añade `"arrays"` al `pages` del `meta.json` del módulo y enlaza el tema desde el `index.mdx` del módulo (lista de **Temas** y una `<Card>` en "Apuntes disponibles").
+
+## Portada de un módulo
+
+Así es el `index.mdx` de cada módulo:
+
+````mdx title="content/docs/1-dam/programacion/index.mdx"
+---
+title: Programación
+description: "Aprende a programar desde cero con Java: tipos de datos, estructuras de control, POO..."
+icon: Code
+---
+
+## De qué va el módulo
+
+Descripción breve del módulo.
+
+## Apuntes disponibles
+
+<Cards>
+  <Card icon="BookOpen" title="Arrays en Java" href="/docs/1-dam/programacion/arrays" />
+</Cards>
+
+## Temas
+
+1. [Arrays en Java](/docs/1-dam/programacion/arrays) — disponible
+2. Herencia y polimorfismo
+
+<Callout type="info" title="Apuntes en construcción">
+  Estamos añadiendo los apuntes de este módulo poco a poco. Si tienes material, súbelo desde [Aportar](/aportar).
+</Callout>
+````
+
+<MarcarCompletado />

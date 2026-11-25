@@ -9,7 +9,7 @@ export interface TerminalProps {
   titulo?: string;
   /**
    * Prompt que identifica las líneas de comando. Por defecto se reconocen
-   * `$ `, `> `, `PS> `, `C:\…> `, `mysql> `, `sql> ` y `jshell> `.
+   * `$ `, `> `, `PS> `, `C:\…> `, `mysql> ` (y su continuación `-> `), `sql> ` y `jshell> `.
    */
   prompt?: string;
   /** Contenido: un string (usa {`...`}) con una línea por renglón. */
@@ -18,7 +18,7 @@ export interface TerminalProps {
   contenido?: string;
 }
 
-const PROMPTS = [/^\$ /, /^> /, /^PS[^>]*> /, /^[A-Z]:\\[^>]*> /, /^mysql> /, /^sql> /, /^jshell> /, /^[\w.-]+@[\w.-]+:[^$#]*[$#] /];
+const PROMPTS = [/^\$ /, /^> /, /^PS[^>]*> /, /^[A-Z]:\\[^>]*> /, /^mysql> /, /^sql> /, /^jshell> /, /^\s+-> /, /^[\w.-]+@[\w.-]+:[^$#]*[$#] /];
 
 function textoDe(node: ReactNode): string {
   if (typeof node === 'string' || typeof node === 'number') return String(node);

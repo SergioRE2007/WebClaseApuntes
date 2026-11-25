@@ -109,6 +109,7 @@ export function Ejercicio({ titulo, dificultad = 'media', pregunta, tutor = true
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.15 }}
               className="flex flex-col gap-3 sm:flex-row sm:items-center"
               role="alertdialog"
               aria-label="Confirmar ver la solución"
@@ -132,6 +133,7 @@ export function Ejercicio({ titulo, dificultad = 'media', pregunta, tutor = true
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
               className="flex flex-wrap items-center gap-2"
             >
               {pistas.length > 0 && (

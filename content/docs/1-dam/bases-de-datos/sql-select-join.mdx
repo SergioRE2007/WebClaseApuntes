@@ -1,0 +1,299 @@
+---
+title: "Consultas SQL: SELECT y JOIN"
+description: Cómo consultar una base de datos relacional con SELECT, filtrar, ordenar, agrupar y combinar tablas con INNER JOIN y LEFT JOIN.
+icon: Table
+---
+
+`SELECT` es la instrucción que más vas a escribir en SQL: sirve para **consultar** datos sin modificarlos. En este tema la usaremos sobre una pequeña base de datos de un instituto y aprenderás a combinar varias tablas con `JOIN`.
+
+## La base de datos de ejemplo
+
+Tenemos alumnos, módulos y las matrículas que los relacionan (una relación **N:M** resuelta con una tabla intermedia):
+
+<Mermaid
+  titulo="Modelo entidad-relación de la base de datos instituto"
+  chart={`erDiagram
+    ALUMNO ||--o{ MATRICULA : "se matricula"
+    MODULO ||--o{ MATRICULA : "tiene"
+    ALUMNO {
+      int id PK
+      varchar nombre
+      varchar apellidos
+      int curso
+    }
+    MODULO {
+      char codigo PK
+      varchar nombre
+      int curso
+    }
+    MATRICULA {
+      int alumno_id PK, FK
+      char modulo_codigo PK, FK
+      decimal nota
+    }`}
+/>
+
+```sql title="instituto.sql"
+CREATE TABLE alumno (
+  id        INT PRIMARY KEY,
+  nombre    VARCHAR(50) NOT NULL,
+  apellidos VARCHAR(80) NOT NULL,
+  curso     INT NOT NULL
+);
+
+CREATE TABLE modulo (
+  codigo CHAR(4) PRIMARY KEY,
+  nombre VARCHAR(80) NOT NULL,
+  curso  INT NOT NULL
+);
+
+CREATE TABLE matricula (
+  alumno_id     INT,
+  modulo_codigo CHAR(4),
+  nota          DECIMAL(4,2),
+  PRIMARY KEY (alumno_id, modulo_codigo),
+  FOREIGN KEY (alumno_id) REFERENCES alumno(id),
+  FOREIGN KEY (modulo_codigo) REFERENCES modulo(codigo)
+);
+
+INSERT INTO alumno VALUES
+  (1, 'Ana', 'García', 1), (2, 'Luis', 'Pérez', 1),
+  (3, 'Marta', 'López', 2), (4, 'Pablo', 'Ruiz', 1);
+
+INSERT INTO modulo VALUES
+  ('0484', 'Bases de Datos', 1), ('0485', 'Programación', 1), ('0486', 'Acceso a Datos', 2);
+
+INSERT INTO matricula VALUES
+  (1, '0484', 8.5), (1, '0485', 7), (2, '0484', 5), (2, '0485', 4.5), (3, '0486', 9);
+```
+
+<Callout type="info" title="Pruébalo tú">
+  Copia el script en MySQL, MariaDB o en un editor online como [DB Fiddle](https://www.db-fiddle.com/) y ejecuta cada consulta del tema. Fíjate en que **Pablo no tiene ninguna matrícula**: lo usaremos para entender la diferencia entre `INNER JOIN` y `LEFT JOIN`.
+</Callout>
+
+## Estructura de un SELECT
+
+```sql
+SELECT columnas           -- qué quiero ver
+FROM tabla                -- de dónde
+WHERE condicion           -- qué filas (antes de agrupar)
+GROUP BY columnas         -- cómo agrupar
+HAVING condicion          -- qué grupos (después de agrupar)
+ORDER BY columnas         -- en qué orden
+LIMIT n;                  -- cuántas filas como máximo
+```
+
+Solo `SELECT` es obligatorio (y casi siempre `FROM`), pero **el orden de las cláusulas sí lo es**. Un ejemplo sencillo: los alumnos de primero ordenados por apellidos.
+
+```sql
+SELECT nombre, apellidos
+FROM alumno
+WHERE curso = 1 -- [!code highlight]
+ORDER BY apellidos;
+```
+
+| nombre | apellidos |
+| --- | --- |
+| Ana | García |
+| Luis | Pérez |
+| Pablo | Ruiz |
+
+Operadores útiles en `WHERE`: `=`, `<>`, `<`, `>=`, `BETWEEN 5 AND 7`, `IN ('0484', '0485')`, `LIKE 'M%'`, `IS NULL`, combinados con `AND`, `OR` y `NOT`.
+
+## Funciones de agregado y GROUP BY
+
+Las funciones `COUNT`, `SUM`, `AVG`, `MIN` y `MAX` resumen muchas filas en un único valor. Con `GROUP BY` calculas ese resumen **por grupo**:
+
+```sql
+SELECT modulo_codigo, COUNT(*) AS alumnos, AVG(nota) AS media
+FROM matricula
+GROUP BY modulo_codigo
+HAVING COUNT(*) >= 2; -- [!code highlight]
+```
+
+<Callout type="warn" title="WHERE frente a HAVING">
+  `WHERE` filtra **filas** antes de agrupar y no puede usar funciones de agregado. `HAVING` filtra **grupos** después de agrupar. Además, toda columna del `SELECT` que no esté dentro de una función de agregado debe aparecer en el `GROUP BY`.
+</Callout>
+
+## Combinar tablas con JOIN
+
+Los datos están repartidos: la matrícula solo guarda el `id` del alumno y el código del módulo. Para ver nombres necesitamos **combinar** tablas uniendo cada clave ajena con la clave primaria a la que apunta.
+
+<Tabs items={['INNER JOIN', 'LEFT JOIN', 'JOIN implícito']}>
+  <Tab value="INNER JOIN">
+
+```sql
+SELECT a.nombre, m.nombre AS modulo, mt.nota
+FROM alumno a
+JOIN matricula mt ON mt.alumno_id = a.id -- [!code highlight]
+JOIN modulo m ON m.codigo = mt.modulo_codigo -- [!code highlight]
+ORDER BY a.nombre, m.nombre;
+```
+
+  Devuelve solo las filas que **tienen pareja en ambas tablas**. `JOIN` a secas es lo mismo que `INNER JOIN`. Pablo **no aparece** porque no tiene matrículas.
+
+  </Tab>
+  <Tab value="LEFT JOIN">
+
+```sql
+SELECT a.nombre, COUNT(mt.modulo_codigo) AS modulos
+FROM alumno a
+LEFT JOIN matricula mt ON mt.alumno_id = a.id -- [!code highlight]
+GROUP BY a.id, a.nombre
+ORDER BY modulos DESC, a.nombre;
+```
+
+  Devuelve **todas las filas de la tabla de la izquierda** (`alumno`), tengan o no pareja. Si no la tienen, las columnas de la derecha valen `NULL`. Por eso Pablo sale con 0 módulos: `COUNT(columna)` no cuenta los `NULL`.
+
+  </Tab>
+  <Tab value="JOIN implícito">
+
+```sql
+SELECT a.nombre, m.nombre AS modulo, mt.nota
+FROM alumno a, matricula mt, modulo m
+WHERE mt.alumno_id = a.id
+  AND m.codigo = mt.modulo_codigo;
+```
+
+  Sintaxis antigua (SQL-89): se listan las tablas separadas por comas y la condición de unión va en el `WHERE`. Da el mismo resultado que el `INNER JOIN`, pero es más fácil olvidar una condición y obtener un **producto cartesiano**. Mejor usa `JOIN ... ON`.
+
+  </Tab>
+</Tabs>
+
+Este es el resultado del `INNER JOIN` ejecutado en el cliente de MySQL:
+
+<Terminal titulo="mysql — instituto">
+{`mysql> SELECT a.nombre, m.nombre AS modulo, mt.nota
+    -> FROM alumno a
+    -> JOIN matricula mt ON mt.alumno_id = a.id
+    -> JOIN modulo m ON m.codigo = mt.modulo_codigo
+    -> ORDER BY a.nombre, m.nombre;
++--------+----------------+------+
+| nombre | modulo         | nota |
++--------+----------------+------+
+| Ana    | Bases de Datos | 8.50 |
+| Ana    | Programación   | 7.00 |
+| Luis   | Bases de Datos | 5.00 |
+| Luis   | Programación   | 4.50 |
+| Marta  | Acceso a Datos | 9.00 |
++--------+----------------+------+
+5 rows in set (0.00 sec)`}
+</Terminal>
+
+<Callout type="idea" title="Alias de tabla">
+  `alumno a` le da a la tabla el alias `a`. Así escribes `a.nombre` en vez de `alumno.nombre`, y es **obligatorio** distinguir columnas con el mismo nombre en varias tablas (aquí, `nombre` existe en `alumno` y en `modulo`).
+</Callout>
+
+<CompletarCodigo
+  titulo="Alumnos aprobados y sus módulos"
+  enunciado="Completa la consulta para listar cada alumno con los módulos que tiene aprobados."
+  lenguaje="sql"
+  ignorarMayusculas
+  codigo={`SELECT a.nombre, m.nombre AS modulo
+[[FROM]] alumno a
+[[JOIN|INNER JOIN]] matricula mt [[ON]] mt.alumno_id = a.id
+JOIN modulo m ON m.codigo = mt.[[modulo_codigo]]
+[[WHERE]] mt.nota >= 5;`}
+/>
+
+## Comprueba lo que sabes
+
+<Quiz titulo="Test: SELECT y JOIN">
+  <Pregunta enunciado="¿Cuál es el orden correcto de las cláusulas?">
+    <Opcion>`SELECT … WHERE … FROM … ORDER BY …`</Opcion>
+    <Opcion correcta>`SELECT … FROM … WHERE … GROUP BY … HAVING … ORDER BY …`</Opcion>
+    <Opcion>`SELECT … FROM … GROUP BY … WHERE … ORDER BY …`</Opcion>
+    <Opcion>`FROM … SELECT … WHERE … HAVING … GROUP BY …`</Opcion>
+  </Pregunta>
+
+  <Pregunta tipo="vf" enunciado="Un `INNER JOIN` entre `alumno` y `matricula` incluye también a los alumnos sin ninguna matrícula." respuesta={false} explicacion="`INNER JOIN` solo devuelve las filas con pareja en ambas tablas. Para incluir alumnos sin matrícula se usa `LEFT JOIN` desde `alumno`." />
+
+  <Pregunta tipo="texto" enunciado="Con los datos de ejemplo, ¿cuántas filas devuelve esta consulta?" respuesta="5" explicacion="Hay 5 matrículas y todas tienen un alumno existente, así que el `JOIN` produce una fila por matrícula. Pablo no aparece.">
+
+```sql
+SELECT *
+FROM alumno a
+JOIN matricula mt ON mt.alumno_id = a.id;
+```
+
+  </Pregunta>
+
+  <Pregunta enunciado="¿Cuáles de estas son funciones de agregado?" explicacion="`COUNT`, `AVG` y `MAX` resumen varias filas en un valor. `UPPER` es una función de texto que actúa fila a fila y `LIKE` es un operador de comparación.">
+    <Opcion correcta>`COUNT`</Opcion>
+    <Opcion correcta>`AVG`</Opcion>
+    <Opcion correcta>`MAX`</Opcion>
+    <Opcion>`UPPER`</Opcion>
+    <Opcion>`LIKE`</Opcion>
+  </Pregunta>
+
+  <Pregunta enunciado="Quieres mostrar solo los módulos cuya nota media sea mayor que 6. ¿Dónde pones la condición `AVG(nota) > 6`?" explicacion="La condición usa una función de agregado sobre cada grupo, así que va en `HAVING`, después del `GROUP BY`.">
+    <Opcion>En el `WHERE`</Opcion>
+    <Opcion correcta>En el `HAVING`</Opcion>
+    <Opcion>En el `ORDER BY`</Opcion>
+    <Opcion>En el `ON` del `JOIN`</Opcion>
+  </Pregunta>
+
+  <Pregunta tipo="texto" enunciado="¿Qué valor devuelve `SELECT COUNT(*) FROM alumno WHERE curso = 1;` con los datos de ejemplo?" respuesta="3" explicacion="Ana, Luis y Pablo están en primero. Marta está en segundo." />
+</Quiz>
+
+<Flashcards titulo="Repaso rápido de SQL">
+  <Tarjeta frente="¿Qué hace `WHERE`?">Filtra **filas** antes de agrupar.</Tarjeta>
+  <Tarjeta frente="¿Qué hace `HAVING`?">Filtra **grupos** después del `GROUP BY`; puede usar funciones de agregado.</Tarjeta>
+  <Tarjeta frente="`INNER JOIN`">Solo las filas que tienen coincidencia en las dos tablas.</Tarjeta>
+  <Tarjeta frente="`LEFT JOIN`">Todas las filas de la tabla izquierda; las de la derecha sin pareja aparecen como `NULL`.</Tarjeta>
+  <Tarjeta frente="`COUNT(*)` frente a `COUNT(columna)`">`COUNT(*)` cuenta filas; `COUNT(columna)` cuenta solo los valores **no nulos** de esa columna.</Tarjeta>
+  <Tarjeta frente="¿Qué es un producto cartesiano?">Combinar cada fila de una tabla con todas las de otra. Ocurre si unes tablas sin condición de unión.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Alumnos sin matrícula" dificultad="facil">
+  Escribe una consulta que muestre el nombre y los apellidos de los alumnos que **no están matriculados en ningún módulo**.
+
+  <Pista>Necesitas que aparezcan los alumnos aunque no tengan pareja en `matricula`: ¿qué tipo de `JOIN` conserva todas las filas de la izquierda?</Pista>
+  <Pista>En un `LEFT JOIN`, las columnas de `matricula` valen `NULL` cuando el alumno no tiene matrículas. Filtra por eso con `IS NULL`.</Pista>
+
+  <Solucion>
+
+```sql
+SELECT a.nombre, a.apellidos
+FROM alumno a
+LEFT JOIN matricula mt ON mt.alumno_id = a.id
+WHERE mt.alumno_id IS NULL;
+```
+
+  Resultado: **Pablo Ruiz**. Recuerda que con `NULL` no se usa `=`: `mt.alumno_id = NULL` nunca es verdadero.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Nota media por módulo" dificultad="media">
+  Muestra, para cada módulo, su **nombre**, el **número de alumnos** matriculados y la **nota media** redondeada a dos decimales. Incluye solo los módulos con **al menos 2 alumnos** y ordena de mayor a menor media.
+
+  <Pista>Une `modulo` con `matricula` y agrupa por módulo: `GROUP BY m.codigo, m.nombre`.</Pista>
+  <Pista>`ROUND(AVG(mt.nota), 2)` calcula la media con dos decimales. El filtro "al menos 2 alumnos" afecta a grupos, no a filas.</Pista>
+
+  <Solucion>
+
+```sql
+SELECT m.nombre,
+       COUNT(*) AS alumnos,
+       ROUND(AVG(mt.nota), 2) AS media
+FROM modulo m
+JOIN matricula mt ON mt.modulo_codigo = m.codigo
+GROUP BY m.codigo, m.nombre
+HAVING COUNT(*) >= 2 -- [!code highlight]
+ORDER BY media DESC;
+```
+
+| nombre | alumnos | media |
+| --- | --- | --- |
+| Bases de Datos | 2 | 6.75 |
+| Programación | 2 | 5.75 |
+
+  Acceso a Datos queda fuera porque solo tiene una alumna matriculada.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

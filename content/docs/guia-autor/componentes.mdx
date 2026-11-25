@@ -1,0 +1,525 @@
+---
+title: Catálogo de componentes
+description: Ejemplo en vivo y código listo para copiar de cada componente que puedes usar en los apuntes, con todas sus props.
+icon: Puzzle
+---
+
+Todos estos componentes están **registrados globalmente**: escríbelos en cualquier `.mdx` sin `import`. Cada sección tiene una demo en vivo, el código para copiar y la tabla de props.
+
+## Componentes interactivos de DAM Apuntes
+
+### Quiz (test)
+
+Un test que se responde pregunta a pregunta, con corrección inmediata, explicación, puntuación final, botón de reintentar y celebración si aciertas todas. Hay tres tipos de pregunta:
+
+- **Opciones** (por defecto): hijos `<Opcion>`, marca la buena con `correcta`. Si marcas **más de una** correcta, la pregunta pasa a ser de respuesta múltiple automáticamente (casillas + botón Comprobar).
+- **Verdadero/falso**: `tipo="vf"` y `respuesta={true}` o `respuesta={false}`.
+- **Texto**: `tipo="texto"` y `respuesta="..."` (o una lista de respuestas válidas). Ideal para "¿qué imprime este código?".
+
+<Quiz titulo="Quiz de ejemplo" descripcion="Así lo verá el alumnado">
+  <Pregunta enunciado="¿Qué palabra clave crea un objeto en Java?" explicacion="`new` reserva memoria, ejecuta el constructor y devuelve la referencia.">
+    <Opcion>`class`</Opcion>
+    <Opcion correcta>`new`</Opcion>
+    <Opcion>`this`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cuáles son tipos primitivos?" explicacion="`String` es una clase, no un tipo primitivo.">
+    <Opcion correcta>`int`</Opcion>
+    <Opcion correcta>`boolean`</Opcion>
+    <Opcion>`String`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`main` tiene que ser `static`." respuesta={true} explicacion="La JVM lo llama sin crear ningún objeto." />
+  <Pregunta tipo="texto" enunciado="¿Qué imprime `System.out.println(7 / 2);`?" respuesta="3" explicacion="Dividir dos `int` da un `int`: se descarta la parte decimal." />
+</Quiz>
+
+````mdx
+<Quiz titulo="Test: clases y objetos" descripcion="4 preguntas">
+  <Pregunta enunciado="¿Qué palabra clave crea un objeto en Java?" explicacion="`new` reserva memoria, ejecuta el constructor y devuelve la referencia.">
+    <Opcion>`class`</Opcion>
+    <Opcion correcta>`new`</Opcion>
+    <Opcion>`this`</Opcion>
+  </Pregunta>
+
+  {/* Varias correctas = respuesta múltiple */}
+  <Pregunta enunciado="¿Cuáles son tipos primitivos?" explicacion="`String` es una clase.">
+    <Opcion correcta>`int`</Opcion>
+    <Opcion correcta>`boolean`</Opcion>
+    <Opcion>`String`</Opcion>
+  </Pregunta>
+
+  <Pregunta tipo="vf" enunciado="`main` tiene que ser `static`." respuesta={true} explicacion="La JVM lo llama sin crear objetos." />
+
+  {/* Con código: el bloque va dentro, con líneas en blanco alrededor */}
+  <Pregunta tipo="texto" enunciado="¿Qué imprime este código?" respuesta={["3", "3.0"]}>
+
+```java
+System.out.println(7 / 2);
+```
+
+    <Explicacion>
+      Dividir dos `int` da un `int`. Para obtener `3.5` haz `7 / 2.0`.
+    </Explicacion>
+  </Pregunta>
+</Quiz>
+````
+
+<TypeTable
+  type={{
+    'Quiz · titulo': { type: 'string', default: '"Comprueba lo que sabes"', description: 'Título del test.' },
+    'Quiz · descripcion': { type: 'string', description: 'Subtítulo opcional.' },
+    'Pregunta · enunciado': { type: 'string', required: true, description: 'Texto de la pregunta. Admite `código` entre comillas invertidas.' },
+    'Pregunta · tipo': { type: '"opciones" | "vf" | "texto"', default: '"opciones"', description: 'Tipo de pregunta.' },
+    'Pregunta · respuesta': { type: 'boolean | string | string[]', description: 'Para "vf": true/false. Para "texto": la respuesta o lista de respuestas válidas.' },
+    'Pregunta · explicacion': { type: 'string', description: 'Se muestra tras responder. Para texto con formato usa el hijo <Explicacion>.' },
+    'Pregunta · exacta': { type: 'boolean', default: 'false', description: 'Tipo "texto": distinguir mayúsculas y espacios.' },
+    'Opcion · correcta': { type: 'boolean', default: 'false', description: 'Marca la opción como correcta. Varias = respuesta múltiple.' },
+  }}
+/>
+
+<Callout type="warn" title="Escribe cada opción en una sola línea">
+  `<Opcion>texto</Opcion>` en la misma línea. Si la partes en varias líneas, MDX la convierte en un párrafo y el botón se ve peor.
+</Callout>
+
+### Flashcards (tarjetas de repaso)
+
+Mazo de tarjetas que se giran con animación 3D. El alumno marca cada una como "me la sé" o "repasar", puede barajar y repasar solo las marcadas. Teclado: espacio gira, flechas mueven, `S` y `R` marcan.
+
+<Flashcards titulo="Mazo de ejemplo">
+  <Tarjeta frente="¿Qué es la JVM?">La **Java Virtual Machine**: ejecuta el *bytecode* (`.class`) en cualquier sistema operativo.</Tarjeta>
+  <Tarjeta frente="¿Qué genera `javac`?">Ficheros `.class` con *bytecode* a partir de los `.java`.</Tarjeta>
+  <Tarjeta frente="JDK frente a JRE">El **JDK** incluye herramientas de desarrollo (compilador…); el **JRE** solo lo necesario para ejecutar.</Tarjeta>
+</Flashcards>
+
+```mdx
+<Flashcards titulo="Repaso: Java básico">
+  <Tarjeta frente="¿Qué es la JVM?">La **Java Virtual Machine**: ejecuta el *bytecode*.</Tarjeta>
+  <Tarjeta frente="¿Qué genera `javac`?">Ficheros `.class` con *bytecode*.</Tarjeta>
+  <Tarjeta frente="JDK frente a JRE">
+    El **JDK** incluye herramientas de desarrollo; el **JRE** solo lo necesario para ejecutar.
+  </Tarjeta>
+</Flashcards>
+```
+
+<TypeTable
+  type={{
+    'Flashcards · titulo': { type: 'string', default: '"Tarjetas de repaso"', description: 'Título del mazo.' },
+    'Tarjeta · frente': { type: 'string', required: true, description: 'Cara delantera (pregunta o concepto). Admite `código`.' },
+    'Tarjeta · children': { type: 'Markdown', required: true, description: 'Cara trasera: la respuesta. Admite negritas, código, listas…' },
+  }}
+/>
+
+### Ejercicio, Pista y Solucion
+
+Enunciado con pistas que se revelan de una en una, solución oculta (con un "¿seguro?" antes de mostrarla) y un botón para pedir ayuda al Tutor DAM.
+
+<Ejercicio titulo="Par o impar" dificultad="facil">
+  Escribe un programa que lea un número entero y diga si es par o impar.
+
+  <Pista>Un número es par si el resto de dividirlo entre 2 es 0.</Pista>
+  <Pista>El operador resto en Java es `%`.</Pista>
+
+  <Solucion>
+
+```java
+Scanner sc = new Scanner(System.in);
+int n = sc.nextInt();
+System.out.println(n % 2 == 0 ? "Par" : "Impar");
+```
+
+  </Solucion>
+</Ejercicio>
+
+````mdx
+<Ejercicio titulo="Par o impar" dificultad="facil">
+  Escribe un programa que lea un número entero y diga si es par o impar.
+
+  <Pista>Un número es par si el resto de dividirlo entre 2 es 0.</Pista>
+  <Pista>El operador resto en Java es `%`.</Pista>
+
+  <Solucion>
+
+```java
+Scanner sc = new Scanner(System.in);
+int n = sc.nextInt();
+System.out.println(n % 2 == 0 ? "Par" : "Impar");
+```
+
+  </Solucion>
+</Ejercicio>
+````
+
+<TypeTable
+  type={{
+    titulo: { type: 'string', required: true, description: 'Título del ejercicio.' },
+    dificultad: { type: '"facil" | "media" | "dificil"', default: '"media"', description: 'Etiqueta de dificultad (sin tilde en el valor).' },
+    pregunta: { type: 'string', description: 'Mensaje que se envía al Tutor DAM al pulsar «Pregúntale al tutor». Por defecto se genera con el título.' },
+    tutor: { type: 'boolean', default: 'true', description: 'tutor={false} oculta el botón del tutor.' },
+  }}
+/>
+
+Puedes poner tantas `<Pista>` como quieras (se muestran en orden) y la `<Solucion>` puede tener texto, varios bloques de código o tablas. Ambas son opcionales.
+
+### CompletarCodigo (rellenar huecos)
+
+Código con huecos que el alumno rellena; comprueba cada hueco y puede ver la solución. Marca cada hueco con `[[respuesta]]` y, si hay varias respuestas válidas, sepáralas con `|`: `[[JOIN|INNER JOIN]]`.
+
+<CompletarCodigo
+  titulo="Bucle for"
+  enunciado="Completa el bucle para imprimir los números del 1 al 10."
+  codigo={`for (int i = [[1]]; i [[<=]] 10; [[i++|++i|i += 1]]) {
+    System.out.[[println]](i);
+}`}
+/>
+
+```mdx
+<CompletarCodigo
+  titulo="Bucle for"
+  enunciado="Completa el bucle para imprimir los números del 1 al 10."
+  lenguaje="java"
+  codigo={`for (int i = [[1]]; i [[<=]] 10; [[i++|++i|i += 1]]) {
+    System.out.[[println]](i);
+}`}
+/>
+```
+
+Alternativa: escribe `___` (tres guiones bajos) en cada hueco y pasa las respuestas en orden con `respuestas={["1", "<=", ["i++", "++i"]]}`.
+
+<TypeTable
+  type={{
+    codigo: { type: 'string', required: true, description: 'Código con huecos [[...]] o ___. Escríbelo entre {`...`}.' },
+    respuestas: { type: '(string | string[])[]', description: 'Solo si usas ___: respuestas en orden.' },
+    lenguaje: { type: 'string', default: '"java"', description: 'Para el coloreado: java, kotlin, sql, python, javascript, typescript, csharp, bash.' },
+    titulo: { type: 'string', default: '"Completa el código"', description: 'Título de la tarjeta.' },
+    enunciado: { type: 'string', description: 'Instrucciones breves.' },
+    ignorarMayusculas: { type: 'boolean', default: 'false', description: 'Útil en SQL: SELECT = select.' },
+  }}
+/>
+
+### Mermaid (diagramas)
+
+Diagramas de clases UML, entidad-relación, de flujo, de secuencia, de estados… a partir de texto. Se adaptan al modo oscuro y se pueden ampliar. Sintaxis completa en [mermaid.js.org](https://mermaid.js.org/intro/).
+
+<Mermaid
+  titulo="Herencia en UML"
+  chart={`classDiagram
+    Animal <|-- Perro
+    Animal <|-- Gato
+    class Animal {
+      <<abstract>>
+      #String nombre
+      +hacerSonido()* void
+    }
+    class Perro {
+      +hacerSonido() void
+    }
+    class Gato {
+      +hacerSonido() void
+    }`}
+/>
+
+```mdx
+<Mermaid
+  titulo="Herencia en UML"
+  chart={`classDiagram
+    Animal <|-- Perro
+    Animal <|-- Gato
+    class Animal {
+      <<abstract>>
+      #String nombre
+      +hacerSonido()* void
+    }
+    class Perro {
+      +hacerSonido() void
+    }
+    class Gato {
+      +hacerSonido() void
+    }`}
+/>
+```
+
+Otros tipos útiles (cambia la primera línea):
+
+```mdx
+<Mermaid chart={`erDiagram
+  CLIENTE ||--o{ PEDIDO : realiza
+  PEDIDO ||--|{ LINEA_PEDIDO : contiene
+  PRODUCTO ||--o{ LINEA_PEDIDO : aparece`} />
+
+<Mermaid chart={`flowchart TD
+  A[Inicio] --> B{"¿n > 0?"}
+  B -- Sí --> C[Positivo]
+  B -- No --> D[Cero o negativo]`} />
+
+<Mermaid chart={`sequenceDiagram
+  Cliente->>Servidor: GET /api/alumnos
+  Servidor-->>Cliente: 200 OK (JSON)`} />
+```
+
+<TypeTable
+  type={{
+    chart: { type: 'string', required: true, description: 'Definición del diagrama entre {`...`}. La sangría común se elimina sola.' },
+    titulo: { type: 'string', description: 'Pie de figura y texto alternativo.' },
+  }}
+/>
+
+Si el diagrama tiene un error de sintaxis, se muestra un aviso con el mensaje y el código, sin romper la página.
+
+### Terminal
+
+Salida de consola con estilo de ventana. Las líneas que empiezan por un *prompt* (`$ `, `> `, `PS> `, `mysql> `, `jshell> `…) se muestran como comandos y el resto como salida. El botón copia solo los comandos.
+
+<Terminal titulo="bash">
+{`$ javac Main.java
+$ java Main
+Hola, mundo`}
+</Terminal>
+
+```mdx
+<Terminal titulo="bash">
+{`$ javac Main.java
+$ java Main
+Hola, mundo`}
+</Terminal>
+```
+
+<TypeTable
+  type={{
+    titulo: { type: 'string', default: '"Terminal"', description: 'Título de la ventana.' },
+    prompt: { type: 'string', description: 'Fuerza un prompt concreto (p. ej. "C:\\>"); entonces solo esas líneas son comandos.' },
+    children: { type: 'string', description: 'El contenido, entre {`...`}.' },
+  }}
+/>
+
+### Concepto (definición emergente)
+
+Un término subrayado dentro de un párrafo que muestra su definición al pulsarlo. Por ejemplo: en Java todo objeto vive en el <Concepto termino="Heap" definicion="Zona de memoria donde se crean los objetos con `new`. La libera automáticamente el recolector de basura.">heap</Concepto>.
+
+```mdx
+En Java todo objeto vive en el <Concepto termino="Heap" definicion="Zona de memoria donde se crean los objetos con `new`.">heap</Concepto>.
+```
+
+<TypeTable
+  type={{
+    definicion: { type: 'string', required: true, description: 'Definición breve. Admite `código`.' },
+    termino: { type: 'string', description: 'Nombre formal, si difiere del texto subrayado.' },
+  }}
+/>
+
+### Glosario y Termino
+
+Lista de definiciones en tarjetas, ideal para el resumen final de un tema.
+
+<Glosario titulo="Glosario de ejemplo">
+  <Termino nombre="JDK">Kit de desarrollo de Java: compilador, JVM y herramientas.</Termino>
+  <Termino nombre="Bytecode">Código intermedio (`.class`) que ejecuta la JVM.</Termino>
+</Glosario>
+
+```mdx
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="JDK">Kit de desarrollo de Java: compilador, JVM y herramientas.</Termino>
+  <Termino nombre="Bytecode">Código intermedio (`.class`) que ejecuta la JVM.</Termino>
+</Glosario>
+```
+
+### MarcarCompletado
+
+Botón para el final de cada tema. Guarda el progreso en el navegador del alumno (`localStorage`, clave `dam:progreso`) y se usa en la portada para mostrar lo que lleva estudiado. **Ponlo al final de todos los temas.**
+
+<MarcarCompletado />
+
+```mdx
+<MarcarCompletado />
+```
+
+| Prop | Tipo | Descripción |
+| --- | --- | --- |
+| `url` | `string` | Opcional. Por defecto, la página actual. |
+
+### Icono y Card con icono
+
+`<Card>` acepta el nombre de un icono de [lucide.dev](https://lucide.dev/icons) en `icon`. `<Icono nombre="..." />` pinta cualquier icono suelto.
+
+<Cards>
+  <Card icon="Code" title="Programación" href="/docs/1-dam/programacion" description="Con enlace" />
+  <Card icon="Lightbulb" title="Sin enlace" description="Una tarjeta informativa" />
+</Cards>
+
+```mdx
+<Cards>
+  <Card icon="Code" title="Programación" href="/docs/1-dam/programacion" description="Con enlace" />
+  <Card icon="Lightbulb" title="Sin enlace" description="Una tarjeta informativa" />
+</Cards>
+
+Texto con un icono <Icono nombre="Rocket" className="inline size-4" /> en línea.
+```
+
+## Componentes de Fumadocs
+
+### Callout (avisos)
+
+<Callout title="Información (por defecto)">Texto del aviso.</Callout>
+<Callout type="warn" title="Cuidado">Error típico que conviene evitar.</Callout>
+<Callout type="error" title="Error">Algo que no compila o falla.</Callout>
+<Callout type="success" title="Bien hecho">Buena práctica.</Callout>
+<Callout type="idea" title="Idea">Truco o curiosidad.</Callout>
+
+```mdx
+<Callout title="Información (por defecto)">Texto del aviso.</Callout>
+<Callout type="warn" title="Cuidado">Error típico que conviene evitar.</Callout>
+<Callout type="error" title="Error">Algo que no compila o falla.</Callout>
+<Callout type="success" title="Bien hecho">Buena práctica.</Callout>
+<Callout type="idea" title="Idea">Truco o curiosidad.</Callout>
+```
+
+### Pestañas (Tabs)
+
+Para comparar enfoques o mostrar el mismo ejemplo en varios lenguajes. El `value` de cada `<Tab>` debe coincidir con un elemento de `items`.
+
+<Tabs items={['Java', 'Kotlin']}>
+  <Tab value="Java">
+
+```java
+String saludo = "Hola";
+```
+
+  </Tab>
+  <Tab value="Kotlin">
+
+```kotlin
+val saludo = "Hola"
+```
+
+  </Tab>
+</Tabs>
+
+````mdx
+<Tabs items={['Java', 'Kotlin']}>
+  <Tab value="Java">
+
+```java
+String saludo = "Hola";
+```
+
+  </Tab>
+  <Tab value="Kotlin">
+
+```kotlin
+val saludo = "Hola"
+```
+
+  </Tab>
+</Tabs>
+````
+
+### Steps (pasos)
+
+<Steps>
+  <Step>
+
+#### Instala el JDK
+
+  Descárgalo desde adoptium.net.
+
+  </Step>
+  <Step>
+
+#### Comprueba la instalación
+
+  Ejecuta `java -version` en la terminal.
+
+  </Step>
+</Steps>
+
+```mdx
+<Steps>
+  <Step>
+
+#### Instala el JDK
+
+  Descárgalo desde adoptium.net.
+
+  </Step>
+  <Step>
+
+#### Comprueba la instalación
+
+  Ejecuta `java -version` en la terminal.
+
+  </Step>
+</Steps>
+```
+
+### Accordions (desplegables)
+
+<Accordions type="single">
+  <Accordion title="¿Qué diferencia hay entre == y equals()?">
+    `==` compara referencias; `equals()` compara contenido.
+  </Accordion>
+  <Accordion title="¿Por qué main es static?">
+    Porque la JVM lo llama sin crear ningún objeto.
+  </Accordion>
+</Accordions>
+
+```mdx
+<Accordions type="single">
+  <Accordion title="¿Qué diferencia hay entre == y equals()?">
+    `==` compara referencias; `equals()` compara contenido.
+  </Accordion>
+  <Accordion title="¿Por qué main es static?">
+    Porque la JVM lo llama sin crear ningún objeto.
+  </Accordion>
+</Accordions>
+```
+
+Usa `type="multiple"` para permitir varios abiertos a la vez.
+
+### Files (árbol de archivos)
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="modelo" defaultOpen>
+      <File name="Persona.java" />
+    </Folder>
+    <File name="Main.java" />
+  </Folder>
+  <File name="pom.xml" />
+</Files>
+
+```mdx
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="modelo" defaultOpen>
+      <File name="Persona.java" />
+    </Folder>
+    <File name="Main.java" />
+  </Folder>
+  <File name="pom.xml" />
+</Files>
+```
+
+### TypeTable (tabla de propiedades)
+
+Útil para documentar los métodos o atributos de una clase.
+
+<TypeTable
+  type={{
+    nombre: { type: 'String', description: 'Nombre de la persona.', required: true },
+    edad: { type: 'int', description: 'Edad en años. No puede ser negativa.', default: '0' },
+  }}
+/>
+
+```mdx
+<TypeTable
+  type={{
+    nombre: { type: 'String', description: 'Nombre de la persona.', required: true },
+    edad: { type: 'int', description: 'Edad en años. No puede ser negativa.', default: '0' },
+  }}
+/>
+```
+
+### Imágenes con zoom
+
+Cualquier imagen en Markdown se amplía al pulsarla. Guarda el archivo en `public/apuntes/...`:
+
+```mdx
+![Esquema de la arquitectura cliente-servidor](/apuntes/psp/cliente-servidor.png)
+```

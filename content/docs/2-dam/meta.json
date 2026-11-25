@@ -1,0 +1,17 @@
+{
+  "title": "2º DAM",
+  "description": "Segundo curso del ciclo",
+  "icon": "Rocket",
+  "root": true,
+  "pages": [
+    "index",
+    "acceso-a-datos",
+    "desarrollo-de-interfaces",
+    "pmdm",
+    "psp",
+    "sge",
+    "ipe-2",
+    "sostenibilidad",
+    "proyecto-intermodular"
+  ]
+}

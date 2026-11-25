@@ -23,7 +23,7 @@ export default async function AdminPage(props: {
   const filtros = parseFiltros(await props.searchParams);
   const { stats, aportaciones, hayMas, alumnos, error } = await getDatosAdmin(filtros);
   const nombresModulos = getNombresModulos();
-  const modulos = [...getModulos().map((m) => ({ slug: m.slug, nombre: m.nombre })), { slug: MODULO_OTRO, nombre: 'Otro' }];
+  const modulos = [...getModulos().map((m) => ({ slug: m.slug, nombre: m.grupo ? `${m.nombre} · ${m.grupo}` : m.nombre })), { slug: MODULO_OTRO, nombre: 'Otro' }];
   const demo = !isSupabaseConfigured;
   const hayFiltros = Boolean(filtros.q || filtros.modulo);
 

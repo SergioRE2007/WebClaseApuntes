@@ -96,7 +96,13 @@ export function ChatPanel({ nombre, disponible }: ChatPanelProps) {
 
   useEffect(() => {
     if (!abierto) return;
-    const id = window.setTimeout(() => textareaRef.current?.focus({ preventScroll: true }), 60);
+    const id = window.setTimeout(() => {
+      const el = textareaRef.current;
+      // Si el tutor no está disponible el textarea está deshabilitado: enfocamos
+      // el panel para que Esc y el Tab sigan funcionando.
+      if (el && !el.disabled) el.focus({ preventScroll: true });
+      else panelRef.current?.focus({ preventScroll: true });
+    }, 60);
     return () => window.clearTimeout(id);
   }, [abierto]);
 
@@ -277,13 +283,14 @@ export function ChatPanel({ nombre, disponible }: ChatPanelProps) {
             aria-modal="false"
             aria-labelledby={tituloId}
             onKeyDown={onKeyDownPanel}
+            tabIndex={-1}
             initial={reducir ? { opacity: 0 } : { opacity: 0, scale: 0.94, y: 24 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={reducir ? { opacity: 0 } : { opacity: 0, scale: 0.94, y: 24 }}
             transition={{ type: 'spring', stiffness: 380, damping: 32 }}
             style={{ transformOrigin: 'bottom right' }}
             className={cn(
-              'fixed z-50 flex flex-col overflow-hidden bg-fd-background text-fd-foreground print:hidden',
+              'fixed z-50 flex flex-col overflow-hidden bg-fd-background text-fd-foreground outline-none print:hidden',
               // móvil: hoja a pantalla completa
               'inset-0 h-dvh w-full',
               // escritorio: tarjeta flotante

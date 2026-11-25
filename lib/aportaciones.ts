@@ -173,6 +173,8 @@ export interface Modulo {
   slug: string;
   nombre: string;
   temas: { url: string; titulo: string }[];
+  /** Curso al que pertenece ("1º DAM"), si lo hay. */
+  grupo?: string;
 }
 
 // ---------------------------------------------------------------------------

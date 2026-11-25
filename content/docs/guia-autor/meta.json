@@ -1,0 +1,7 @@
+{
+  "title": "Guía del autor",
+  "description": "Cómo añadir y mantener los apuntes",
+  "icon": "PenLine",
+  "root": true,
+  "pages": ["index", "componentes", "plantilla"]
+}

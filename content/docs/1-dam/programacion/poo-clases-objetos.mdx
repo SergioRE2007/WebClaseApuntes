@@ -1,0 +1,552 @@
+---
+title: "Programación orientada a objetos: clases y objetos"
+description: Qué son las clases y los objetos en Java, cómo se declaran atributos, métodos y constructores, y por qué encapsulamos.
+icon: Boxes
+---
+
+La **programación orientada a objetos** (POO) organiza un programa en torno a *objetos* que combinan datos y comportamiento. En lugar de tener variables sueltas y funciones que las manipulan, agrupas todo lo que pertenece a una misma "cosa" (una persona, una cuenta bancaria, un pedido…) en una única pieza.
+
+En este tema verás las dos ideas sobre las que se construye todo lo demás: la **clase** y el **objeto**.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Diferenciar entre <Concepto termino="Clase" definicion="Plantilla o molde que define qué datos (atributos) y qué comportamiento (métodos) tendrán sus objetos.">clase</Concepto> y <Concepto termino="Objeto" definicion="Ejemplar concreto creado a partir de una clase con `new`. Tiene su propio estado (valores de sus atributos).">objeto</Concepto>.
+  - Declarar atributos, métodos y constructores.
+  - Usar `this` y entender qué es una referencia.
+  - Aplicar la <Concepto termino="Encapsulación" definicion="Ocultar el estado interno de un objeto (atributos `private`) y exponer solo operaciones controladas (métodos públicos).">encapsulación</Concepto> con `private`, *getters* y *setters*.
+  - Distinguir entre miembros de instancia y miembros `static`.
+</Callout>
+
+## Clase y objeto
+
+Una **clase** es una plantilla: describe qué *datos* tendrá cada objeto (sus **atributos**) y qué *sabe hacer* (sus **métodos**). Un **objeto** es un ejemplar concreto creado a partir de esa plantilla, también llamado **instancia**.
+
+Piensa en el plano de una casa (la clase) y en las casas construidas con ese plano (los objetos): todas tienen la misma estructura, pero cada una tiene su propio color, sus propios muebles y su propia dirección.
+
+```java title="Persona.java"
+public class Persona {
+    // Atributos: el estado de cada objeto
+    String nombre;
+    int edad;
+
+    // Método: el comportamiento
+    void saludar() {
+        System.out.println("Hola, soy " + nombre + " y tengo " + edad + " años");
+    }
+}
+```
+
+Para crear objetos usamos el operador `new`, que reserva memoria para el objeto y devuelve una **referencia** a él:
+
+```java title="Main.java"
+public class Main {
+    public static void main(String[] args) {
+        Persona ana = new Persona(); // [!code highlight]
+        ana.nombre = "Ana";
+        ana.edad = 19;
+
+        Persona luis = new Persona(); // [!code highlight]
+        luis.nombre = "Luis";
+        luis.edad = 21;
+
+        ana.saludar();
+        luis.saludar();
+    }
+}
+```
+
+<Terminal titulo="bash — ~/poo">
+{`$ javac Persona.java Main.java
+$ java Main
+Hola, soy Ana y tengo 19 años
+Hola, soy Luis y tengo 21 años`}
+</Terminal>
+
+Cada objeto tiene **su propia copia** de los atributos: cambiar `ana.edad` no afecta a `luis.edad`.
+
+<Callout type="info" title="Convenciones de nombres en Java">
+  Las clases empiezan por mayúscula y usan *PascalCase* (`CuentaBancaria`). Atributos, métodos y variables usan *camelCase* (`saldoActual`, `calcularArea()`). Cada clase pública va en un fichero con su mismo nombre: `Persona` → `Persona.java`.
+</Callout>
+
+## Anatomía de una clase
+
+Así se ve la clase `Persona` en un **diagrama de clases UML**, la notación que usarás en Entornos de Desarrollo. El signo `-` indica `private` y `+` indica `public`:
+
+<Mermaid
+  titulo="Diagrama de clases UML de Persona y CuentaBancaria"
+  chart={`classDiagram
+    class Persona {
+      -String nombre
+      -int edad
+      +Persona(String nombre, int edad)
+      +getNombre() String
+      +getEdad() int
+      +setEdad(int edad) void
+      +saludar() void
+    }
+    class CuentaBancaria {
+      -String iban
+      -double saldo
+      -Persona titular
+      +ingresar(double cantidad) void
+      +retirar(double cantidad) boolean
+      +getSaldo() double
+    }
+    CuentaBancaria --> "1" Persona : titular`}
+/>
+
+Una clase puede contener:
+
+| Elemento | Para qué sirve | Ejemplo |
+| --- | --- | --- |
+| Atributos | Guardan el estado del objeto | `private int edad;` |
+| Constructores | Inicializan el objeto al crearlo con `new` | `public Persona(String nombre) {...}` |
+| Métodos | Definen el comportamiento | `public void saludar() {...}` |
+| Miembros `static` | Pertenecen a la clase, no a cada objeto | `static int totalPersonas;` |
+
+### Métodos
+
+Un método tiene **modificador de acceso**, **tipo de retorno** (o `void` si no devuelve nada), **nombre** y **parámetros**:
+
+```java
+public double calcularImc(double peso, double altura) {
+//  ^       ^        ^              ^
+//  acceso  retorno  nombre         parámetros
+    return peso / (altura * altura);
+}
+```
+
+## Constructores
+
+Un **constructor** es un método especial que se ejecuta al hacer `new`. Tiene el **mismo nombre que la clase** y **no tiene tipo de retorno** (ni siquiera `void`). Sirve para que el objeto nazca en un estado válido.
+
+```java title="Persona.java"
+public class Persona {
+    private String nombre;
+    private int edad;
+
+    // Constructor con parámetros
+    public Persona(String nombre, int edad) {
+        this.nombre = nombre; // [!code highlight]
+        this.edad = edad; // [!code highlight]
+    }
+
+    // Constructor sin parámetros que reutiliza el anterior
+    public Persona() {
+        this("Anónimo", 0);
+    }
+}
+```
+
+`this` es una referencia al **propio objeto** que se está construyendo o usando. En `this.nombre = nombre`, la parte izquierda es el atributo y la derecha el parámetro que tiene el mismo nombre. Además, `this(...)` llama a otro constructor de la misma clase (debe ser la primera instrucción).
+
+<Callout type="warn" title="El constructor por defecto desaparece">
+  Si no escribes ningún constructor, Java añade uno **sin parámetros** automáticamente. Pero en cuanto escribes uno con parámetros, ese constructor por defecto deja de existir: `new Persona()` dará error de compilación a menos que lo declares tú.
+</Callout>
+
+## Encapsulación: atributos privados, getters y setters
+
+Si los atributos son accesibles desde fuera, cualquiera puede dejar el objeto en un estado absurdo (`ana.edad = -40`). La **encapsulación** consiste en ocultar el estado (`private`) y ofrecer métodos públicos que controlan el acceso.
+
+<Tabs items={['Sin encapsular', 'Encapsulada', 'record (Java 16+)']}>
+  <Tab value="Sin encapsular">
+
+```java title="Persona.java"
+public class Persona {
+    public String nombre;
+    public int edad;
+}
+
+// En cualquier otra clase:
+persona.edad = -40; // compila y deja un objeto inválido
+```
+
+  Rápido de escribir, pero **no hay ningún control**: cualquier parte del programa puede modificar los datos sin validarlos.
+
+  </Tab>
+  <Tab value="Encapsulada">
+
+```java title="Persona.java"
+public class Persona {
+    private String nombre; // [!code highlight]
+    private int edad; // [!code highlight]
+
+    public Persona(String nombre, int edad) {
+        this.nombre = nombre;
+        setEdad(edad);
+    }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public int getEdad() {
+        return edad;
+    }
+
+    public void setEdad(int edad) {
+        if (edad < 0) {
+            throw new IllegalArgumentException("La edad no puede ser negativa");
+        }
+        this.edad = edad;
+    }
+}
+```
+
+  La clase **protege sus invariantes**: es imposible tener una persona con edad negativa. No hay `setNombre`, así que el nombre no se puede cambiar tras crearla.
+
+  </Tab>
+  <Tab value="record (Java 16+)">
+
+```java title="Persona.java"
+public record Persona(String nombre, int edad) {
+    public Persona {
+        if (edad < 0) {
+            throw new IllegalArgumentException("La edad no puede ser negativa");
+        }
+    }
+}
+
+// Uso: los "getters" se llaman como el campo
+Persona p = new Persona("Ana", 19);
+System.out.println(p.nombre());
+```
+
+  Un `record` genera automáticamente constructor, *getters*, `equals`, `hashCode` y `toString`. Sus campos son `final`: es ideal para datos **inmutables**.
+
+  </Tab>
+</Tabs>
+
+### Modificadores de acceso
+
+| Modificador | Misma clase | Mismo paquete | Subclase | Cualquiera |
+| --- | :---: | :---: | :---: | :---: |
+| `private` | Sí | No | No | No |
+| *(sin modificador)* | Sí | Sí | No | No |
+| `protected` | Sí | Sí | Sí | No |
+| `public` | Sí | Sí | Sí | Sí |
+
+La regla práctica: **atributos `private`**, y métodos `public` solo si forman parte de lo que la clase ofrece al exterior.
+
+## Referencias y `null`
+
+Las variables de tipo objeto **no contienen el objeto**, sino una **referencia** (la "dirección") al objeto, que vive en el *heap*. Por eso, al asignar una variable a otra (línea resaltada) **no se copia el objeto**: las dos variables apuntan al mismo.
+
+```java
+Persona a = new Persona("Ana", 19);
+Persona b = a; // [!code highlight]
+b.setEdad(20);
+System.out.println(a.getEdad()); // 20
+
+Persona c = null;       // c no apunta a ningún objeto
+c.getEdad();            // NullPointerException en tiempo de ejecución
+```
+
+<Mermaid
+  titulo="Dos referencias al mismo objeto en memoria"
+  chart={`flowchart LR
+    subgraph Pila
+      A[a]
+      B[b]
+      C[c = null]
+    end
+    subgraph Heap
+      O(("Persona<br/>nombre = Ana<br/>edad = 20"))
+    end
+    A --> O
+    B --> O`}
+/>
+
+<Callout type="error" title="Comparar objetos">
+  `a == b` compara **referencias** (si son el mismo objeto), no el contenido. Para comparar contenido se usa `equals()`, por ejemplo con cadenas: `nombre.equals("Ana")`.
+</Callout>
+
+## Miembros `static`
+
+Un atributo o método `static` pertenece a la **clase**, no a cada objeto: hay **una sola copia compartida**. Se usa con el nombre de la clase.
+
+```java title="Persona.java"
+public class Persona {
+    private static int totalPersonas = 0; // [!code highlight]
+    private String nombre;
+
+    public Persona(String nombre) {
+        this.nombre = nombre;
+        totalPersonas++;
+    }
+
+    public static int getTotalPersonas() { // [!code highlight]
+        return totalPersonas;
+    }
+}
+
+// Uso
+new Persona("Ana");
+new Persona("Luis");
+System.out.println(Persona.getTotalPersonas()); // 2
+```
+
+Un método `static` **no puede usar `this`** ni acceder directamente a atributos de instancia, porque no se ejecuta sobre ningún objeto concreto. Por eso `main` es `static`: la JVM lo llama sin crear ningún objeto.
+
+## Paso a paso: crear y usar tu primera clase
+
+<Steps>
+  <Step>
+
+### Identifica la entidad
+
+  Piensa qué "cosa" del problema quieres representar y qué datos tiene. Por ejemplo, un `Libro` con título, autor y número de páginas.
+
+  </Step>
+  <Step>
+
+### Declara los atributos como `private`
+
+  Elige el tipo adecuado para cada dato: `String titulo`, `String autor`, `int paginas`.
+
+  </Step>
+  <Step>
+
+### Escribe el constructor
+
+  Recibe los datos necesarios, valídalos y asígnalos con `this.atributo = parametro`.
+
+  </Step>
+  <Step>
+
+### Añade getters, setters y métodos de comportamiento
+
+  Solo los que tengan sentido. Sobrescribe `toString()` para poder imprimir el objeto de forma legible.
+
+  </Step>
+  <Step>
+
+### Úsala desde `main`
+
+  Crea objetos con `new`, llama a sus métodos y compila con `javac` antes de ejecutar con `java`.
+
+  </Step>
+</Steps>
+
+<CompletarCodigo
+  titulo="Completa la clase Libro"
+  enunciado="Rellena los huecos para que la clase compile y esté bien encapsulada."
+  lenguaje="java"
+  codigo={`public class Libro {
+    [[private]] String titulo;
+    private int paginas;
+
+    public [[Libro]](String titulo, int paginas) {
+        [[this]].titulo = titulo;
+        this.paginas = paginas;
+    }
+
+    public [[String]] getTitulo() {
+        [[return]] titulo;
+    }
+}
+
+Libro quijote = [[new]] Libro("El Quijote", 1250);`}
+/>
+
+## Pon a prueba lo aprendido
+
+<Quiz titulo="Test: clases y objetos" descripcion="6 preguntas · respuesta inmediata">
+  <Pregunta enunciado="¿Cuál es la mejor definición de objeto?" explicacion="Un objeto es una instancia concreta de una clase, con su propio estado. La clase es la plantilla.">
+    <Opcion>Un fichero `.java` que contiene código</Opcion>
+    <Opcion correcta>Un ejemplar concreto creado a partir de una clase, con sus propios valores</Opcion>
+    <Opcion>Un método que se ejecuta al arrancar el programa</Opcion>
+    <Opcion>Un tipo primitivo como `int` o `double`</Opcion>
+  </Pregunta>
+
+  <Pregunta tipo="vf" enunciado="Si escribes un constructor con parámetros, Java sigue creando automáticamente el constructor sin parámetros." respuesta={false} explicacion="El constructor por defecto solo se genera si la clase no declara ningún constructor. Si lo necesitas, tienes que escribirlo tú." />
+
+  <Pregunta tipo="texto" enunciado="¿Qué imprime este fragmento?" respuesta="1" explicacion="`b = a` no copia el objeto: ambas variables apuntan al mismo contador, así que incrementar desde `b` también se ve desde `a`.">
+
+```java
+Contador a = new Contador(); // valor empieza en 0
+Contador b = a;
+b.incrementar();             // suma 1 al valor
+System.out.println(a.getValor());
+```
+
+  </Pregunta>
+
+  <Pregunta enunciado="¿Cuáles de estos son modificadores de acceso en Java?" explicacion="Los modificadores de acceso son `public`, `protected` y `private` (más el acceso por defecto, sin palabra). `static` y `final` son modificadores, pero no de acceso.">
+    <Opcion correcta>`public`</Opcion>
+    <Opcion correcta>`private`</Opcion>
+    <Opcion correcta>`protected`</Opcion>
+    <Opcion>`static`</Opcion>
+    <Opcion>`final`</Opcion>
+  </Pregunta>
+
+  <Pregunta enunciado="Dentro de un método de instancia, ¿a qué hace referencia `this`?">
+    <Opcion>A la clase en la que está escrito el método</Opcion>
+    <Opcion correcta>Al objeto sobre el que se ha llamado al método</Opcion>
+    <Opcion>Al último objeto creado con `new`</Opcion>
+    <Opcion>Al método `main`</Opcion>
+    <Explicacion>
+      `this` es una referencia al **objeto actual**. Si haces `ana.saludar()`, dentro de `saludar()` la referencia `this` apunta a `ana`. Por eso los métodos `static` no pueden usar `this`: no se ejecutan sobre ningún objeto.
+    </Explicacion>
+  </Pregunta>
+
+  <Pregunta tipo="vf" enunciado="Un atributo `static` tiene un valor distinto en cada objeto de la clase." respuesta={false} explicacion="Al revés: un atributo `static` es único y compartido por toda la clase. Los atributos de instancia (sin `static`) son los que tienen un valor por objeto." />
+</Quiz>
+
+## Tarjetas de repaso
+
+<Flashcards titulo="Repaso: clases y objetos">
+  <Tarjeta frente="¿Qué es una clase?">Una plantilla que define los **atributos** (datos) y **métodos** (comportamiento) que tendrán sus objetos.</Tarjeta>
+  <Tarjeta frente="¿Qué es un objeto o instancia?">Un ejemplar concreto de una clase, creado con `new`, con su propio estado.</Tarjeta>
+  <Tarjeta frente="¿Qué hace el operador `new`?">Reserva memoria para un objeto nuevo en el *heap*, ejecuta el constructor y devuelve una referencia a ese objeto.</Tarjeta>
+  <Tarjeta frente="¿Qué es un constructor?">Un método especial con el **mismo nombre que la clase** y **sin tipo de retorno**, que inicializa el objeto al crearlo.</Tarjeta>
+  <Tarjeta frente="¿Para qué sirve `this`?">Referencia al objeto actual. Sirve para distinguir atributos de parámetros (`this.nombre = nombre`) y para llamar a otro constructor con `this(...)`.</Tarjeta>
+  <Tarjeta frente="¿Qué es la encapsulación?">Ocultar el estado interno (`private`) y exponer solo métodos públicos que lo controlan y validan.</Tarjeta>
+  <Tarjeta frente="Getter y setter">Métodos públicos para **leer** (`getEdad()`) y **modificar** (`setEdad(int)`) un atributo privado, pudiendo validar el valor.</Tarjeta>
+  <Tarjeta frente="¿Qué significa `static`?">Que el miembro pertenece a la **clase** y no a cada objeto: hay una sola copia compartida y se usa con `NombreClase.miembro`.</Tarjeta>
+  <Tarjeta frente="¿Qué compara `==` entre objetos?">Las **referencias**: si son exactamente el mismo objeto. Para comparar contenido se usa `equals()`.</Tarjeta>
+  <Tarjeta frente="¿Cuándo salta un `NullPointerException`?">Al usar un método o atributo a través de una referencia que vale `null`, es decir, que no apunta a ningún objeto.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="La clase Rectangulo" dificultad="facil">
+  Crea una clase `Rectangulo` con dos atributos privados de tipo `double`: `base` y `altura`.
+
+  - Un constructor que reciba ambos valores.
+  - Los métodos `calcularArea()` y `calcularPerimetro()`.
+  - Un método `toString()` que devuelva algo como `Rectangulo 3.0 x 2.0`.
+
+  En un `main`, crea dos rectángulos e imprime su área y su perímetro.
+
+  <Pista>El área es `base * altura` y el perímetro `2 * (base + altura)`. Ambos métodos devuelven `double`.</Pista>
+  <Pista>`toString()` se declara como `public String toString()` y suele llevar encima la anotación `@Override`.</Pista>
+
+  <Solucion>
+
+```java title="Rectangulo.java"
+public class Rectangulo {
+    private double base;
+    private double altura;
+
+    public Rectangulo(double base, double altura) {
+        this.base = base;
+        this.altura = altura;
+    }
+
+    public double calcularArea() {
+        return base * altura;
+    }
+
+    public double calcularPerimetro() {
+        return 2 * (base + altura);
+    }
+
+    @Override
+    public String toString() {
+        return "Rectangulo " + base + " x " + altura;
+    }
+
+    public static void main(String[] args) {
+        Rectangulo r1 = new Rectangulo(3, 2);
+        Rectangulo r2 = new Rectangulo(5.5, 4);
+        System.out.println(r1 + " -> área " + r1.calcularArea() + ", perímetro " + r1.calcularPerimetro());
+        System.out.println(r2 + " -> área " + r2.calcularArea() + ", perímetro " + r2.calcularPerimetro());
+    }
+}
+```
+
+  Al concatenar `r1` con un `String`, Java llama automáticamente a `r1.toString()`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Cuenta bancaria encapsulada" dificultad="media">
+  Implementa una clase `CuentaBancaria` que cumpla estas reglas:
+
+  1. Tiene un `titular` (`String`) y un `saldo` (`double`), ambos privados.
+  2. Cada cuenta recibe un **número de cuenta automático**: la primera es la 1, la segunda la 2, etc.
+  3. `ingresar(double cantidad)` solo acepta cantidades positivas.
+  4. `retirar(double cantidad)` devuelve `true` si se pudo retirar y `false` si no hay saldo suficiente (el saldo nunca puede quedar negativo).
+  5. Solo se puede **consultar** el saldo; no existe `setSaldo`.
+
+  <Pista>Para numerar las cuentas necesitas un contador compartido por todas: un atributo `static`.</Pista>
+  <Pista>En el constructor, incrementa el contador estático y guarda su valor en un atributo de instancia `numero`. Márcalo como `final` porque nunca cambia.</Pista>
+  <Pista>Para rechazar cantidades no válidas puedes lanzar `IllegalArgumentException` o, más sencillo, no hacer nada y devolver `false`.</Pista>
+
+  <Solucion>
+
+```java title="CuentaBancaria.java"
+public class CuentaBancaria {
+    private static int ultimoNumero = 0; // [!code highlight]
+
+    private final int numero;
+    private final String titular;
+    private double saldo;
+
+    public CuentaBancaria(String titular) {
+        this.titular = titular;
+        this.numero = ++ultimoNumero; // [!code highlight]
+        this.saldo = 0;
+    }
+
+    public void ingresar(double cantidad) {
+        if (cantidad <= 0) {
+            throw new IllegalArgumentException("La cantidad debe ser positiva");
+        }
+        saldo += cantidad;
+    }
+
+    public boolean retirar(double cantidad) {
+        if (cantidad <= 0 || cantidad > saldo) {
+            return false;
+        }
+        saldo -= cantidad;
+        return true;
+    }
+
+    public double getSaldo() {
+        return saldo;
+    }
+
+    public int getNumero() {
+        return numero;
+    }
+
+    public String getTitular() {
+        return titular;
+    }
+}
+```
+
+```java title="Main.java"
+public class Main {
+    public static void main(String[] args) {
+        CuentaBancaria c1 = new CuentaBancaria("Ana");
+        CuentaBancaria c2 = new CuentaBancaria("Luis");
+
+        c1.ingresar(100);
+        System.out.println(c1.retirar(30));   // true
+        System.out.println(c1.retirar(500));  // false
+        System.out.println("Cuenta " + c1.getNumero() + ": " + c1.getSaldo()); // Cuenta 1: 70.0
+        System.out.println("Cuenta " + c2.getNumero() + ": " + c2.getSaldo()); // Cuenta 2: 0.0
+    }
+}
+```
+
+  `++ultimoNumero` incrementa primero y luego devuelve el valor, así la primera cuenta recibe el 1.
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Clase">Plantilla con atributos y métodos.</Termino>
+  <Termino nombre="Objeto">Instancia concreta de una clase, creada con `new`.</Termino>
+  <Termino nombre="Constructor">Inicializa el objeto; mismo nombre que la clase, sin retorno.</Termino>
+  <Termino nombre="this">Referencia al objeto actual.</Termino>
+  <Termino nombre="Encapsulación">Atributos `private` + métodos públicos que controlan el acceso.</Termino>
+  <Termino nombre="static">Miembro de la clase, compartido por todos los objetos.</Termino>
+</Glosario>
+
+<MarcarCompletado />

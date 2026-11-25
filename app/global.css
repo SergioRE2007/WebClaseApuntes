@@ -142,9 +142,12 @@ body {
   color: inherit;
 }
 
-:focus-visible {
-  outline: 2px solid var(--color-fd-ring);
-  outline-offset: 2px;
+/* En @layer base para que `outline-none` / `focus-visible:ring-*` de los componentes puedan sustituirlo. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-fd-ring);
+    outline-offset: 2px;
+  }
 }
 
 /* Scrollbar fina y teñida */

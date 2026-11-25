@@ -1,0 +1,9 @@
+export { Quiz, Pregunta, Opcion, Explicacion } from './quiz';
+export { Flashcards, Tarjeta } from './flashcards';
+export { Ejercicio, Pista, Solucion } from './ejercicio';
+export { Mermaid } from './mermaid';
+export { CompletarCodigo } from './completar-codigo';
+export { Terminal } from './terminal';
+export { Concepto, Glosario, Termino } from './concepto';
+export { MarcarCompletado } from './marcar-completado';
+export { Icono, Card } from './icono';

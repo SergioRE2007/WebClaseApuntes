@@ -154,7 +154,7 @@ export function CompletarCodigo({
                     aria-invalid={mal || undefined}
                     style={{ width: `${ancho + 1}ch` }}
                     className={cn(
-                      'mx-0.5 h-6 rounded-md border border-dashed bg-fd-background px-1 text-center font-mono text-[13px] text-fd-foreground outline-none transition-colors focus:border-solid focus:border-fd-primary focus-visible:ring-2 focus-visible:ring-fd-ring',
+                      'mx-0.5 h-6 rounded-md border border-dashed border-fd-primary/60 bg-fd-primary/10 px-1 text-center font-mono text-[13px] text-fd-foreground outline-none transition-colors focus:border-solid focus:border-fd-primary focus-visible:ring-2 focus-visible:ring-fd-ring',
                       ok && 'border-solid border-green-500 bg-green-500/10',
                       mal && 'border-solid border-red-500 bg-red-500/10',
                     )}

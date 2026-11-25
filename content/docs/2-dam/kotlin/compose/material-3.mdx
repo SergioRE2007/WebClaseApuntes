@@ -1,0 +1,456 @@
+---
+title: Material 3
+description: "El tema de la app (colores, tipografía, color dinámico y modo oscuro), Scaffold y su innerPadding, TopAppBar con sus slots, iconos, botones flotantes, Card, indicadores de carga y la barra inferior NavigationBar."
+icon: Palette
+---
+
+import { AnatomiaScaffold } from '@/components/temas/compose/anatomia-scaffold';
+
+<Concepto termino="Material 3" definicion="El sistema de diseño de Google. En Compose son los componentes de androidx.compose.material3: Button, Card, Scaffold, TopAppBar, NavigationBar...">Material 3</Concepto> (también llamado Material You) es el sistema de diseño de Google, y en Compose viene como una librería de componentes ya hechos: `Button`, `Card`, `Scaffold`, `TopAppBar`... Los requisitos del proyecto piden **aplicar Material Design 3** en la interfaz, y en clase se usó durante todo el curso.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Cómo funciona el tema de la app: colores, tipografía, color dinámico y modo oscuro.
+  - Montar una pantalla con `Scaffold` y respetar su `innerPadding`.
+  - Una barra superior reutilizable con `TopAppBar` y sus *slots*.
+  - Iconos desde recursos, en código y de la librería de Material.
+  - Botones flotantes, `Card`, indicadores de carga y la barra inferior.
+</Callout>
+
+## El tema: `MaterialTheme`
+
+<DeClase fecha="18/11" proyecto="ToDoOfflineFirst" nota="se enseñó Theme.kt, sin cambios" />
+
+Android Studio genera en `ui/theme/Theme.kt` una función con el nombre del proyecto que envuelve toda la app (`ToDoAppTheme`, `RoomTheme`, `ToDoOfflineFirstTheme`...). Todos los componentes de Material 3 que van dentro toman de ahí sus colores y su tipografía.
+
+<Recorrido
+  titulo="core/ui/theme/Theme.kt"
+  lenguaje="kotlin"
+  codigo={`@Composable
+fun ToDoOfflineFirstTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    val colorScheme = when {
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            val context = LocalContext.current
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+        darkTheme -> DarkColorScheme
+        else -> LightColorScheme
+    }
+    MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
+}`}
+>
+  <Paso lineas="3" titulo="Modo oscuro según el sistema">
+    `darkTheme` vale por defecto `isSystemInDarkTheme()`: lo que tenga puesto el móvil. Si le pasas otro valor, mandas tú.
+  </Paso>
+  <Paso lineas="4" titulo="Color dinámico">
+    Con `dynamicColor = true`, la app toma los colores del fondo de pantalla del usuario (Material You).
+  </Paso>
+  <Paso lineas="5" titulo="El contenido es una lambda">
+    `content: @Composable () -> Unit` es un tipo función que además es composable: lo que pongas entre las llaves de `ToDoOfflineFirstTheme { ... }`.
+  </Paso>
+  <Paso lineas="7-11" titulo="Solo desde Android 12">
+    El color dinámico existe desde Android 12 (`Build.VERSION_CODES.S`, API 31). Por eso se comprueba la versión antes: en un móvil más antiguo esas funciones no existen.
+  </Paso>
+  <Paso lineas="12-13" titulo="Si no, los colores de la app">
+    `DarkColorScheme` y `LightColorScheme` son los esquemas fijos definidos en el mismo archivo con `darkColorScheme(...)` y `lightColorScheme(...)` (colores en `Color.kt`).
+  </Paso>
+  <Paso lineas="15" titulo="MaterialTheme">
+    Al final, `MaterialTheme` aplica el esquema de colores y la tipografía (`Typography`, de `Type.kt`) a todo lo de dentro.
+  </Paso>
+</Recorrido>
+
+Desde cualquier composable de dentro se leen los valores del tema con `MaterialTheme`:
+
+```kotlin
+Text(text = name, style = MaterialTheme.typography.headlineLarge)   // 09/11
+```
+
+<NoDadoEnClase inline /> Igual que `MaterialTheme.typography`, existe `MaterialTheme.colorScheme` para usar los colores del tema (`MaterialTheme.colorScheme.primary`...) en vez de poner colores a mano; así funcionan solos el modo oscuro y el color dinámico. Este último no salió en clase.
+
+<NoSeVio titulo="El modo oscuro guardado en el tema">
+  El 18/11 se guardó el modo oscuro con DataStore y se abrió `Theme.kt`, pero las capturas terminan antes de ver cómo llega el valor guardado al tema (18/11).
+</NoSeVio>
+
+<NoDadoEnClase titulo="Pasar el modo oscuro al tema">
+  La forma estándar: en `MainActivity`, se lee el ajuste y se pasa como `darkTheme`. El ViewModel de ajustes y el DataStore son del [bloque de datos](/docs/2-dam/kotlin/datos).
+</NoDadoEnClase>
+
+```kotlin title="MainActivity.kt"
+setContent {
+    val modoOscuro by ajustesViewModel.modoOscuro.collectAsStateWithLifecycle()
+    MiAppTheme(darkTheme = modoOscuro) {
+        AppNavHost()
+    }
+}
+```
+
+## Scaffold
+
+<DeClase fecha="07/10, 09/10, 23/10" proyecto="TipCalculator y ToDoApp" />
+
+**`Scaffold`** ("andamio") es el esqueleto de una pantalla de Material 3. Tiene un hueco (*slot*) para cada pieza típica y coloca cada una en su sitio:
+
+| Slot | Qué va | En clase |
+| --- | --- | --- |
+| `topBar` | La barra superior (`TopAppBar`). | `ApplicationTopBar`, 18/11 |
+| `bottomBar` | La barra inferior (`NavigationBar`). | No salió |
+| `floatingActionButton` | El botón flotante (FAB). | `LargeFloatingActionButton`, `FloatingActionButton`, `ExtendedFloatingActionButton` |
+| `content` (la lambda final) | El contenido de la pantalla. Recibe `innerPadding`. | La lista de tareas |
+
+```kotlin title="TaskListScreen.kt (23/10)"
+Scaffold(
+    modifier = modifier.fillMaxSize(),
+    floatingActionButton = {
+        FloatingActionButton(onClick = toCreate) {
+            Icon(painterResource(id = R.drawable.add_24px), contentDescription = "Create")
+        }
+    }
+) { innerPadding ->
+    val modifier = Modifier
+        .consumeWindowInsets(paddingValues = innerPadding)
+        .padding(paddingValues = innerPadding)
+    LazyColumn(modifier = modifier) {
+        // ...
+    }
+}
+```
+
+- El icono se lee <Dudoso nota="Otra captura lee `add_24dp`.">`add_24px`</Dudoso>.
+- El final de las líneas `consumeWindowInsets(...).padding(...)` sale cortado en varias capturas <Dudoso />.
+
+### El `innerPadding`
+
+La lambda del contenido recibe **`innerPadding`**: el espacio que ocupan las barras (la tuya y las del sistema, porque la app va de borde a borde con `enableEdgeToEdge()`). **Si no lo aplicas al contenido, el contenido se mete debajo de las barras.** Pruébalo:
+
+<AnatomiaScaffold />
+
+- Con **`.padding(innerPadding)`** el contenido empieza debajo de la barra de estado y de la `TopAppBar`, y acaba encima de la barra inferior.
+- El **FAB no forma parte del `innerPadding`**: flota encima del contenido.
+- **`.consumeWindowInsets(innerPadding)`** avisa a lo de dentro de que ese espacio ya está cubierto. Si dentro hubiera otro `Scaffold`, no volvería a sumar el hueco de la barra de estado.
+
+<Callout type="error" title="Hueco doble arriba o abajo">
+  Si ves un hueco del doble de alto arriba o abajo, tienes un `Scaffold` dentro de otro (por ejemplo, uno en `MainActivity` y otro en cada pantalla) y los dos dejan sitio para la barra de estado. Pasa `Modifier.consumeWindowInsets(innerPadding)` junto al `padding`, como en clase, o quita uno de los dos.
+</Callout>
+
+## `TopAppBar`
+
+<DeClase fecha="18/11" proyecto="ToDoOfflineFirst" nota="componente reutilizable en core/ui/CommonComponents.kt" />
+
+El 18/11 se hizo una barra superior **reutilizable** para todas las pantallas: cada una decide si enseña la flecha de volver y el botón de ajustes.
+
+<Recorrido
+  titulo="core/ui/CommonComponents.kt"
+  lenguaje="kotlin"
+  codigo={`@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ApplicationTopBar(
+    text: String,
+    showNavigation: Boolean = false,
+    onBack: () -> Unit = {},
+    showSettings: Boolean = false,
+    onSettings: () -> Unit = {},
+) {
+    TopAppBar(
+        actions = {
+            if (showSettings) {
+                IconButton(onClick = onSettings) {
+                    Icon(imageVector = settings, contentDescription = "")
+                }
+            }
+        },
+        navigationIcon = {
+            if (showNavigation) {
+                IconButton(onClick = onBack) {
+                    Icon(imageVector = arrow_back, contentDescription = null)
+                }
+            }
+        },
+        title = { Text(text = text) }
+    )
+}`}
+>
+  <Paso lineas="1" titulo="@OptIn">
+    `TopAppBar` está marcada como experimental en Material 3. Para usarla hay que aceptarlo con `@OptIn(ExperimentalMaterial3Api::class)`; sin eso, el IDE da error.
+  </Paso>
+  <Paso lineas="3-9" titulo="Parámetros con valor por defecto">
+    Solo `text` es obligatorio. Los callbacks valen `{}` (no hacen nada) por defecto, así que una pantalla sin ajustes ni flecha llama a `ApplicationTopBar(text = "Tasks")` y ya.
+  </Paso>
+  <Paso lineas="11-17" titulo="Slot actions">
+    Los botones de la derecha. Aquí, un `IconButton` con el icono de ajustes, solo si `showSettings` es `true`.
+  </Paso>
+  <Paso lineas="18-24" titulo="Slot navigationIcon">
+    El botón de la izquierda: normalmente la flecha de volver, que llama a `onBack`.
+  </Paso>
+  <Paso lineas="25" titulo="Slot title">
+    El título también es una lambda: puedes poner un `Text` o cualquier otro composable.
+  </Paso>
+</Recorrido>
+
+- **`IconButton`** es un botón redondo pensado para llevar solo un icono.
+- Los *slots* son **lambdas composables**: por eso dentro puedes usar un `if` para decidir si se pinta algo.
+- En la lista de tareas se usaba así: `topBar = { ApplicationTopBar(text = "Tasks", showSettings = true, onSettings = onSettings) }`. El `onSettings` sube hasta el `NavHost`, que es quien navega.
+- En el icono de ajustes, `contentDescription = ""` y `null` no son lo mismo para la accesibilidad: lo correcto en un botón sin texto es describir lo que hace (`"Ajustes"`).
+
+## Iconos
+
+Hay tres formas de tener un icono, y en clase salieron dos:
+
+<Tabs items={['Recurso drawable', 'ImageVector en código', 'Icons de Material']}>
+  <Tab value="Recurso drawable">
+
+```kotlin
+Icon(painterResource(id = R.drawable.add_24px), contentDescription = "Create")
+```
+
+Un archivo XML vectorial en `res/drawable` (en Android Studio: clic derecho en `res` → New → Vector Asset). Es lo que se usó en la TipCalculator (`icon_calculate_24`) y en la ToDoApp. El nombre se lee <Dudoso nota="Otra captura lee `add_24dp`.">`add_24px`</Dudoso>.
+
+  </Tab>
+  <Tab value="ImageVector en código">
+
+```kotlin
+Icon(imageVector = settings, contentDescription = "Ajustes")
+```
+
+El 18/11, los iconos `settings` y `arrow_back` eran **propiedades de Kotlin** en `core/ui/icon/settings.kt`, construidas con `ImageVector.Builder` y `path(...)` (con `SolidColor`, `StrokeCap`, `StrokeJoin` y `PathFillType`), y guardadas en una variable privada `_settings` para crearlas una sola vez. Es código generado por herramientas que convierten un SVG; las coordenadas del dibujo salen cortadas en las capturas y no importan.
+
+  </Tab>
+  <Tab value="Icons de Material">
+
+```kotlin
+Icon(Icons.Default.Settings, contentDescription = "Ajustes")
+Icon(Icons.Default.Home, contentDescription = null)
+```
+
+<NoDadoEnClase inline /> Los iconos básicos de Material (`Home`, `Settings`, `Add`, `ShoppingCart`...) vienen en la librería `material-icons-core`, que **hay que añadir** (sin versión, la pone el BOM):
+
+```kotlin title="app/build.gradle.kts"
+implementation("androidx.compose.material:material-icons-core")
+```
+
+Si Android Studio no encuentra `Icons`, es que falta esta línea. Para todos los iconos existe `material-icons-extended`, que pesa bastante más.
+
+  </Tab>
+</Tabs>
+
+## Botones flotantes
+
+<DeClase fecha="09/10, 16/10, 18/11" proyecto="ToDoApp y ToDoOfflineFirst" />
+
+El **FAB** (*floating action button*) es el botón de la acción principal de la pantalla (crear una tarea). Va en el slot `floatingActionButton` del `Scaffold`. En clase salieron tres tamaños:
+
+| Componente | Cómo es | En clase |
+| --- | --- | --- |
+| `FloatingActionButton` | El normal, con un icono. | 16/10, 23/10 |
+| `LargeFloatingActionButton` | Más grande. | 09/10 |
+| `ExtendedFloatingActionButton` | Alargado, con icono **y texto**. | 18/11 |
+
+```kotlin
+LargeFloatingActionButton(onClick = toCreate) {
+    Icon(painterResource(id = R.drawable.add_24px), contentDescription = "Create")
+}
+```
+
+El 18/11 se usó un `ExtendedFloatingActionButton`, pero en las capturas no se ve con qué parámetros. Su forma habitual <NoDadoEnClase inline /> es con un slot para el icono y otro para el texto:
+
+```kotlin
+ExtendedFloatingActionButton(
+    onClick = toTaskCreate,
+    icon = { Icon(painterResource(R.drawable.add_24px), contentDescription = null) },
+    text = { Text("Nueva tarea") }
+)
+```
+
+## `Card`, botones y campos
+
+- **`Card`**: un contenedor con fondo y esquinas redondeadas para agrupar la información de un elemento (cada tarea, cada pokémon). Para que responda al toque, `Modifier.clickable` (ver [Modifier](/docs/2-dam/kotlin/compose/modifier#clickable)). La `TaskCard` completa está en [Composables y layouts](/docs/2-dam/kotlin/compose/composables-y-layouts#componer-composables).
+- **`Button`**: el botón principal, relleno con el color del tema. Con `enabled` se desactiva.
+- **`TextField`** y **`OutlinedTextField`**: campo relleno o con borde. Ver [Estado y recomposición](/docs/2-dam/kotlin/compose/estado-y-recomposicion#campos-de-texto-textfield-y-textfieldstate).
+- **`Switch`** y **`Slider`**: componentes controlados, en la misma página.
+
+## Indicadores de carga
+
+<DeClase fecha="23/10, 09/11" proyecto="ToDoApp y PokeApp2627" />
+
+```kotlin
+if (isLoading) {
+    CircularProgressIndicator()
+}
+```
+
+`CircularProgressIndicator()` sin parámetros es el círculo que gira **sin fin** (no sabes cuánto falta). El 23/10 se vieron sus **dos sobrecargas**: esa y la que recibe el progreso, para cuando sí sabes cuánto lleva (de `0f` a `1f`):
+
+```kotlin
+CircularProgressIndicator(progress = { 0.7f })   // el 70 %
+```
+
+En clase se empezó a escribir un `modifier = Modifier....` dentro <Dudoso nota="Se estaba escribiendo `modifier = Modifier.` (min. 35:08), pero no se ve cómo se terminó." />, sin que se vea cómo acaba.
+
+El 13/11 se miró en la documentación de Material 3 el **Loading indicator** y el **Contained loading indicator** de *Material 3 Expressive*, la versión más nueva de Material. Fue solo teoría: no se escribió código.
+
+## Barra inferior: `NavigationBar` <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  La barra de navegación inferior no salió en ninguna clase de Android. Aquí tienes cómo se pinta; cómo se conecta con la navegación (`popUpTo`, `saveState`...) es del [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura).
+</NoDadoEnClase>
+
+Una **`NavigationBar`** lleva un **`NavigationBarItem`** por pestaña, con su icono, su texto y si está seleccionada. Como cualquier componente controlado, **no guarda cuál está seleccionada**: se lo dices tú y te avisa al pulsar.
+
+```kotlin title="BarraInferior.kt"
+@Composable
+fun BarraInferior(seleccionada: Int, onSeleccionar: (Int) -> Unit) {
+    NavigationBar {
+        NavigationBarItem(
+            selected = seleccionada == 0,
+            onClick = { onSeleccionar(0) },
+            icon = { Icon(Icons.Default.Home, contentDescription = null) },
+            label = { Text(stringResource(R.string.productos)) }
+        )
+        NavigationBarItem(
+            selected = seleccionada == 1,
+            onClick = { onSeleccionar(1) },
+            icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+            label = { Text(stringResource(R.string.ajustes)) }
+        )
+    }
+}
+```
+
+Se pone en el slot `bottomBar` del `Scaffold`: `bottomBar = { BarraInferior(seleccionada, onSeleccionar = { ... }) }`. El `innerPadding` ya incluye su alto. Necesita `material-icons-core` para `Icons.Default`.
+
+## Practica
+
+<CompletarCodigo
+  titulo="Una pantalla con Scaffold"
+  enunciado="Barra superior reutilizable, botón flotante y contenido que respeta el innerPadding."
+  lenguaje="kotlin"
+  codigo={`Scaffold(
+    modifier = modifier.fillMaxSize(),
+    [[topBar]] = { ApplicationTopBar(text = "Tasks", showSettings = true, onSettings = onSettings) },
+    [[floatingActionButton]] = {
+        FloatingActionButton(onClick = toCreate) {
+            Icon(painterResource(id = R.drawable.add_24px), contentDescription = "Create")
+        }
+    }
+) { [[innerPadding]] ->
+    LazyColumn(
+        modifier = Modifier
+            .consumeWindowInsets(innerPadding)
+            .[[padding]](innerPadding)
+    ) { /* ... */ }
+}`}
+/>
+
+<Quiz titulo="Test: Material 3" descripcion="7 preguntas">
+  <Pregunta enunciado="¿Qué pasa si no aplicas el `innerPadding` del `Scaffold` al contenido?" explicacion="El contenido se pinta desde el borde de la pantalla y queda debajo de la barra de estado, de la `TopAppBar` y de la barra inferior.">
+    <Opcion>No compila.</Opcion>
+    <Opcion correcta>El contenido queda tapado por las barras.</Opcion>
+    <Opcion>El `Scaffold` lo aplica solo.</Opcion>
+    <Opcion>Se ocultan las barras.</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué `ApplicationTopBar` lleva `@OptIn(ExperimentalMaterial3Api::class)`?" explicacion="`TopAppBar` está marcada como experimental en Material 3 y hay que aceptarlo explícitamente para usarla.">
+    <Opcion>Para que funcione el modo oscuro.</Opcion>
+    <Opcion correcta>Porque `TopAppBar` es una API experimental de Material 3.</Opcion>
+    <Opcion>Porque usa iconos en código.</Opcion>
+    <Opcion>Para poder llamarla desde Java.</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En una `TopAppBar`, ¿qué slot lleva los botones de la derecha (por ejemplo, ajustes)?" explicacion="`actions` son los botones de la derecha; `navigationIcon`, el de la izquierda (la flecha de volver); `title`, el título.">
+    <Opcion>`navigationIcon`</Opcion>
+    <Opcion correcta>`actions`</Opcion>
+    <Opcion>`title`</Opcion>
+    <Opcion>`floatingActionButton`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="El color dinámico (los colores del fondo de pantalla) funciona en cualquier versión de Android." respuesta={false} explicacion="Solo desde Android 12 (API 31, `Build.VERSION_CODES.S`). Por eso el tema comprueba la versión antes." />
+  <Pregunta enunciado="¿Qué hace `isSystemInDarkTheme()` en el tema?" explicacion="Devuelve si el móvil tiene puesto el modo oscuro. Es el valor por defecto de `darkTheme`.">
+    <Opcion correcta>Dice si el sistema tiene activado el modo oscuro.</Opcion>
+    <Opcion>Activa el modo oscuro en la app.</Opcion>
+    <Opcion>Guarda la preferencia del usuario.</Opcion>
+    <Opcion>Comprueba si hay color dinámico.</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Android Studio no encuentra `Icons.Default.Home`. ¿Qué falta?" explicacion="Los iconos de Material están en `material-icons-core`, que se añade sin versión porque la pone el BOM.">
+    <Opcion>Importar `R.drawable.home`.</Opcion>
+    <Opcion correcta>La dependencia `androidx.compose.material:material-icons-core`.</Opcion>
+    <Opcion>Poner `@OptIn` en la función.</Opcion>
+    <Opcion>Subir el `minSdk`.</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cuáles de estos componentes de botón flotante salieron en clase?" explicacion="Se usaron los tres: `FloatingActionButton`, `LargeFloatingActionButton` y `ExtendedFloatingActionButton`. `SmallFloatingActionButton` existe, pero no salió.">
+    <Opcion correcta>`FloatingActionButton`</Opcion>
+    <Opcion correcta>`LargeFloatingActionButton`</Opcion>
+    <Opcion correcta>`ExtendedFloatingActionButton`</Opcion>
+    <Opcion>`SmallFloatingActionButton`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: Material 3">
+  <Tarjeta frente="¿Para qué sirve la función del tema (`MiAppTheme`)?">Envuelve la app y aplica los colores (`colorScheme`) y la tipografía de Material 3 a todo lo de dentro.</Tarjeta>
+  <Tarjeta frente="Color dinámico">Los colores salen del fondo de pantalla del usuario. Solo desde Android 12 (API 31).</Tarjeta>
+  <Tarjeta frente="Slots del `Scaffold`">`topBar`, `bottomBar`, `floatingActionButton` y el contenido, que recibe `innerPadding`.</Tarjeta>
+  <Tarjeta frente="`innerPadding`">El espacio que ocupan las barras. Hay que aplicarlo al contenido con `padding(innerPadding)`.</Tarjeta>
+  <Tarjeta frente="`consumeWindowInsets(innerPadding)`">Avisa a lo de dentro de que ese espacio ya está cubierto, para que no se sume dos veces.</Tarjeta>
+  <Tarjeta frente="Slots de `TopAppBar`">`title`, `navigationIcon` (izquierda) y `actions` (derecha).</Tarjeta>
+  <Tarjeta frente="`CircularProgressIndicator()` sin parámetros">Gira sin fin: carga de duración desconocida. Con `progress = { 0.5f }` enseña el avance.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Pantalla de detalle con flecha de volver" dificultad="media">
+  Escribe una pantalla `TaskDetailScreen(titulo: String, onBack: () -> Unit, modifier: Modifier = Modifier)` con un `Scaffold` que use la `ApplicationTopBar` de clase con la flecha de volver y el título de la tarea, y que en el contenido pinte una `Card` con el texto `"Detalle de $titulo"` respetando el `innerPadding`.
+
+  <Pista>`ApplicationTopBar` ya tiene `showNavigation` y `onBack`.</Pista>
+  <Pista>El `modifier` del parámetro va en el `Scaffold`; el `innerPadding`, en la `Card`.</Pista>
+
+  <Solucion>
+
+```kotlin
+@Composable
+fun TaskDetailScreen(
+    titulo: String,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            ApplicationTopBar(text = titulo, showNavigation = true, onBack = onBack)
+        }
+    ) { innerPadding ->
+        Card(
+            modifier = Modifier
+                .consumeWindowInsets(innerPadding)
+                .padding(innerPadding)
+                .padding(16.dp)
+        ) {
+            Text(text = "Detalle de $titulo")
+        }
+    }
+}
+```
+
+  Como `ApplicationTopBar` tiene `@OptIn` dentro, esta pantalla no lo necesita. En el `NavHost`, `onBack = { navController.popBackStack() }`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="El tema siempre en oscuro" dificultad="facil">
+  Quieres probar cómo queda tu app en modo oscuro y sin color dinámico, sin cambiar los ajustes del móvil. ¿Qué cambiarías en la llamada al tema de `MainActivity`?
+
+  <Pista>Mira los parámetros con valor por defecto de la función del tema.</Pista>
+
+  <Solucion>
+
+```kotlin
+setContent {
+    MiAppTheme(darkTheme = true, dynamicColor = false) {
+        AppNavHost()
+    }
+}
+```
+
+  Como `darkTheme` y `dynamicColor` tienen valor por defecto, normalmente no se pasan. Pasándolos, mandas tú. También puedes hacerlo solo en un `@Preview`, para ver las dos versiones sin tocar la app.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

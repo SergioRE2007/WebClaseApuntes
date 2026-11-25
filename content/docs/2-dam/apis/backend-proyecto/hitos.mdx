@@ -1,0 +1,187 @@
+---
+title: Planificación por hitos
+description: Los 11 hitos semanales del proyecto (de H1 a H11), qué se revisa en cada uno, qué parte del backend toca y si se ha dado en clase.
+icon: CalendarRange
+---
+
+La **"Planificación por hitos · PI · Acceso a Datos"** reparte el proyecto en **11 hitos semanales acumulativos**: cada semana se revisa una evidencia que funcione y cada hito amplía el anterior. Igual que con los requisitos, el documento se llama "de Acceso a Datos", pero los hitos H6 a H8 y buena parte de H9 a H11 son **backend y base de datos**, que es lo que se explica en este bloque.
+
+<Callout type="info" title="Cómo funcionan los hitos">
+  - Cada hito es una semana de trabajo y se revisa con algo que se pueda **ejecutar o comprobar**.
+  - Son **genéricos**: no fijan el tema del proyecto, los adaptas a tu modelo.
+  - En Navidad (del 21 de diciembre al 10 de enero) **no hay hitos obligatorios**.
+  - La secuencia va de frontend a diseño visual, servicios, API, persistencia, integración y lógica de negocio.
+</Callout>
+
+## El calendario
+
+<Mermaid
+  titulo="Hitos del proyecto, curso 2026-27"
+  chart={`gantt
+  dateFormat YYYY-MM-DD
+  axisFormat %d/%m
+  section Angular
+  H1 Estructura inicial :h1, 2026-10-29, 2d
+  H2 Layout y estilos :h2, 2026-11-02, 5d
+  H3 Componentes y rutas :h3, 2026-11-09, 5d
+  H4 Vistas y formularios :h4, 2026-11-16, 5d
+  H5 Servicios Angular :h5, 2026-11-23, 5d
+  section Backend
+  H6 Diseño de la API :h6, 2026-11-30, 5d
+  H7 ORM y modelo :h7, 2026-12-09, 3d
+  H8 Endpoints y seed :h8, 2026-12-14, 5d
+  section Navidad
+  Sin hitos :done, nav, 2026-12-21, 2027-01-10
+  section Integración
+  H9 Integración :h9, 2027-01-11, 5d
+  H10 Consultas y negocio :h10, 2027-01-18, 5d
+  H11 Revisión final :h11, 2027-01-25, 5d`}
+/>
+
+## Los 11 hitos
+
+| Hito | Semana | Foco | Qué se revisa |
+| --- | --- | --- | --- |
+| H1 | 29-30 oct. | Creación y estructura inicial | Proyecto creado y versionado. Angular y Express **separados**, estructura de carpetas, configuración inicial y que las dos aplicaciones arranquen. |
+| H2 | 2-6 nov. | Layout y estilos | Layout general con Tailwind CSS y criterios visuales comunes: estructura, espaciado, tipografía y navegación. |
+| H3 | 9-13 nov. | Componentización y navegación | Componentes principales y reutilizables, y Angular Router con navegación entre las vistas principales. |
+| H4 | 16-20 nov. | Vistas, formularios e interacción | Listados, detalle y formularios principales, comunicación entre componentes y primeras validaciones. Puede usar datos simulados. |
+| H5 | 23-27 nov. | Servicios Angular | Servicios de acceso a datos e interfaces o tipos. Separación entre componentes y comunicación con la futura API. |
+| H6 | 30 nov.-4 dic. | Diseño de la API REST | Recursos, rutas, parámetros, cuerpos y respuestas definidos. Express organizado en rutas, controladores y servicios. **Contrato** entre frontend y backend. |
+| H7 | 9-11 dic. | ORM y modelo de persistencia | Modelo con Prisma: relaciones, restricciones y conexión con PostgreSQL. Primeras migraciones y preparación del seed. |
+| H8 | 14-18 dic. | Endpoints y acceso a datos | Endpoints principales conectados a la base. CRUD y consultas con el ORM. **Seed operativo**. |
+| — | 21 dic.-10 ene. | Sin hitos | Margen antes y después de Navidad. |
+| H9 | 11-15 ene. | Integración Angular, API y base de datos | Cambiar los datos simulados por los reales. Angular consumiendo la API y operaciones que atraviesan todas las capas. |
+| H10 | 18-22 ene. | Consultas y lógica de negocio | Búsqueda, filtro, orden y paginación desde el backend. Consultas relacionales y **operación de negocio con transacción**. |
+| H11 | 25-29 ene. | Integración y revisión final | Validaciones en los dos lados, errores HTTP, integridad, estados de carga y vacío. Revisión de migraciones, seed, configuración y funcionamiento global. |
+
+## Qué parte del backend toca cada hito
+
+H2 a H5 son de Angular: están en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado) y en los apuntes de [Acceso a Datos](/docs/2-dam/acceso-a-datos).
+
+| Hito | Del backend | Estado en clase | Dónde |
+| --- | --- | --- | --- |
+| H1 | Proyecto Express con TypeScript, `app.ts` e `index.ts` separados, `.env` | Dado (20/10) | [Backend de clase](/docs/2-dam/apis/backend) |
+| H6 | Rutas, controladores y servicios por módulo; el contrato de la API | Dado (20/10 y 27/10); el contrato, con Swagger (03/11) | [Backend de clase](/docs/2-dam/apis/backend) y el ejemplo de abajo |
+| H7 | `schema.prisma` con varias entidades, relaciones y `onDelete`; migraciones | A medias | [Modelo y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) |
+| H7 y H8 | Seed | No dado | [Modelo y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) |
+| H8 | CRUD con Prisma de tus entidades | Dado (27/10, con `users`) | [Backend de clase](/docs/2-dam/apis/backend) |
+| H9 | CORS para tu web, proteger rutas con el token | A medias (el error de CORS salió el 18/11) | [CORS y token](/docs/2-dam/apis/backend-proyecto/cors-y-token) |
+| H10 | Listado con búsqueda, filtro, orden y paginación | No dado | [Listado paginado](/docs/2-dam/apis/backend-proyecto/listado-paginado) |
+| H10 | `include`, `select`, `_count` y `where` | A medias | [Consultas](/docs/2-dam/apis/backend-proyecto/consultas-relacionadas) |
+| H10 | Operación de negocio con transacción | No dado | [Transacciones](/docs/2-dam/apis/backend-proyecto/transacciones) |
+| H11 | Errores HTTP e integridad | Dado (los códigos de Prisma, 27/10); `HttpError` y P2003, no dados | [Errores HTTP](/docs/2-dam/apis/backend-proyecto/errores-http) |
+
+## H6: el contrato de la API <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  En clase el contrato se documentó con **Swagger** en `/api-docs` (03/11), pero no se diseñó uno desde cero. Esta tabla es una forma sencilla de tenerlo escrito para el H6: qué rutas hay, qué reciben y qué códigos devuelven.
+</NoDadoEnClase>
+
+Para la tienda de ejemplo del bloque:
+
+| Método y ruta | Recibe | Responde |
+| --- | --- | --- |
+| `GET /api/productos` | *Query*: `q`, `categoriaId`, `orden`, `dir`, `page`, `limit` | `200` con `items`, `total`, `page`, `limit` y `totalPages` · `400` si los parámetros están mal |
+| `GET /api/productos/:id` | — | `200` con el producto · `404` |
+| `POST /api/productos` | *Body*: `nombre`, `precio`, `stock`, `categoriaId` | `201` con el producto creado · `400` · `409` si la `categoriaId` no existe (P2003) |
+| `PATCH /api/productos/:id` | *Body* parcial | `200` · `400` · `404` |
+| `DELETE /api/productos/:id` | — | `204` · `404` · `409` si está en algún pedido |
+| `GET /api/categorias` | — | `200` con cada categoría y su número de productos |
+| `GET /api/categorias/:id` | — | `200` con la categoría y sus productos · `404` |
+| `POST /api/pedidos/:id/confirmar` | Token en `Authorization` | `200` con el pedido confirmado · `401` · `404` · `409` sin stock |
+
+Angular necesita saber exactamente esto para escribir sus servicios e interfaces en el H5, así que conviene tenerlo **antes** de programar el backend.
+
+## La revisión de cada semana
+
+La revisión **no exige** que cada bloque esté cerrado al 100 %: se mira que haya un avance que se pueda comprobar y que sepas explicarlo.
+
+| Aspecto | Qué tienes que poder enseñar |
+| --- | --- |
+| Ejecución | El proyecto arranca y se ve el avance. |
+| Integración | Lo nuevo no rompe de forma permanente lo anterior. |
+| Arquitectura | Se mantiene la separación entre componentes, servicios, API, lógica y persistencia. |
+| Trazabilidad | El repositorio refleja el avance con commits y una estructura comprensible. |
+| Explicación técnica | Sabes justificar lo que has decidido y decir qué te falta. |
+| Rúbrica | En algunos hitos se aplica una rúbrica con lo dado hasta ese momento. |
+
+### Trazabilidad: cómo lo hacía el profesor
+
+<DeClase fecha="27/10, 03/11" proyecto="node-server-26-27" />
+
+El repositorio de referencia del profesor está hecho justo así: un **tag de Git por versión** (de v0.1.0 a v1.1.3), un `CHANGELOG.md` con lo que añade cada versión y commits con prefijo (`feat:`, `fix:`, `docs:`). En clase se recorrió versión a versión con Git Graph y se subieron los tags con `git push origin --tags`.
+
+### Un tag por hito <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  En clase solo se vio cómo **subir** los tags, no cómo crearlos.
+</NoDadoEnClase>
+
+Puedes marcar el final de cada hito con un tag anotado, igual que las versiones del profesor:
+
+<Terminal titulo="bash">
+{`$ git add .
+$ git commit -m "feat: seed con categorías, productos y pedidos"
+$ git tag -a h8 -m "H8: endpoints conectados y seed operativo"
+$ git push
+$ git push origin --tags`}
+</Terminal>
+
+Así, en la revisión puedes enseñar qué había exactamente al cerrar cada hito.
+
+## Comprueba lo que sabes
+
+<Quiz titulo="Test: los hitos" descripcion="5 preguntas">
+  <Pregunta enunciado="¿En qué hito tiene que estar operativo el seed?" explicacion="En el H7 se prepara y en el H8 tiene que estar operativo, con datos suficientes para probar la aplicación.">
+    <Opcion>H6</Opcion>
+    <Opcion>H7</Opcion>
+    <Opcion correcta>H8</Opcion>
+    <Opcion>H11</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿En qué hito se revisan la búsqueda, el filtro, la ordenación, la paginación y la transacción?" explicacion="El H10 es el de consultas y lógica de negocio.">
+    <Opcion>H8</Opcion>
+    <Opcion>H9</Opcion>
+    <Opcion correcta>H10</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="En el H4 ya tiene que haber datos reales de la base de datos." respuesta={false} explicacion="El H4 permite datos simulados. Se sustituyen por los reales en el H9." />
+  <Pregunta tipo="vf" enunciado="Para pasar la revisión semanal, todo lo del hito tiene que estar terminado al 100 %." respuesta={false} explicacion="La revisión no exige que cada bloque esté cerrado al 100 %: basta con un avance que se pueda comprobar y que sepas explicar, sin romper lo anterior." />
+  <Pregunta enunciado="¿Qué se revisa en el H6?" explicacion="El H6 es el diseño de la API: recursos, rutas, parámetros, cuerpos y respuestas, el backend separado en rutas, controladores y servicios, y el contrato con el frontend.">
+    <Opcion>El layout con Tailwind</Opcion>
+    <Opcion correcta>Las rutas, parámetros y respuestas de la API y el contrato con Angular</Opcion>
+    <Opcion>Las migraciones y el seed</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: hitos">
+  <Tarjeta frente="H6">Diseño de la API REST: rutas, parámetros, cuerpos y respuestas, y el contrato con Angular.</Tarjeta>
+  <Tarjeta frente="H7">Modelo con Prisma (relaciones, restricciones, PostgreSQL), primeras migraciones y preparar el seed.</Tarjeta>
+  <Tarjeta frente="H8">Endpoints conectados a la base, CRUD y consultas con el ORM, y seed operativo.</Tarjeta>
+  <Tarjeta frente="H9">Integración: Angular consume la API real y los datos simulados desaparecen.</Tarjeta>
+  <Tarjeta frente="H10">Búsqueda, filtro, orden y paginación en el backend, consultas relacionales y operación de negocio con transacción.</Tarjeta>
+  <Tarjeta frente="H11">Revisión final: validaciones, errores HTTP, integridad, estados de carga y vacío, migraciones y seed.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="El contrato de tu API" dificultad="media">
+  Escribe para tu proyecto una tabla como la del H6 con **todas** las rutas de tu API: método, ruta, qué reciben (parámetros de la URL, *query* o *body*) y qué códigos devuelven. Incluye al menos el listado principal con búsqueda y paginación y la ruta de tu operación de negocio.
+
+  <Pista>Por cada entidad suelen salir cinco rutas: listar, ver una, crear, modificar y borrar.</Pista>
+  <Pista>La operación de negocio no es un CRUD: suele ir como `POST` a una subruta con un verbo, por ejemplo `/api/reservas/:id/cancelar`.</Pista>
+
+  <Solucion>
+
+No hay una única respuesta. Comprueba que tu tabla cumple esto:
+
+- Cada ruta que crea responde `201`; cada ruta que borra, `204`.
+- Las rutas con `:id` pueden responder `404`.
+- Las que reciben datos pueden responder `400`.
+- Las que chocan con un único o con datos relacionados pueden responder `409`.
+- Las protegidas pueden responder `401`.
+- El listado principal recibe `q`, algún filtro, `orden`, `dir`, `page` y `limit`, y responde con el total.
+
+</Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

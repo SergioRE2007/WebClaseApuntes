@@ -1,0 +1,400 @@
+---
+title: Despliegue en Vercel
+description: "Publicar una SPA de Angular en Vercel como en la Act 11: comprobar el build, vercel.json con el rewrite, Root y Output Directory, Production y Preview por rama, el error de CORS contra localhost y la tabla de diagnóstico."
+icon: Rocket
+---
+
+import { SimuladorVercel } from '@/components/temas/proyecto/simulador-vercel';
+
+<DeClase fecha="18/11" proyecto="proj-game" rama="refactor/reactive-form2" nota="Act 11, «Migración ReactiveForms, Git y Vercel»" />
+<DeClase fecha="19/11" proyecto="proyecto-rutas" nota="Vercel CLI" />
+
+La Act 11 de Angular tenía tres partes: pasar el formulario de juegos a **formularios reactivos** en una rama, abrir una **Pull Request de revisión** y publicar una **Preview** en **Vercel**. Los formularios están en [Acceso a Datos](/docs/2-dam/acceso-a-datos) y la rama y la PR en [Git: ramas, tags y Git Graph](/docs/2-dam/proyecto-intermodular/git-ramas-y-tags). Aquí tienes el despliegue, siguiendo la guía de la actividad paso a paso.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué comprobar antes de subir y qué carpeta se publica.
+  - Para qué sirve el rewrite de `vercel.json` y por qué sin él sale un 404 al recargar.
+  - Configurar Root Directory, Output Directory y Build Command.
+  - La diferencia entre Production y Preview.
+  - Por qué la web publicada no puede hablar con tu `localhost`.
+</Callout>
+
+## La idea: una rama, una Preview
+
+<Concepto termino="Vercel" definicion="Servicio que compila y publica webs. Cada vez que subes a una rama del repositorio conectado, vuelve a compilar el proyecto.">Vercel</Concepto> está conectado al repositorio de GitHub. La rama principal se publica en **Production** y cada rama de trabajo tiene su propia **Preview**, con otra URL. El enunciado lo dibujaba así:
+
+<Mermaid
+  titulo="Ramas y despliegues de la Act 11"
+  chart={`flowchart LR
+    R["refactor/reactive-forms"] -- "PR de revisión (se deja abierta)" --> M["main"]
+    M --> P["Production"]
+    R --> V["Preview"]`}
+/>
+
+## Los pasos de la guía
+
+<Steps>
+  <Step>
+
+#### A. Comprobar antes de subir
+
+```bash title="Terminal"
+git branch --show-current
+npm ci
+npm run build
+```
+
+- `git branch --show-current`: estás en la rama buena.
+- `npm ci` instala **exactamente** lo que dice `package-lock.json` (es lo mismo que hará Vercel).
+- `npm run build` no puede dar errores: si falla aquí, fallará en Vercel.
+
+El build de Angular 19 sin SSR deja la web en **`dist/<proyecto>/browser`**. Esa es la carpeta que se publica:
+
+<Files>
+  <Folder name="dist" defaultOpen>
+    <Folder name="proj-game" defaultOpen>
+      <Folder name="browser" defaultOpen>
+        <File name="index.html" />
+        <File name="main-*.js" />
+        <File name="polyfills-*.js" />
+        <File name="styles-*.css" />
+        <File name="3rdpartylicenses.txt" />
+      </Folder>
+      <File name="prerendered-routes.json" />
+    </Folder>
+  </Folder>
+</Files>
+
+Y en el `.gitignore` tienen que estar `/dist` y `/node_modules`: Vercel instala y compila por su cuenta.
+
+</Step>
+  <Step>
+
+#### Añadir vercel.json
+
+Se crea en la raíz del proyecto (junto a `package.json`) y se hace commit:
+
+```json title="vercel.json"
+{
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
+```
+
+```bash title="Terminal"
+git add vercel.json
+git commit -m "chore: configure SPA navigation on Vercel"
+npm run build
+```
+
+Para qué sirve lo tienes más abajo, en "Por qué hace falta el rewrite".
+
+</Step>
+  <Step>
+
+#### B. Conectar GitHub con Vercel
+
+En vercel.com: **Add New → Project → Import** y eliges el repositorio. En **Configure Project** revisas:
+
+- **Root Directory**: la carpeta que tiene el `package.json` (la raíz, si el repositorio es solo la web).
+- **Framework Preset**: Angular.
+- **Build Command**: `npm run build`.
+- **Output Directory**: la carpeta que contiene el `index.html` compilado, `dist/<proyecto>/browser`.
+
+Pulsas **Deploy**. La rama `main` queda como **Production Branch**.
+
+</Step>
+  <Step>
+
+#### C. Preview por rama
+
+```bash title="Terminal"
+git push -u origin feature/reactive-forms
+```
+
+Cada push de una rama crea una Preview con su URL. Si la Preview te pide iniciar sesión, es la **Deployment Protection** de Vercel, no un fallo.
+
+</Step>
+  <Step>
+
+#### D. Qué funciona en la Preview
+
+La Preview carga el frontend y las **validaciones** del formulario funcionan, pero **guardar no**: la app intenta llamar a JSON Server en `localhost:3000` y el navegador lo bloquea (lo tienes más abajo, en "El límite de la práctica"). Para comprobar las validaciones: al enviar un formulario **inválido**, en la pestaña Network **no debe salir ninguna petición**.
+
+</Step>
+  <Step>
+
+#### E. PR de revisión
+
+En GitHub, PR con base `main` y compare `feature/reactive-forms`, título "Refactorizar: formularios reactivos". Se revisa en *Files changed* y **se deja abierta**.
+
+</Step>
+  <Step>
+
+#### F. Si algo falla
+
+La tabla de diagnóstico está al final de la página.
+
+</Step>
+</Steps>
+
+## Lo que se hizo en clase
+
+El 18/11 el profesor siguió la guía con su proyecto `proj-game`:
+
+1. Commit (`git add -A .` y `git commit -m "."`) y `git push origin refactor/reactive-form2`.
+2. En vercel.com le pidió activar la **verificación en dos pasos** y, al crear el despliegue, un **código de seguridad por correo**.
+3. Importó el repositorio `proj-game` con el preset Angular. En los **Build Logs** se ve el clonado de la rama `master`, `vercel build` y avisos de npm. Termina con "Deployed to Production in 30 seconds", en `proj-game-r6lu.vercel.app`.
+4. En el panel, **Recent Previews** muestra la rama `refactor/reactive-form2`.
+5. Buscó "vercel deploy branch from github": cada `git push origin <rama>` crea una Preview, y también se puede desplegar a mano desde **Deployments → Create Deployment**. Al buscar "refactor" en *Import* sale "No Results Found", porque **ahí se buscan repositorios, no ramas**.
+6. La app publicada da el **error de CORS** al llamar a `http://localhost:3000`, y la paginación pone "1 de 0" porque no llega ningún dato.
+7. Creó un segundo proyecto (`proj-game-jttv`) para enseñar la configuración: en *Build and Output Settings*, el Build Command, la Output Directory y el Install Command; en *Deployment Settings*, Node.js 26.x, la región `iad1` y la Deployment Protection en Standard.
+
+Los avisos `npm warn deprecated` del build (`rimraf@3.0.2`, `inflight@1.0.6`, `glob@7.2.3`, `glob@10.5.0`, `connect-pause@0.1.1`, `tar@6.2.1` y `uuid@8.3.2`) **no son errores**: el despliegue sigue.
+
+- La producción se desplegó desde <Dudoso nota="La guía usa `main`; la rama principal del profesor es `master`.">`master`</Dudoso>. La Preview de la rama sale en Recent Previews, pero no se ve que se llegara a abrir.
+- En el segundo proyecto la Output Directory aparece como <Dudoso nota="La guía habla de `dist/<proyecto>/browser`, y ese segundo proyecto no se llega a ver desplegado.">`dist`</Dudoso>.
+- La máquina de build sale con <Dudoso nota="En Deployment Settings pone Basic, con 2 vCPU y 8 GB.">2 cores y 7 GB</Dudoso> en los logs. Plan Hobby.
+
+## Por qué hace falta el rewrite
+
+Una SPA de Angular tiene **un solo** `index.html`. Rutas como `/aula/materiales` no son archivos: las conoce el **Router de Angular**, que corre en el navegador.
+
+- Si entras por `/` y pulsas un enlace (`routerLink`), Angular cambia de pantalla **sin pedir nada al servidor**. Funciona siempre.
+- Si **recargas** en `/aula/materiales` (o pegas esa URL), el navegador le pide a Vercel el archivo `/aula/materiales`, que no existe. Sin rewrite, Vercel responde **404**.
+- Con el rewrite `/(.*)` → `/index.html`, Vercel sirve `index.html` para cualquier ruta que no sea un archivo real. Angular arranca, lee la URL y pinta la pantalla que toca.
+
+<Flujo
+  titulo="Recargar /aula/materiales con el rewrite"
+  nodos={["Navegador", "Vercel", "Angular Router"]}
+>
+  <Mensaje de="Navegador" a="Vercel" titulo="GET /aula/materiales">
+    Has pulsado F5 en una ruta interna: es una petición nueva al servidor.
+  </Mensaje>
+  <Mensaje de="Vercel" a="Vercel" titulo="¿Existe ese archivo?">
+    En la carpeta publicada no hay ningún `/aula/materiales`. Como hay un rewrite `/(.*)`, Vercel usa `/index.html` en su lugar.
+  </Mensaje>
+  <Mensaje de="Vercel" a="Navegador" tipo="respuesta" titulo="200 index.html">
+    La URL de la barra no cambia: sigue siendo `/aula/materiales`.
+  </Mensaje>
+  <Mensaje de="Navegador" a="Angular Router" titulo="Arranca la app">
+    El navegador carga `main-*.js` y Angular lee la URL actual.
+  </Mensaje>
+  <Mensaje de="Angular Router" a="Angular Router" titulo="Resuelve la ruta">
+    Busca `aula` y su hija `materiales` en `routes` y pinta `AulaComponent` con `MaterialesComponent` en su `router-outlet`.
+  </Mensaje>
+</Flujo>
+
+Pruébalo tú: elige la Output Directory, activa o quita el rewrite y abre cada URL. Cuando la app esté cargada, usa también sus enlaces y compara.
+
+<SimuladorVercel />
+
+Lo que tienes que sacar de la demo:
+
+- Con la Output Directory mal (`dist` en vez de `dist/<proyecto>/browser`) sale **404 incluso en `/`**: Vercel no encuentra ningún `index.html`. El rewrite no lo arregla.
+- Con la Output Directory bien y **sin** rewrite, `/` funciona y los enlaces también, pero **recargar una ruta interna da 404**.
+- Con las dos cosas bien, todo funciona.
+- Vercel **primero busca un archivo real** (por eso `main-*.js` o `styles-*.css` se siguen sirviendo) y solo si no existe aplica el rewrite. <NoDadoEnClase inline /> Este detalle de Vercel no salió en clase.
+
+<Callout type="warn" title="Solo para SPA">
+  El rewrite a `index.html` es para una SPA sin SSR, como las de clase. Un proyecto de Angular con SSR se despliega de otra forma.
+</Callout>
+
+## Root Directory y Output Directory
+
+Son los dos campos que más fallan:
+
+| Campo | Qué es | En `proj-game` |
+| --- | --- | --- |
+| Root Directory | La carpeta del repositorio que tiene el `package.json` de la web. | La raíz del repositorio, que solo tenía la web. |
+| Output Directory | La carpeta que contiene el `index.html` **compilado**. | `dist/proj-game/browser` |
+
+<NoDadoEnClase titulo="Si tu repositorio tiene backend y frontend">
+  Si en el mismo repositorio tienes, por ejemplo, `backend/` y `frontend/`, el Root Directory de Vercel es `frontend` (donde está su `package.json`) y la Output Directory se cuenta desde ahí: `dist/<proyecto>/browser`. En clase el repositorio era solo la web.
+</NoDadoEnClase>
+
+## El límite de la práctica: CORS contra localhost
+
+La web publicada en Vercel sigue llamando a `http://localhost:3000/games`, donde estaba JSON Server en el ordenador del profesor. En la consola sale:
+
+```txt title="Consola del navegador"
+Access to XMLHttpRequest at 'http://localhost:3000/games?_page=1&_limit=5'
+from origin 'https://proj-game-r6lu.vercel.app' has been blocked by CORS policy:
+Permission was denied for this request to access the `loopback` address space.
+```
+
+- `localhost` es la dirección **de bucle local** (*loopback*): significa "este mismo ordenador". En la web publicada, `localhost` es el ordenador **de quien la visita**, no el tuyo.
+- El navegador no deja que una página de un origen público acceda al *loopback*. Por eso la Preview **valida pero no guarda**.
+- En la práctica era lo esperado: solo se pedía comprobar el frontend y las validaciones.
+
+<NoSeVio titulo="La web publicada contra una API publicada">
+  En clase no se llegó a publicar una API ni a conectar la web desplegada con ella. La rama `vercel-deployment` del backend de referencia no se abre, y se probó `environment.apiUrl` en Angular pero dio error y no se vio `environment.ts`.
+</NoSeVio>
+
+### Cómo se conecta con tu API <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  No se ha visto en clase. Es lo que necesitarás para tu proyecto cuando la web y la API estén publicadas.
+</NoDadoEnClase>
+
+1. **Publica la API** con `https` (si la web va por `https` y la API por `http`, el navegador da un error de *Mixed Content*).
+2. **Permite el origen de tu web en el CORS de la API** (por ejemplo, `https://tu-proyecto.vercel.app`, sin `/` al final). Cómo hacerlo en Express está en [APIs: backend del proyecto](/docs/2-dam/apis/backend-proyecto).
+3. **Saca la URL de la API a los *environments* de Angular**, para usar `localhost` en desarrollo y la URL publicada en el build:
+
+```bash title="Terminal"
+ng generate environments
+```
+
+```ts title="src/environments/environment.ts"
+export const environment = {
+  apiUrl: 'https://tu-api.example.com/api',
+};
+```
+
+```ts title="src/environments/environment.development.ts"
+export const environment = {
+  apiUrl: 'http://localhost:3000/api',
+};
+```
+
+```ts title="src/app/services/game.service.ts"
+import { environment } from '../../environments/environment';
+
+@Injectable({ providedIn: 'root' })
+export class GameService {
+  private readonly http = inject(HttpClient);
+  private readonly apiUrl = `${environment.apiUrl}/games`;
+}
+```
+
+`ng generate environments` crea los dos archivos y añade a `angular.json` el reemplazo de `environment.ts` por `environment.development.ts` en la configuración de desarrollo (`ng serve`). `npm run build` usa la de producción, así que coge la URL publicada. Importa siempre `environment.ts`, nunca el de desarrollo.
+
+## Vercel CLI
+
+<DeClase fecha="19/11" proyecto="proyecto-rutas" />
+
+El 19/11, al enseñar la solución de la Act 12 desplegada, el profesor usó la terminal de Vercel:
+
+<Terminal titulo="bash">
+{`$ vercel login
+$ vercel project ls`}
+</Terminal>
+
+- `vercel login` inicia sesión con un **código de dispositivo** y un correo de verificación.
+- `vercel project ls` lista tus proyectos (salían `proj-routes` y `proj-game`, con Node 26.x).
+- La versión era la <Dudoso nota="En los logs de build del 18/11 sale 65.17.0.">66.2.0</Dudoso>.
+
+<NoDadoEnClase titulo="Desplegar desde la terminal">
+  En clase no se desplegó con la CLI. Si quieres hacerlo: `vercel` dentro de la carpeta del proyecto crea un despliegue de Preview, y `vercel --prod` lo publica en Production.
+</NoDadoEnClase>
+
+## Tabla de diagnóstico
+
+Es el paso F de la guía: qué revisar primero según el síntoma.
+
+| Síntoma | Qué revisar |
+| --- | --- |
+| Build Failed | Los **Build Logs** (y que `npm run build` funcione en tu ordenador). |
+| Página 404 | **Root Directory** y **Output Directory**. |
+| 404 al recargar una ruta | Falta el **rewrite** de `vercel.json`. |
+| No hay Preview | La **rama** y el **push**. |
+| La Preview pide iniciar sesión | La **Deployment Protection**. |
+| Falla el POST | **CORS** o la API en `localhost`. |
+
+<NoSeVio>La tabla de la guía no se lee entera en las capturas: esta es la parte que se ve.</NoSeVio>
+
+## Comprueba lo que sabes
+
+<Quiz titulo="Test: despliegue en Vercel">
+  <Pregunta enunciado="Tu web funciona al entrar por `/`, pero al recargar en `/aula/materiales` sale un 404. ¿Qué falta?" explicacion="Falta el rewrite de `vercel.json` que manda las rutas que no son archivos a `index.html`.">
+    <Opcion>Cambiar el Build Command</Opcion>
+    <Opcion correcta>El rewrite `/(.*)` → `/index.html` en `vercel.json`</Opcion>
+    <Opcion>Activar la Deployment Protection</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué Output Directory pones para una app de Angular 19 sin SSR llamada `proj-game`?" explicacion="El build de Angular 19 sin SSR deja el `index.html` en `dist/proj-game/browser`.">
+    <Opcion>`dist`</Opcion>
+    <Opcion>`src`</Opcion>
+    <Opcion correcta>`dist/proj-game/browser`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Navegar con un `routerLink` dentro de la app hace una petición nueva a Vercel." respuesta={false} explicacion="No: el Router de Angular cambia de pantalla en el navegador. Solo recargar o pegar la URL hace una petición nueva." />
+  <Pregunta enunciado="¿Por qué la Preview validaba el formulario pero no guardaba?" explicacion="La app llamaba a `localhost:3000`, que en la web publicada es el ordenador de quien la visita, y el navegador bloquea el acceso al loopback desde un origen público.">
+    <Opcion>Porque faltaba el rewrite</Opcion>
+    <Opcion correcta>Porque intentaba llamar a `localhost:3000` y el navegador lo bloquea (CORS, loopback)</Opcion>
+    <Opcion>Porque Vercel no admite formularios reactivos</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Antes de subir, ¿qué comprueba `npm ci` que no comprueba `npm install`?" explicacion="`npm ci` instala exactamente lo que dice el lockfile, igual que hará Vercel. Si el lockfile y `package.json` no cuadran, falla.">
+    <Opcion correcta>Que se instala exactamente lo del `package-lock.json`</Opcion>
+    <Opcion>Que no hay vulnerabilidades</Opcion>
+    <Opcion>Que el build no tiene errores</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="La Preview de tu rama te pide iniciar sesión. ¿Qué es?" explicacion="Es la Deployment Protection de Vercel, no un fallo del despliegue.">
+    <Opcion>Un error de CORS</Opcion>
+    <Opcion correcta>La Deployment Protection</Opcion>
+    <Opcion>Que el build ha fallado</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Los avisos `npm warn deprecated` del build hacen que falle el despliegue." respuesta={false} explicacion="Son avisos de dependencias antiguas. En clase salieron varios y el despliegue terminó bien." />
+  <Pregunta enunciado="¿Qué dos carpetas no se suben al repositorio?" explicacion="`/dist` y `/node_modules` van en el `.gitignore`: Vercel instala y compila por su cuenta.">
+    <Opcion correcta>`/dist`</Opcion>
+    <Opcion correcta>`/node_modules`</Opcion>
+    <Opcion>`/src`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: Vercel">
+  <Tarjeta frente="Comprobar antes de subir">`git branch --show-current`, `npm ci` y `npm run build` sin errores. `/dist` y `/node_modules` en el `.gitignore`.</Tarjeta>
+  <Tarjeta frente="¿Qué carpeta se publica?">`dist/<proyecto>/browser`, lo que genera Angular 19 sin SSR. Es la Output Directory.</Tarjeta>
+  <Tarjeta frente="Root Directory">La carpeta del repositorio que tiene el `package.json` de la web.</Tarjeta>
+  <Tarjeta frente="El rewrite de `vercel.json`">`/(.*)` → `/index.html`: cualquier ruta que no sea un archivo devuelve `index.html` y la resuelve el Router de Angular. Sin él, recargar una ruta interna da 404.</Tarjeta>
+  <Tarjeta frente="Production y Preview">La Production Branch (`main`) se publica en Production. Cada push de otra rama crea una Preview con su URL.</Tarjeta>
+  <Tarjeta frente="La Preview pide iniciar sesión">Es la Deployment Protection.</Tarjeta>
+  <Tarjeta frente="CORS contra `localhost`">La web publicada no puede llamar al `localhost` de quien la visita (loopback). Hace falta una API publicada con `https` y con el origen de la web en su CORS.</Tarjeta>
+  <Tarjeta frente="Build Failed">Mira primero los Build Logs, y que `npm run build` funcione en tu ordenador.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Publica tu web" dificultad="media">
+  Publica la parte de Angular de tu proyecto en Vercel: comprueba el build, añade `vercel.json`, conecta el repositorio y despliega. Después crea una rama, cambia un texto, súbela y comprueba que tiene su Preview. Por último, recarga una ruta interna en las dos URL.
+
+  <Pista>Antes de nada, mira en `dist/` cómo se llama exactamente tu carpeta `browser`: es la Output Directory.</Pista>
+  <Pista>Si la Preview no aparece, revisa que has hecho push de la rama (fila "No hay Preview" de la tabla de diagnóstico).</Pista>
+
+  <Solucion>
+
+```bash title="Terminal"
+git switch main
+npm ci
+npm run build              # debe terminar sin errores
+# crea vercel.json con el rewrite
+git add vercel.json
+git commit -m "chore: configure SPA navigation on Vercel"
+git push origin main       # Vercel: Add New → Project → Import → Deploy
+
+git switch -c feature/texto-portada
+# cambia el texto
+git add .
+git commit -m "feat: nuevo texto en la portada"
+git push -u origin feature/texto-portada   # crea la Preview
+```
+
+En Configure Project: Root Directory la carpeta con tu `package.json`, preset Angular, Build Command `npm run build` y Output Directory `dist/<tu-proyecto>/browser`. Si al recargar una ruta interna sale 404, el `vercel.json` no está en la raíz del Root Directory o no se ha subido.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Diagnostica" dificultad="facil">
+  Para cada caso, di qué revisarías primero: (1) el despliegue sale como "Build Failed"; (2) la web publicada enseña la página 404 de Vercel nada más entrar; (3) la web carga, pero al guardar no pasa nada y en la consola sale un error de CORS.
+
+  <Pista>Son tres filas distintas de la tabla de diagnóstico.</Pista>
+
+  <Solucion>
+
+1. Los **Build Logs**, y ejecutar `npm run build` en tu ordenador para ver el mismo error.
+2. **Root Directory** y **Output Directory**: casi siempre la Output Directory no apunta a la carpeta que tiene el `index.html` (`dist/<proyecto>/browser`).
+3. **CORS o la API en `localhost`**: la web publicada está llamando a `localhost`, o la API no permite el origen de tu web.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

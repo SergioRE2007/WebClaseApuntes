@@ -1,0 +1,332 @@
+---
+title: Servicios e inyección de dependencias
+description: "Para qué sirve un servicio en Angular, qué significa @Injectable({ providedIn: 'root' }) y las dos formas de pedirlo: la función inject() y el constructor con private (y el error TS2339 si se te olvida)."
+icon: Syringe
+---
+
+Un **servicio** es una clase que guarda la lógica que no es de la pantalla: pedir datos a una API, guardar el estado que comparten varios componentes, hacer cálculos… El componente se queda con lo suyo, **pintar y responder al usuario**, y le pide el servicio a Angular en vez de crearlo con `new`. A eso se le llama **inyección de dependencias** (DI).
+
+<DeClase fecha="27/10, 28/10" proyecto="angular-http y proj-fakestore" nota="Act 8, Catálogo de productos con un Service" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Por qué la petición HTTP va en un servicio y no en el componente.
+  - Qué hace `@Injectable({ providedIn: 'root' })`.
+  - Las dos formas de inyectar: `inject()` (la que más se usa en clase) y el constructor.
+  - Por qué sin `private` en el constructor sale el error TS2339.
+</Callout>
+
+## Separar responsabilidades
+
+El documento de la Act 8 lo resume con este reparto:
+
+| Pieza | Se encarga de |
+| --- | --- |
+| `AppComponent` | Mostrar la información y gestionar la interfaz. |
+| `ProductService` | Obtener los datos y hablar con la API por HTTP. |
+| Fake Store API | Devolver los productos en JSON. |
+
+Una de las preguntas finales de la actividad es justo esa: *¿por qué se crea `ProductService` en vez de hacer la petición desde `AppComponent`?* Porque así:
+
+- El componente no sabe **de dónde** salen los datos. Si mañana cambias la Fake Store por vuestra API, solo tocas el servicio.
+- Varios componentes pueden usar el mismo servicio sin repetir código.
+- Es más fácil probar el componente con un servicio falso.
+
+Si vienes de Java, es la misma idea que un `@Service` de Spring inyectado con `@Autowired`, o que Hilt en Android (ver [Kotlin](/docs/2-dam/kotlin)).
+
+## Crear un servicio
+
+```bash title="Terminal"
+ng g s services/product
+```
+
+Crea `product.service.ts` (y su `.spec.ts`):
+
+```ts title="src/app/services/product.service.ts (recién generado)"
+import { Injectable } from '@angular/core';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class ProductService {
+
+  constructor() { }
+}
+```
+
+- **`@Injectable`** marca la clase como algo que el sistema de inyección puede crear y entregar.
+- **`providedIn: 'root'`** lo registra en el **inyector raíz**: hay **una sola instancia para toda la aplicación** (un *singleton*), y no hay que registrarlo en ningún otro sitio. Si nadie lo usa, el compilador lo quita del resultado final (*tree shaking*).
+
+El cuerpo con `HttpClient` y `getProducts()` está en [HttpClient](/docs/2-dam/acceso-a-datos/angular/httpclient).
+
+## Pedir el servicio: `inject()` o constructor
+
+<DeClase fecha="28/10" proyecto="proj-fakestore" />
+
+El 28/10 se probaron las dos formas en el mismo componente y se dejó escrito en comentarios:
+
+```ts title="src/app/app.component.ts (proj-fakestore)"
+import { Component, inject, OnInit } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
+import { ProductService } from './services/product.service';
+import { Product } from './models/product';
+
+@Component({
+  selector: 'app-root',
+  imports: [RouterOutlet],
+  templateUrl: './app.component.html',
+  styleUrl: './app.component.css'
+})
+export class AppComponent implements OnInit {
+
+  products?: Product[];
+
+  //Inyección por función
+  private productService = inject(ProductService);
+
+  //Inyección por constructor, importante el scope de la propiedad en el constructor
+  //constructor( private productService: ProductService ) {}
+
+  ngOnInit(): void {
+    this.productService.getProducts().subscribe( products => {
+      console.log(products);
+      this.products = products;
+    });
+  }
+
+  title = 'proj-fakestore';
+}
+```
+
+<Comparar titulo="Las dos formas de inyectar">
+  <Lado tipo="bien" titulo="Con inject() (la de clase)">
+
+```ts
+export class AppComponent {
+  private productService = inject(ProductService);
+}
+```
+
+Una propiedad normal inicializada con `inject()`. Es la forma moderna y la que más se usa en clase, también dentro de los servicios (`inject(HttpClient)`). Ojo: el `AppComponent` de `proj-game` que se repasó el 05/11 pide `GameService` por constructor (`constructor(private gameService: GameService){}`), así que verás las dos.
+
+  </Lado>
+  <Lado titulo="Por constructor">
+
+```ts
+export class AppComponent {
+  constructor(private productService: ProductService) {}
+}
+```
+
+Angular ve el tipo del parámetro y le pasa la instancia. Funciona igual, pero **hace falta el `private`** (o `protected`, `public`, `readonly`).
+
+  </Lado>
+</Comparar>
+
+### El error TS2339
+
+Lo que se enseñó a propósito en clase: el constructor **sin** modificador.
+
+```ts title="Así falla"
+constructor( productService: ProductService ) {}
+
+ngOnInit(): void {
+  this.productService.getProducts();
+  // Property 'productService' does not exist on type 'AppComponent'. ts(2339)
+}
+```
+
+En TypeScript, un parámetro del constructor **con** `private` (o `public`, `protected`, `readonly`) es una *parameter property*: declara la propiedad y la asigna a la vez. **Sin** el modificador, es un parámetro normal que solo existe dentro del constructor, así que `this.productService` no existe. Eso es lo que quería decir el comentario "importante el scope de la propiedad en el constructor".
+
+<Comparar titulo="Una parameter property es un atajo" columnas>
+  <Lado titulo="TypeScript">
+
+```ts
+class AppComponent {
+  constructor(
+    private productService: ProductService
+  ) {}
+}
+```
+
+  </Lado>
+  <Lado titulo="Lo mismo, al estilo Java">
+
+```ts
+class AppComponent {
+  private productService: ProductService;
+  constructor(productService: ProductService) {
+    this.productService = productService;
+  }
+}
+```
+
+  </Lado>
+</Comparar>
+
+### `private readonly`
+
+En `angular-http` (27/10) las dependencias se declaran `private readonly`:
+
+```ts title="posts.component.ts"
+private readonly postsService = inject(PostsService);
+```
+
+- `private`: solo la clase lo usa. La plantilla no lo necesita.
+- `readonly`: nadie puede reasignarlo después (`this.postsService = ...` daría error). Es como un `final` de Java.
+
+## Quién crea el servicio
+
+<Flujo
+  titulo="inject(ProductService) con providedIn: 'root'"
+  nodos={["AppComponent", "Inyector raíz", "ProductService", "OtroComponente"]}
+>
+  <Mensaje de="AppComponent" a="Inyector raíz" titulo="inject(ProductService)">
+    El componente pide un `ProductService`. No sabe cómo se crea.
+  </Mensaje>
+  <Mensaje de="Inyector raíz" a="ProductService" titulo="La primera vez, lo crea">
+    No hay ninguna instancia todavía: el inyector la crea (y, a su vez, le inyecta lo que pida, como `HttpClient`).
+  </Mensaje>
+  <Mensaje de="Inyector raíz" a="AppComponent" tipo="respuesta" titulo="Devuelve la instancia">
+    El componente recibe el servicio listo para usar y se lo guarda en `productService`.
+  </Mensaje>
+  <Mensaje de="OtroComponente" a="Inyector raíz" titulo="inject(ProductService)">
+    Otro componente pide lo mismo más tarde.
+  </Mensaje>
+  <Mensaje de="Inyector raíz" a="OtroComponente" tipo="respuesta" titulo="La misma instancia">
+    Como está en `root`, le da **la misma** instancia: los dos comparten el servicio y sus datos.
+  </Mensaje>
+</Flujo>
+
+## Otros sitios donde dar un servicio <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Viene en la unidad 5 de servicios e inyección de dependencias de las guías (la que se enseñó como teoría el 28/10), pero en clase solo se usó `providedIn: 'root'`.
+</NoDadoEnClase>
+
+| Dónde | Cómo | Resultado |
+| --- | --- | --- |
+| Inyector raíz | `@Injectable({ providedIn: 'root' })` | Una instancia para toda la aplicación. |
+| Configuración de la aplicación | `providers: [ProductService]` en `app.config.ts` | También global, pero no se elimina aunque no se use. |
+| Un componente | `providers: [ProductService]` en su `@Component` | Una instancia **por cada** componente de ese tipo, compartida con sus hijos. |
+
+`provideHttpClient()` y `provideRouter(routes)` de `app.config.ts` son justo eso: *providers* globales que registran `HttpClient` y el router.
+
+## Practica
+
+<Quiz titulo="Test: servicios e inyección">
+  <Pregunta enunciado="¿Qué significa `providedIn: 'root'`?" explicacion="Se registra en el inyector raíz: una sola instancia para toda la aplicación, sin registrarlo en ningún sitio más.">
+    <Opcion>Que el servicio solo se puede usar en `AppComponent`</Opcion>
+    <Opcion correcta>Que hay una sola instancia para toda la aplicación</Opcion>
+    <Opcion>Que se crea una instancia nueva cada vez que se pide</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué error da `constructor(productService: ProductService) {}` al usar `this.productService`?" explicacion="Sin modificador, el parámetro no se convierte en propiedad: TS2339, la propiedad no existe.">
+    <Opcion>NG1</Opcion>
+    <Opcion correcta>TS2339: la propiedad no existe en el tipo</Opcion>
+    <Opcion>NullInjectorError</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué forma de inyectar se dejó al final en `proj-fakestore` el 28/10 (la que también usan los servicios de clase)?" explicacion="`private productService = inject(ProductService);` como propiedad de la clase. La del constructor se quedó comentada.">
+    <Opcion correcta>`private productService = inject(ProductService);`</Opcion>
+    <Opcion>`private productService = new ProductService();`</Opcion>
+    <Opcion>`@Autowired productService: ProductService;`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Si dos componentes hacen `inject(ProductService)` y el servicio tiene `providedIn: 'root'`, cada uno recibe una instancia distinta." respuesta={false} explicacion="Reciben la misma: es un singleton del inyector raíz." />
+  <Pregunta tipo="vf" enunciado="Crear el servicio con `new ProductService()` dentro del componente es equivalente a inyectarlo." respuesta={false} explicacion="Con `new`, cada componente crea su propia instancia (ya no comparten el servicio ni sus datos), el componente queda atado a esa clase concreta (no se puede cambiar por una falsa al probar) y, si el servicio pidiera sus dependencias por constructor, tendrías que pasárselas tú a mano." />
+  <Pregunta enunciado="¿Por qué la petición HTTP va en el servicio y no en el componente?" explicacion="Separar responsabilidades: el componente pinta y el servicio habla con la API. Se reutiliza y se cambia en un solo sitio.">
+    <Opcion>Porque los componentes no pueden importar `HttpClient`</Opcion>
+    <Opcion correcta>Para que el componente solo pinte y el acceso a la API esté en un sitio reutilizable</Opcion>
+    <Opcion>Porque es más rápido</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: servicios">
+  <Tarjeta frente="Servicio">Clase con `@Injectable` que guarda la lógica que no es de la vista (llamadas HTTP, estado compartido).</Tarjeta>
+  <Tarjeta frente="`providedIn: 'root'`">Singleton en el inyector raíz: una instancia para toda la aplicación.</Tarjeta>
+  <Tarjeta frente="`inject(X)`">Pide al inyector una instancia de `X`. Se usa al declarar una propiedad.</Tarjeta>
+  <Tarjeta frente="Parameter property">`constructor(private x: X) {}`: declara y asigna la propiedad `x` a la vez.</Tarjeta>
+  <Tarjeta frente="Error TS2339 en el constructor">Falta `private` (o `public`, `protected`, `readonly`) en el parámetro.</Tarjeta>
+  <Tarjeta frente="`readonly`">La propiedad no se puede reasignar, como `final` en Java.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Un servicio sin HTTP" dificultad="facil">
+  Crea `CarritoService` con una lista privada de nombres de productos y los métodos `anadir(nombre: string)` y `total(): number`. Inyéctalo en dos componentes distintos, `TiendaComponent` (que añade) y `CabeceraComponent` (que enseña el total), y comprueba que los dos ven el mismo carrito.
+
+  <Pista>Con `providedIn: 'root'` los dos componentes reciben la misma instancia.</Pista>
+  <Pista>Para que la cabecera pinte el total, llama al método en la plantilla: `{{ carrito.total() }}`. Como la plantilla lo usa, el servicio no puede ser `private` en ese componente.</Pista>
+
+  <Solucion>
+
+```ts title="carrito.service.ts"
+import { Injectable } from '@angular/core';
+
+@Injectable({ providedIn: 'root' })
+export class CarritoService {
+  private productos: string[] = [];
+
+  anadir(nombre: string): void {
+    this.productos.push(nombre);
+  }
+
+  total(): number {
+    return this.productos.length;
+  }
+}
+```
+
+```ts title="tienda.component.ts"
+export class TiendaComponent {
+  private readonly carrito = inject(CarritoService);
+
+  protected comprar(nombre: string): void {
+    this.carrito.anadir(nombre);
+  }
+}
+```
+
+```ts title="cabecera.component.ts"
+export class CabeceraComponent {
+  protected readonly carrito = inject(CarritoService);
+}
+```
+
+```html title="cabecera.component.html"
+<p>Carrito: {{ carrito.total() }} productos</p>
+```
+
+Al pulsar "comprar" en la tienda, el número de la cabecera sube, porque los dos componentes tienen el mismo `CarritoService`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="De constructor a inject()" dificultad="facil">
+  Pasa este componente a `inject()` y explica por qué daba error:
+
+```ts
+export class ListaComponent implements OnInit {
+  constructor(gameService: GameService) {}
+
+  ngOnInit(): void {
+    this.gameService.getAll().subscribe(games => console.log(games));
+  }
+}
+```
+
+  <Solucion>
+
+```ts
+export class ListaComponent implements OnInit {
+  private readonly gameService = inject(GameService);
+
+  ngOnInit(): void {
+    this.gameService.getAll().subscribe(games => console.log(games));
+  }
+}
+```
+
+Sin `private` en el constructor, `gameService` era solo un parámetro y no una propiedad: `this.gameService` daba **TS2339**. Con `inject()` declaras la propiedad directamente. La otra solución es `constructor(private gameService: GameService) {}`.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

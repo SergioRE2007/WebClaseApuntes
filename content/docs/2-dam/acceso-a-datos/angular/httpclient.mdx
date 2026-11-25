@@ -1,0 +1,637 @@
+---
+title: Peticiones HTTP con HttpClient
+description: "Cómo pide datos Angular a una API: provideHttpClient(), modelos con interface y Omit, la interfaz genérica CRUD<T, S>, los métodos get/post/put/delete tipados, Observable y subscribe, con JSONPlaceholder y la Fake Store API."
+icon: Globe
+---
+
+`HttpClient` es el servicio de Angular para hacer **peticiones HTTP** (GET, POST, PUT, DELETE…) a una API. Se usa **siempre desde un servicio**, nunca desde el componente, y no devuelve los datos directamente: devuelve un **`Observable`**, una respuesta que llegará más tarde.
+
+<DeClase fecha="27/10, 28/10" proyecto="angular-http y proj-fakestore" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Activar `HttpClient` con `provideHttpClient()`.
+  - Escribir los modelos de la API con `interface` y `Omit`.
+  - Montar un servicio CRUD completo con `get`, `post`, `put` y `delete` tipados.
+  - Entender qué es un `Observable` y por qué hace falta `subscribe`.
+  - Cargar los datos en `ngOnInit` y pintarlos con `@for`.
+</Callout>
+
+## Las APIs de prueba
+
+| API | URL | Para qué se usó |
+| --- | --- | --- |
+| **JSONPlaceholder** | `https://jsonplaceholder.typicode.com` | `angular-http` (27/10): `/posts` (100) y `/comments` (500). También tiene `/albums`, `/photos`, `/todos` y `/users`. |
+| **Fake Store API** | `https://fakestoreapi.com` | `proj-fakestore` (28/10): `/products`, una tienda con 20 productos. |
+| **JSON Server** | `http://localhost:3000` | `proj-game` (desde el 28/10): una API falsa en tu equipo, a partir de un `db.json`. Va en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado). |
+
+Las dos primeras son públicas y devuelven datos de prueba: aceptan `POST`, `PUT` y `DELETE`, pero **no guardan los cambios** de verdad. Antes de programar, abre la URL en el navegador o en Postman para ver qué JSON devuelve. En clase se hizo así con `/posts`, `/posts/1/comments` y los productos.
+
+## 1. Activar HttpClient
+
+`HttpClient` no está disponible hasta que se registra su *provider* en `app.config.ts`:
+
+```ts title="src/app/app.config.ts"
+import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+
+import { routes } from './app.routes';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideZoneChangeDetection({ eventCoalescing: true }),
+    provideRouter(routes),
+    provideHttpClient()
+  ]
+};
+```
+
+<NoSeVio titulo="provideHttpClient() en clase">
+  En las capturas no se ve dónde se registra `provideHttpClient()` (28/10): como las peticiones funcionan, tiene que estar en `app.config.ts`. El archivo de arriba es como queda en Angular 19, siguiendo la unidad 8 de HTTP de las guías.
+</NoSeVio>
+
+Una de las preguntas finales de la Act 8 es **qué pasaría si se quitara `provideHttpClient()`**. La respuesta <NoDadoEnClase inline />: la aplicación compila, pero al abrirla la consola da un `NullInjectorError` que dice que no hay *provider* para `HttpClient` (en Angular 19 sale como `_HttpClient`). El servicio pide un `HttpClient` y el inyector no sabe crearlo. En `proj-fakestore`, como es `AppComponent` quien pide el servicio, Angular ni siquiera puede crear el componente raíz y la página se queda en blanco.
+
+## 2. El modelo de datos
+
+<DeClase fecha="27/10" proyecto="angular-http" />
+
+Primero se escribe una **interfaz** de TypeScript con la forma del JSON. El truco de clase: pegar un JSON de ejemplo como comentario, escribir los campos debajo y borrar el comentario.
+
+```ts title="src/app/models/post.model.ts"
+export interface Post {
+    userId: number;
+    id: number;
+    title: string;
+    body: string;
+}
+
+export type NewPost = Omit<Post, 'id'>;
+```
+
+- Una `interface` de TypeScript solo existe para el compilador: no genera código, solo comprueba tipos. Es como un DTO de Java sin métodos.
+- **`Omit<Post, 'id'>`** crea un tipo nuevo con todos los campos de `Post` **menos** `id`. Es lo que se manda al crear: el `id` lo pone el servidor.
+- Se probó `id?: number` (opcional, de tipo `number | undefined`), pero al final se dejó `id: number` y el tipo aparte. En `proj-game` sí se usa `id?` (05/11).
+
+```ts title="src/app/models/comment.model.ts"
+export interface Comment {
+    postId: number;
+    id: number;
+    name: string;
+    email: string;
+    body: string;
+}
+
+export type NewComment = Omit<Comment, 'id'>;
+```
+
+<Callout type="warn" title="Ojo con el nombre Comment">
+  `Comment` también es un tipo del navegador (el nodo de comentario del DOM). Si se te olvida `import { Comment } from '../models/comment.model'`, TypeScript usa el del DOM y salen errores de tipos raros. El 27/10 salieron errores de tipos en la línea del signal de comentarios hasta que se importó el modelo, y lo más probable es que fuera por esto <Dudoso nota="No se lee el mensaje de error en las capturas: que fuera el `Comment` del DOM es una deducción." />.
+</Callout>
+
+## 3. Una interfaz genérica para todos los servicios
+
+<DeClase fecha="27/10" proyecto="angular-http" />
+
+En clase se generó con `ng g interface interface/CRUD` un **contrato** que implementan todos los servicios de datos:
+
+```ts title="src/app/interface/crud.ts"
+import { Observable } from "rxjs";
+
+export interface CRUD<T, S> {
+    getAll(): Observable<T[]>;
+    getById(id:number):Observable<T>;
+    create(entity:S):Observable<T>;
+    update(id:number, entity:S):Observable<T>;
+    delete(id:number):Observable<void>;
+}
+```
+
+- **`T`** es la entidad que **devuelve** la API (`Post`, con `id`).
+- **`S`** es la que se **envía** (`NewPost`, sin `id`).
+- Todos los métodos devuelven `Observable`, porque las respuestas llegan más tarde. `delete` devuelve `Observable<void>`: no interesa el cuerpo de la respuesta.
+- Es igual que una interfaz genérica de Java (`interface Crud<T, S>`). Si escribes `implements CRUD<Post>` con un solo tipo, sale `Generic type 'CRUD<T, S>' requires 2 type arguments`.
+
+## 4. El servicio
+
+<DeClase fecha="27/10" proyecto="angular-http" />
+
+```bash title="Terminal"
+ng g s services/posts
+```
+
+<Recorrido
+  titulo="src/app/services/posts.service.ts"
+  lenguaje="ts"
+  codigo={`import { HttpClient } from '@angular/common/http';
+import { inject, Injectable } from '@angular/core';
+import { Post, NewPost } from '../models/post.model';
+import { CRUD } from '../interface/crud';
+import { Observable } from 'rxjs';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class PostsService implements CRUD<Post, NewPost> {
+
+  private readonly http = inject(HttpClient);
+  private readonly apiUrl = 'https://jsonplaceholder.typicode.com/posts';
+
+  getAll(): Observable<Post[]> {
+    return this.http.get<Post[]>(this.apiUrl);
+  }
+  getById(id: number): Observable<Post> {
+    return this.http.get<Post>(\`\${this.apiUrl}/\${id}\`);
+  }
+  create(entity: NewPost): Observable<Post> {
+    return this.http.post<Post>(this.apiUrl, entity);
+  }
+  update(id: number, entity: NewPost): Observable<Post> {
+    return this.http.put<Post>(\`\${this.apiUrl}/\${id}\`, entity);
+  }
+  delete(id: number): Observable<void> {
+    return this.http.delete<void>(\`\${this.apiUrl}/\${id}\`);
+  }
+}`}
+>
+  <Paso lineas="1-5" titulo="Imports">
+    `HttpClient` viene de `@angular/common/http` y `Observable` de `rxjs`, la librería de programación reactiva que usa Angular.
+  </Paso>
+  <Paso lineas="7-10" titulo="Un servicio que cumple el contrato">
+    `@Injectable({ providedIn: 'root' })` lo hace singleton. `implements CRUD<Post, NewPost>` obliga a escribir los cinco métodos. En clase, el editor los generó con `throw new Error('Method not implemented.')` y se fueron rellenando.
+  </Paso>
+  <Paso lineas="12" titulo="Se inyecta HttpClient">
+    El servicio también pide sus dependencias con `inject()`. Funciona porque `provideHttpClient()` está en `app.config.ts`.
+  </Paso>
+  <Paso lineas="13" titulo="La URL base, en una propiedad">
+    Así no se repite en cada método. Si cambias de API, cambias una línea.
+  </Paso>
+  <Paso lineas="15-17" titulo="GET de la lista">
+    `get<Post[]>(url)` hace un `GET` y le dice a TypeScript que el JSON será un array de `Post`. Devuelve `Observable<Post[]>`.
+  </Paso>
+  <Paso lineas="18-20" titulo="GET por id">
+    La URL con el id se monta con un *template literal*: comillas invertidas y `${...}`, como un `String.format` de Java. Queda `.../posts/1`.
+  </Paso>
+  <Paso lineas="21-23" titulo="POST: crear">
+    `post<Post>(url, cuerpo)`: el segundo argumento es el objeto que se manda en JSON (un `NewPost`). La API responde con el `Post` creado, ya con `id`.
+  </Paso>
+  <Paso lineas="24-26" titulo="PUT: actualizar">
+    `put<Post>(url, cuerpo)` sustituye el recurso con ese id.
+  </Paso>
+  <Paso lineas="27-29" titulo="DELETE: borrar">
+    `delete<void>(url)`: no interesa lo que devuelva.
+  </Paso>
+</Recorrido>
+
+| Método | Petición | Devuelve |
+| --- | --- | --- |
+| `http.get<T>(url)` | `GET` | `Observable<T>` |
+| `http.post<T>(url, body)` | `POST` con `body` en JSON | `Observable<T>` |
+| `http.put<T>(url, body)` | `PUT` con `body` en JSON | `Observable<T>` |
+| `http.delete<T>(url)` | `DELETE` | `Observable<T>` |
+
+### Los errores de tipos que salieron
+
+`HttpClient` tiene **15 sobrecargas** de cada método (según `responseType`, `observe`…), así que cuando algo falta TypeScript elige una que no esperas:
+
+- **Sin el genérico**, `this.http.get(this.apiUrl)` devuelve `Observable<Object>`, y no se puede devolver como `Observable<Post[]>`.
+- **Con el genérico equivocado**, `get<Post>()` en `getAll`: `Observable<Post> is not assignable to Observable<Post[]>`.
+- **Sin la URL**, `get<Post>()` hace que el editor elija la sobrecarga de `responseType: 'arraybuffer'` y sale un `Observable<ArrayBuffer>`. Al poner la URL coge la buena (la de `responseType: 'json'`).
+- **Sin `return`** (el error más repetido en clase): *"A function whose declared type is neither 'undefined', 'void', nor 'any' must return a value"*.
+
+<NoSeVio titulo="El intento con as y HttpErrorResponse">
+  El 27/10 se probó a escribir `get<Post[]>(this.apiUrl) as Observable<Post[]>` y una firma `Observable<Post[] | HttpErrorResponse>`, con errores de escritura por medio. No se entiende qué se quería enseñar, y al final se dejó la versión sencilla.
+</NoSeVio>
+
+## 5. Observable y subscribe
+
+Un `Observable` es como un pedido: *"cuando lleguen los posts, avísame y dámelos"*. La petición tarda, y JavaScript no se queda esperando: sigue ejecutando el resto del código. Para recibir los datos hay que **suscribirse**:
+
+```ts title="posts.component.ts"
+ngOnInit(): void {
+  this.postsService.getAll().subscribe((posts) => {
+    console.log(posts);   // primero, para comprobar que llegan
+    this.posts = posts;   // luego, se guardan en el componente
+  });
+}
+```
+
+- La función que le pasas a `subscribe` (una *arrow function*, como una lambda de Java) se ejecuta **cuando llega la respuesta**, no antes.
+- Lo que haya después del `subscribe` se ejecuta **antes** de que lleguen los datos.
+- El *tooltip* de `subscribe` enseña que acepta una función o un objeto `Observer`, y que devuelve una `Subscription`.
+- Un `Observable` de `HttpClient` **no hace la petición hasta que alguien se suscribe** <NoDadoEnClase inline />. Si llamas a `getAll()` y no te suscribes, no sale nada en la pestaña Network.
+
+### El recorrido completo
+
+<Flujo
+  titulo="Cargar los productos (proj-fakestore)"
+  nodos={["AppComponent", "ProductService", "HttpClient", "Fake Store API"]}
+>
+  <Mensaje de="AppComponent" a="AppComponent" titulo="ngOnInit()">
+    Angular crea el componente y llama a `ngOnInit`.
+  </Mensaje>
+  <Mensaje de="AppComponent" a="ProductService" titulo="getProducts()">
+    El componente le pide los productos al servicio que le ha inyectado Angular.
+  </Mensaje>
+  <Mensaje de="ProductService" a="HttpClient" titulo="http.get<Product[]>(apiUrl)">
+    El servicio prepara la petición y devuelve enseguida un `Observable<Product[]>`. Todavía no hay datos.
+  </Mensaje>
+  <Mensaje de="HttpClient" a="Fake Store API" titulo="GET /products">
+    Al hacer `subscribe`, sale la petición HTTP.
+  </Mensaje>
+  <Mensaje de="Fake Store API" a="HttpClient" tipo="respuesta" titulo="200 OK + JSON">
+    La API responde con un array de 20 productos en JSON. `HttpClient` lo convierte en objetos.
+  </Mensaje>
+  <Mensaje de="HttpClient" a="AppComponent" tipo="respuesta" titulo="subscribe(products => ...)">
+    Se ejecuta la función del `subscribe`: `this.products = products`. Angular vuelve a pintar la plantilla y aparecen los productos.
+  </Mensaje>
+</Flujo>
+
+Es el mismo flujo del documento de la Act 8: `ngOnInit()` → `productService.getProducts()` → `HttpClient` → Fake Store API → `Observable<Product[]>` → `subscribe(...)` → `this.products`.
+
+## 6. La página que pinta los datos
+
+<DeClase fecha="27/10" proyecto="angular-http" />
+
+```bash title="Terminal"
+ng g c pages/posts
+```
+
+```ts title="src/app/pages/posts/posts.component.ts"
+import { Component, inject, OnInit, signal, WritableSignal } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { PostsService } from '../../services/posts.service';
+import { Post } from '../../models/post.model';
+
+@Component({
+  selector: 'app-posts',
+  imports: [CommonModule],
+  templateUrl: './posts.component.html',
+  styleUrl: './posts.component.css',
+  standalone: true,
+})
+export class PostsComponent implements OnInit {
+
+  private readonly postsService = inject(PostsService);
+  protected readonly posts: WritableSignal<Post[]> = signal<Post[]>([]);
+
+  ngOnInit(): void {
+    this.postsService.getAll().subscribe((posts) => {
+      this.posts.set(posts);
+    });
+  }
+}
+```
+
+```html title="posts.component.html"
+@for (post of posts(); track post.id) {
+    {{post.title}}
+    {{post.body}}
+}
+```
+
+- Primero se guardó en una propiedad normal (`posts: Post[] = []`) y luego se pasó a un **signal**: se escribe con `this.posts.set(...)` y se lee llamándolo, `posts()`. Los signals se explican en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado).
+- `posts` es `protected` porque la usa la plantilla (con `private` sale el error NG1). El servicio es `private`.
+- Los imports del archivo no se ven enteros en las capturas <Dudoso nota="Se reconstruyen a partir de lo que usa la clase." />. `CommonModule` daba error hasta que se importó arriba del archivo.
+- Después, para poner en la cabecera un enlace al dashboard, se añadió `RouterLink` a `imports` (`imports: [CommonModule, RouterLink]`). Sin él sale *"Can't bind to 'routerLink' since it isn't a known property of 'a'"*.
+- La página se enseña en `localhost:4200/posts` con una ruta de `app.routes.ts` (el router va en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado)).
+
+El 27/10 se hizo también `CommentsService` y `CommentsComponent`, igual que los de posts, con los signals `loading` y `error` que generó la IA de Cursor.
+
+<NoSeVio titulo="CommentsService y los estados de carga">
+  No se ven los métodos de `CommentsService` ni cómo se actualizan `loading` y `error`. Para su `apiUrl` se probó `environment.apiUrl + '/comments'`, que dio error porque no existía o no estaba importado `environment` (no se vio `environment.ts`), y al final se puso la URL fija de JSONPlaceholder.
+</NoSeVio>
+
+## 7. El catálogo de la Fake Store (Act 8)
+
+<DeClase fecha="28/10" proyecto="proj-fakestore" />
+
+```bash title="Terminal"
+ng g i models/product
+ng g s services/product
+```
+
+<Tabs items={['product.ts', 'product.service.ts', 'app.component.html']}>
+  <Tab value="product.ts">
+
+```ts title="src/app/models/product.ts"
+export interface Product {
+  id: number;
+  title: string;
+  price: number;
+  description: string;
+  category: string;
+  image: string;
+}
+```
+
+En clase solo se ve, por el autocompletado, que tiene `id`, `title`, `price` y `category`; `image` se añade en la ampliación. El resto de campos <Dudoso nota="Se deducen del JSON de la Fake Store API." /> no se ve.
+
+  </Tab>
+  <Tab value="product.service.ts">
+
+```ts title="src/app/services/product.service.ts"
+import { inject, Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Product } from '../models/product';
+import { Observable } from 'rxjs';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class ProductService {
+  private http = inject(HttpClient);
+  private apiUrl = 'https://fakestoreapi.com/products';
+
+  getProducts(): Observable<Product[]> {
+    return this.http.get<Product[]>(this.apiUrl);
+  }
+}
+```
+
+  </Tab>
+  <Tab value="app.component.html">
+
+```html title="src/app/app.component.html"
+@for( product of this.products; track product.id) {
+{{ product.title}}, precio {{ product.price}}
+<img [src]="product.image" [alt]="product.title">
+<br/>
+}
+```
+
+  </Tab>
+</Tabs>
+
+Sobre el servicio, todo <Dudoso nota="En las capturas solo se ven los imports y la cabecera de la clase.">el cuerpo</Dudoso> sale del documento de la actividad, no de la pantalla: no se ve cómo se inyecta `HttpClient`, la URL exacta ni el tipo de retorno. En el documento, el `get` de `getProducts()` es un hueco que hay que rellenar. El `AppComponent` está en [servicios](/docs/2-dam/acceso-a-datos/angular/servicios-e-inyeccion).
+
+Se depuró con DevTools: un *breakpoint* en `app.component.ts` (pestaña Sources) y, en Console, el array de 20 productos del `console.log`. Ojo con los mensajes de las extensiones del navegador (por ejemplo, *"Attempting handshake with backend"*): no son de tu aplicación.
+
+### Preguntas finales de la Act 8
+
+<Accordions type="multiple">
+  <Accordion title="¿Por qué se crea ProductService en vez de hacer la petición desde AppComponent?">
+    Para separar responsabilidades: el componente pinta y el servicio habla con la API. El acceso a datos queda en un solo sitio, reutilizable por otros componentes y fácil de cambiar.
+  </Accordion>
+  <Accordion title="¿Qué función tiene HttpClient?">
+    Es el servicio de Angular que hace las peticiones HTTP (`get`, `post`, `put`, `delete`) y convierte el JSON de la respuesta en objetos.
+  </Accordion>
+  <Accordion title="¿Qué devuelve getProducts()?">
+    Un `Observable<Product[]>`, no el array: la respuesta llega más tarde.
+  </Accordion>
+  <Accordion title="¿Para qué se usa subscribe()?">
+    Para recibir los datos cuando llegan. La función que se le pasa se ejecuta con el array de productos. Además, es lo que hace que salga la petición.
+  </Accordion>
+  <Accordion title="¿Dónde se guardan al final los productos?">
+    En la propiedad `products` de `AppComponent`, dentro del `subscribe`. La plantilla la recorre con `@for`.
+  </Accordion>
+  <Accordion title="¿Qué pasaría si se quitara provideHttpClient()?">
+    El inyector no sabría crear `HttpClient`: al abrir la aplicación sale un `NullInjectorError` en la consola. Como `AppComponent` pide `ProductService` y este pide `HttpClient`, no se puede crear el componente raíz y no se pinta nada. (La respuesta no se vio en clase.)
+  </Accordion>
+</Accordions>
+
+## Gestionar el error de la petición <NoDadoEnClase inline />
+
+En clase, el `subscribe` solo recibía los datos. Si la API falla (sin red, un 404, un 500), no pasa nada visible: la lista se queda vacía y el error solo sale en la consola.
+
+<Comparar titulo="Suscribirse teniendo en cuenta el error">
+  <Lado tipo="evitar">
+
+```ts
+this.productService.getProducts().subscribe(products => {
+  this.products = products;
+});
+```
+
+Solo el caso bueno. Si falla, el usuario no se entera.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```ts
+this.loading = true;
+this.productService.getProducts().subscribe({
+  next: (products) => {
+    this.products = products;
+    this.loading = false;
+  },
+  error: () => {
+    this.error = 'No se han podido cargar los productos';
+    this.loading = false;
+  }
+});
+```
+
+Con un objeto `{ next, error }` tratas los dos casos y puedes pintar los estados de carga y error con `@if`.
+
+  </Lado>
+</Comparar>
+
+<NoDadoEnClase>
+  La versión con `{ next, error }` no se dio en clase. Es la forma estándar y la que usa el material de lo que falta por dar (listado con estados de carga, vacío y error). El manejo de errores con `catchError` está en la unidad 11 de las guías.
+</NoDadoEnClase>
+
+## Practica
+
+<CompletarCodigo
+  titulo="Servicio de usuarios"
+  enunciado="Completa el servicio para pedir la lista de usuarios y uno por id a JSONPlaceholder."
+  lenguaje="typescript"
+  codigo={`@Injectable({ providedIn: '[[root]]' })
+export class UsersService {
+  private readonly http = [[inject]](HttpClient);
+  private readonly apiUrl = 'https://jsonplaceholder.typicode.com/users';
+
+  getAll(): Observable<User[]> {
+    [[return]] this.http.get<[[User]][]>(this.apiUrl);
+  }
+
+  getById(id: number): Observable<User> {
+    return this.http.[[get]]<User>(this.apiUrl + '/' + id);
+  }
+}`}
+/>
+
+<Quiz titulo="Test: HttpClient">
+  <Pregunta enunciado="¿Qué devuelve `this.http.get<Post[]>(url)`?" explicacion="Un `Observable<Post[]>`: los datos llegan más tarde y hay que suscribirse.">
+    <Opcion>Un `Post[]`</Opcion>
+    <Opcion correcta>Un `Observable<Post[]>`</Opcion>
+    <Opcion>Una `Promise<Post>`</Opcion>
+    <Opcion>El JSON como texto</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Dónde se registra `provideHttpClient()`?" explicacion="En la lista de `providers` de `app.config.ts`.">
+    <Opcion>En el `imports` del componente</Opcion>
+    <Opcion correcta>En los `providers` de `app.config.ts`</Opcion>
+    <Opcion>En `main.ts`, dentro de `@Component`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En `CRUD<Post, NewPost>`, ¿qué es `NewPost`?" explicacion="Es `Omit<Post, 'id'>`: lo que se envía al crear o actualizar, sin el `id` que pone el servidor.">
+    <Opcion>El post que devuelve la API</Opcion>
+    <Opcion correcta>El tipo que se envía: `Post` sin `id`</Opcion>
+    <Opcion>Un post vacío</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué pasa si en `getAll()` escribes `this.http.get(this.apiUrl)` sin el genérico?" explicacion="Sin genérico devuelve `Observable<Object>`, que no se puede asignar al tipo de retorno `Observable<Post[]>`.">
+    <Opcion>Funciona igual</Opcion>
+    <Opcion correcta>Error de tipos: devuelve `Observable<Object>`</Opcion>
+    <Opcion>Devuelve `Observable<any>` sin error</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="El código que hay justo después de `subscribe(...)` se ejecuta cuando ya han llegado los datos." respuesta={false} explicacion="Se ejecuta antes: la petición es asíncrona y la función del `subscribe` se llama más tarde, cuando llega la respuesta." />
+  <Pregunta tipo="vf" enunciado="JSONPlaceholder guarda de verdad los posts que creas con POST." respuesta={false} explicacion="Responde como si los hubiera creado, pero no guarda nada: es una API de prueba." />
+  <Pregunta enunciado="¿Cómo montarías la URL `.../posts/5` a partir de `apiUrl` e `id`?" explicacion="Con un template literal (comillas invertidas). `'${...}'` con comillas simples no sustituye nada.">
+    <Opcion correcta>Con comillas invertidas: `${this.apiUrl}/${id}` entre `` ` ``</Opcion>
+    <Opcion>`'${this.apiUrl}/${id}'` con comillas simples</Opcion>
+    <Opcion>`this.apiUrl/id`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué se usó en clase para crear el tipo sin `id`?" explicacion="`type NewPost = Omit<Post, 'id'>;` quita la propiedad `id` del tipo `Post`.">
+    <Opcion>`Partial<Post>`</Opcion>
+    <Opcion correcta>`Omit<Post, 'id'>`</Opcion>
+    <Opcion>`Pick<Post, 'id'>`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: HttpClient">
+  <Tarjeta frente="`provideHttpClient()`">Registra `HttpClient` en `app.config.ts`. Sin él, `NullInjectorError`.</Tarjeta>
+  <Tarjeta frente="`Omit<Post, 'id'>`">El tipo `Post` sin el campo `id`: lo que se manda al crear.</Tarjeta>
+  <Tarjeta frente="`CRUD<T, S>`">Interfaz genérica de clase: `T` es lo que devuelve la API y `S` lo que se envía.</Tarjeta>
+  <Tarjeta frente="`get<T>(url)`">Petición `GET` tipada. Devuelve `Observable<T>`.</Tarjeta>
+  <Tarjeta frente="`post<T>(url, body)` / `put<T>(url, body)`">Crear y actualizar. El segundo argumento se envía en JSON.</Tarjeta>
+  <Tarjeta frente="`Observable`">Un valor que llegará más tarde. Se recibe con `subscribe`.</Tarjeta>
+  <Tarjeta frente="¿Dónde se llama al servicio?">En `ngOnInit`, con `subscribe`, y se guarda el resultado en una propiedad del componente.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Los todos de JSONPlaceholder" dificultad="media">
+  Haz un modelo `Todo` (`userId`, `id`, `title`, `completed`), un `TodosService` que implemente `CRUD<Todo, NewTodo>` contra `https://jsonplaceholder.typicode.com/todos` y una página que pinte los títulos, tachando los completados.
+
+  <Pista>Copia la estructura de `PostsService`: cambian el modelo y la URL.</Pista>
+  <Pista>Para tachar, un class binding: `[class.hecho]="todo.completed"` y `.hecho { text-decoration: line-through; }`.</Pista>
+
+  <Solucion>
+
+```ts title="models/todo.model.ts"
+export interface Todo {
+  userId: number;
+  id: number;
+  title: string;
+  completed: boolean;
+}
+
+export type NewTodo = Omit<Todo, 'id'>;
+```
+
+```ts title="services/todos.service.ts"
+import { HttpClient } from '@angular/common/http';
+import { inject, Injectable } from '@angular/core';
+import { Observable } from 'rxjs';
+import { CRUD } from '../interface/crud';
+import { NewTodo, Todo } from '../models/todo.model';
+
+@Injectable({ providedIn: 'root' })
+export class TodosService implements CRUD<Todo, NewTodo> {
+  private readonly http = inject(HttpClient);
+  private readonly apiUrl = 'https://jsonplaceholder.typicode.com/todos';
+
+  getAll(): Observable<Todo[]> {
+    return this.http.get<Todo[]>(this.apiUrl);
+  }
+  getById(id: number): Observable<Todo> {
+    return this.http.get<Todo>(`${this.apiUrl}/${id}`);
+  }
+  create(entity: NewTodo): Observable<Todo> {
+    return this.http.post<Todo>(this.apiUrl, entity);
+  }
+  update(id: number, entity: NewTodo): Observable<Todo> {
+    return this.http.put<Todo>(`${this.apiUrl}/${id}`, entity);
+  }
+  delete(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${id}`);
+  }
+}
+```
+
+```ts title="pages/todos/todos.component.ts"
+import { Component, inject, OnInit } from '@angular/core';
+import { TodosService } from '../../services/todos.service';
+import { Todo } from '../../models/todo.model';
+
+@Component({
+  selector: 'app-todos',
+  templateUrl: './todos.component.html',
+  styleUrl: './todos.component.css'
+})
+export class TodosComponent implements OnInit {
+  private readonly todosService = inject(TodosService);
+  protected todos: Todo[] = [];
+
+  ngOnInit(): void {
+    this.todosService.getAll().subscribe(todos => this.todos = todos);
+  }
+}
+```
+
+```html title="pages/todos/todos.component.html"
+<ul>
+  @for (todo of todos; track todo.id) {
+    <li [class.hecho]="todo.completed">{{ todo.title }}</li>
+  }
+</ul>
+```
+
+```css title="pages/todos/todos.component.css"
+.hecho { text-decoration: line-through; }
+```
+
+Y que `provideHttpClient()` esté en `app.config.ts`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Tarjetas de producto" dificultad="media">
+  Mejora la plantilla de `proj-fakestore` como propone el apartado 14 de la actividad: un `<h1>` "Fake Store", un `<h2>` "Catálogo de productos" y cada producto en un `<article>` con su imagen, el título en un `<h3>`, la categoría y el precio. Coloca las tarjetas con Flexbox para que salten de línea.
+
+  <Pista>Las tarjetas: un contenedor con `display: flex`, `flex-wrap: wrap` y `gap`, y cada `article` con `flex: 1 1 200px`.</Pista>
+
+  <Solucion>
+
+```html title="app.component.html"
+<h1>Fake Store</h1>
+<h2>Catálogo de productos</h2>
+
+<section class="catalogo">
+  @for (product of products; track product.id) {
+    <article>
+      <img [src]="product.image" [alt]="product.title">
+      <h3>{{ product.title }}</h3>
+      <p>Categoría: {{ product.category }}</p>
+      <p>{{ product.price }} €</p>
+    </article>
+  }
+</section>
+```
+
+```css title="app.component.css"
+.catalogo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+article {
+  flex: 1 1 200px;
+  border: 1px solid #ddd;
+  padding: 1rem;
+}
+
+img {
+  width: 100px;
+  height: 120px;
+  object-fit: contain;
+}
+```
+
+Para que `@for` no tenga que lidiar con `undefined`, declara `products: Product[] = []` en lugar de `products?: Product[]`.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

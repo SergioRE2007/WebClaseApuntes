@@ -1,0 +1,343 @@
+---
+title: "Control flow: @if, @for, @switch y @let"
+description: "Los bloques de control de las plantillas de Angular 19: @if / @else if / @else, @for con track obligatorio, @empty, las variables $index y compañía, @switch y @let."
+icon: GitBranch
+---
+
+import { SimuladorTrack } from '@/components/temas/angular/simulador-track';
+
+Las plantillas de Angular tienen sus propios **bloques de control**, que empiezan por `@` y llevan llaves, como en Java: `@if`, `@for`, `@switch` y `@let`. Sustituyen a las directivas antiguas `*ngIf` y `*ngFor` que verás en tutoriales de antes de Angular 17.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Mostrar una cosa u otra con `@if / @else if / @else`.
+  - Recorrer una lista con `@for` y por qué `track` es obligatorio.
+  - Qué hacer cuando la lista está vacía (`@empty`).
+  - Guardar una expresión en una variable de la plantilla con `@let`.
+</Callout>
+
+## `@if`, `@else if` y `@else`
+
+<DeClase fecha="14/10" proyecto="proj-lamp" />
+
+```html title="app.component.html"
+<div class="estado">
+  @if (enchufado) {
+    <span>Estado conexión eléctrica: ENCHUFADO</span>
+  } @else {
+    <span>Estado conexión eléctrica: DESENCHUFADO</span>
+  }
+</div>
+<div class="boton">
+  @if (enchufado) {
+    <button>DESENCHUFAR</button>
+  } @else {
+    <button>ENCHUFAR</button>
+  }
+</div>
+```
+
+- La condición va entre paréntesis y el contenido entre llaves, igual que un `if` de Java.
+- Lo que no cumple la condición **no está en el DOM**: no se oculta con CSS, directamente no existe.
+- Puedes usar la misma propiedad en varios `@if`. En clase se usó `enchufado` para el texto y para el botón.
+- El autocompletado de la extensión de Angular ofrece `else`, `else if`… al escribir `@`.
+
+Con `@else if` se encadenan varios casos. Así eran los estados de la página de posts que generó la IA de Cursor el 27/10:
+
+```html title="posts.component.html (fragmento generado por la IA, 27/10)"
+@if (loading()) {
+  <div aria-live="polite" aria-busy="true"> ... </div>
+} @else if (error()) {
+  <div role="alert"> <p>Algo ha fallado</p> <p>{{ error() }}</p> </div>
+} @else if (posts().length === 0) {
+  <p>No hay posts para mostrar.</p>
+} @else {
+  ... cuadrícula de tarjetas ...
+}
+```
+
+Son los cuatro estados de una pantalla con datos: **cargando, error, vacío y con datos**. `loading()`, `error()` y `posts()` son *signals* (se leen llamándolos como una función).
+
+<NoSeVio titulo="Cómo cambian loading y error">
+  La IA añadió los signals `loading` y `error` al componente, pero no se ve cómo se actualizan. Los signals se explican en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado).
+</NoSeVio>
+
+## `@for` con `track`
+
+<DeClase fecha="27/10, 28/10" proyecto="angular-http y proj-fakestore" />
+
+```html title="posts.component.html (27/10)"
+@for (post of posts(); track post.id) {
+    {{post.title}}
+    {{post.body}}
+}
+```
+
+```html title="app.component.html (28/10)"
+@for( product of this.products; track product.id) {
+{{ product.title}}, precio {{ product.price}}
+<img [src]="product.image" [alt]="product.title">
+<br/>
+}
+```
+
+- `@for (elemento of lista; track clave)` es el *for-each* de Java (`for (Post post : posts)`).
+- **`track` es obligatorio.** Si no lo pones, sale el error *"@for loop must have a "track" expression"* (pasó en clase el 27/10).
+- `track` le dice a Angular cómo reconocer cada elemento. Cuando la lista cambia, solo toca en el DOM los elementos que han cambiado, en vez de borrarlo y pintarlo todo otra vez. Usa algo único, normalmente el `id`.
+- La variable del bucle (`product`) **solo existe dentro de las llaves**. Si pones el `<img [src]="product.image">` fuera del `@for`, el compilador dice que `product` no existe.
+
+### Qué cambia según lo que pongas en `track` <NoDadoEnClase inline />
+
+En clase siempre se usó el `id`. La demo compara `track game.id` con `track $index` (la posición) y marca qué tiene que hacer Angular con cada `<li>` cuando cambia la lista:
+
+<SimuladorTrack />
+
+- Con **`track game.id`**, cada `<li>` va unido a **su juego**. Si añades uno al principio, Angular crea **un** nodo nuevo y deja los demás como están. Si inviertes el orden, **mueve** los nodos.
+- Con **`track $index`**, cada `<li>` va unido a **su posición**. Si añades uno al principio, Angular cambia el texto de **todos** los nodos y crea uno al final. Si inviertes el orden, no mueve nada: reescribe los textos.
+- Con 3 elementos no se nota, pero con listas largas o con elementos que tienen estado propio (un `input` a medio escribir, una animación) el `id` evita trabajo y errores. Por eso se usa `track product.id`.
+- Si la lista se queda vacía, se pinta el bloque `@empty`, que se explica más abajo.
+
+### Cuando la lista puede no existir todavía
+
+En `proj-fakestore` la lista empieza sin valor: `products?: Product[]`, es decir, `Product[] | undefined` hasta que llega la respuesta de la API. En clase, el `@for` sobre `this.products` funcionó y el editor no marcó error.
+
+<Comparar titulo="Inicializar la lista">
+  <Lado tipo="evitar">
+
+```ts
+products?: Product[];
+```
+
+Hasta que llegan los datos, `products` vale `undefined`. Funciona, pero tienes que acordarte de ese caso en cada sitio donde la uses (`products.length` fallaría).
+
+  </Lado>
+  <Lado tipo="bien">
+
+```ts
+products: Product[] = [];
+```
+
+Empieza como una lista vacía: el tipo es siempre `Product[]` y `products.length` siempre funciona. Es lo que se hizo el 27/10 antes de pasar a signals (`posts: Post[] = []`).
+
+  </Lado>
+</Comparar>
+
+### `@empty` <NoDadoEnClase inline />
+
+Un bloque que se pinta cuando la lista está vacía. Viene en la unidad 3 de las guías:
+
+```html title="Plantilla"
+<ul>
+  @for (product of products; track product.id) {
+    <li>{{ product.title }}</li>
+  } @empty {
+    <li>No hay productos.</li>
+  }
+</ul>
+```
+
+### Variables del bucle <NoDadoEnClase inline />
+
+Dentro del `@for` tienes unas variables implícitas:
+
+| Variable | Valor |
+| --- | --- |
+| `$index` | Posición del elemento (empieza en 0). |
+| `$count` | Número total de elementos. |
+| `$first` / `$last` | `true` si es el primero / el último. |
+| `$even` / `$odd` | `true` si la posición es par / impar. |
+
+```html title="Plantilla"
+@for (product of products; track product.id; let i = $index) {
+  <li [class.par]="$even">{{ i + 1 }}. {{ product.title }}</li>
+}
+```
+
+Se pueden usar directamente (`$index`) o darles otro nombre con `let i = $index`.
+
+## `@switch` <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Está en la unidad 3 de componentes de las guías, pero no salió en las clases grabadas.
+</NoDadoEnClase>
+
+Elige un bloque según un valor, como el `switch` de Java, pero **sin `break`**: solo se pinta el caso que coincide.
+
+```html title="Plantilla"
+@switch (product.category) {
+  @case ('electronics') { <span>Electrónica</span> }
+  @case ('jewelery') { <span>Joyería</span> }
+  @default { <span>Otros</span> }
+}
+```
+
+## `@let`
+
+<DeClase fecha="05/11" proyecto="proj-game" />
+
+Guarda una expresión en una **variable de la plantilla** para no repetirla. En clase se usó en el formulario para no escribir la misma condición dos veces:
+
+```html title="crud.component.html (05/11)"
+<label for="stockId">Stock: </label>
+@let invalidStock = stock.invalid && (stock.touched || stock.dirty);
+<input [class.invalid-control]="invalidStock" id="stockId" type="number" name="stock"
+       [(ngModel)]="game.stock" required min="0" max="999" #stock="ngModel">
+@if (invalidStock) {
+  ...
+}
+```
+
+- La línea tiene que acabar en **`;`**.
+- Se puede usar después en bindings (`[class.invalid-control]="invalidStock"`) y en otros bloques (`@if (invalidStock)`).
+- El *tooltip* del editor enseñó el tipo `boolean | null`, que sale de las propiedades del control del formulario.
+- `@let` existe desde Angular 18.1, así que en Angular 19 se puede usar sin problema.
+- El formulario completo (`stock` es una referencia `#stock="ngModel"`) va en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado).
+
+Un ejemplo más sencillo:
+
+```html title="Plantilla"
+@let total = product.price * cantidad;
+<p>Total: {{ total }} €</p>
+@if (total > 100) {
+  <p>Envío gratis</p>
+}
+```
+
+## La sintaxis antigua: `*ngIf` y `*ngFor` <NoDadoEnClase inline />
+
+En proyectos y tutoriales anteriores a Angular 17 verás directivas con asterisco. Siguen funcionando si importas `NgIf` y `NgFor` (o `CommonModule`), pero en clase siempre se ha usado la sintaxis con `@`.
+
+<Comparar titulo="Lo mismo con las dos sintaxis" columnas>
+  <Lado titulo="Antigua (directivas)">
+
+```html
+<p *ngIf="enchufado; else no">
+  ENCHUFADO
+</p>
+<ng-template #no>
+  <p>DESENCHUFADO</p>
+</ng-template>
+
+<li *ngFor="let p of products">
+  {{ p.title }}
+</li>
+```
+
+  </Lado>
+  <Lado titulo="Angular 17+ (control flow)">
+
+```html
+@if (enchufado) {
+  <p>ENCHUFADO</p>
+} @else {
+  <p>DESENCHUFADO</p>
+}
+
+@for (p of products; track p.id) {
+  <li>{{ p.title }}</li>
+}
+```
+
+  </Lado>
+</Comparar>
+
+## Practica
+
+<CompletarCodigo
+  titulo="Lista de posts"
+  enunciado="Recorre posts identificando cada post por su id, y muestra 'Sin posts' si no hay ninguno."
+  lenguaje="typescript"
+  codigo={`[[@for]] (post of posts; [[track]] post.id) {
+  <h3>{{ post.title }}</h3>
+} [[@empty]] {
+  <p>Sin posts</p>
+}`}
+/>
+
+<Quiz titulo="Test: control flow">
+  <Pregunta enunciado="¿Qué pasa si escribes `@for (post of posts) { ... }` sin `track`?" explicacion="En Angular 17+ `track` es obligatorio en `@for`: sale el error de compilación.">
+    <Opcion>Funciona, pero más lento</Opcion>
+    <Opcion correcta>Error: el `@for` tiene que llevar una expresión `track`</Opcion>
+    <Opcion>Angular usa el índice automáticamente</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué conviene poner en `track`?" explicacion="Algo que identifique cada elemento de forma única y no cambie, como el `id`.">
+    <Opcion correcta>Un identificador único, como `product.id`</Opcion>
+    <Opcion>El título del producto</Opcion>
+    <Opcion>`Math.random()`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Lo que queda en la rama falsa de un `@if` se oculta con CSS, pero sigue en el DOM." respuesta={false} explicacion="No se crea: el contenido de la rama que no se cumple no está en el DOM." />
+  <Pregunta tipo="vf" enunciado="La variable `product` de un `@for` se puede usar después de cerrar sus llaves." respuesta={false} explicacion="Solo existe dentro del bloque. Fuera, el compilador dice que no existe." />
+  <Pregunta enunciado="¿Cómo se escribe bien una variable de plantilla?" explicacion="`@let nombre = expresión;` y tiene que acabar en punto y coma.">
+    <Opcion>`@let total = precio * 2`</Opcion>
+    <Opcion correcta>`@let total = precio * 2;`</Opcion>
+    <Opcion>`let total = precio * 2;`</Opcion>
+    <Opcion>`@var total = precio * 2;`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué bloque usarías para pintar 'No hay productos' cuando la lista está vacía, sin escribir otro `@if`?" explicacion="`@empty` va justo detrás del `@for` y se pinta si la lista no tiene elementos.">
+    <Opcion>`@else`</Opcion>
+    <Opcion correcta>`@empty`</Opcion>
+    <Opcion>`@default`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="Dentro de un `@for`, ¿qué variable implícita tiene la posición del elemento (empezando en 0)?" respuesta="$index" explicacion="`$index`. También están `$count`, `$first`, `$last`, `$even` y `$odd`." />
+</Quiz>
+
+<Flashcards titulo="Repaso: control flow">
+  <Tarjeta frente="`@if (c) { } @else if (d) { } @else { }`">Condicional. Lo que no se cumple no se crea en el DOM.</Tarjeta>
+  <Tarjeta frente="`@for (x of lista; track x.id)`">Recorre la lista. `track` es obligatorio y sirve para que Angular reconozca cada elemento.</Tarjeta>
+  <Tarjeta frente="`@empty`">Se pinta cuando la lista del `@for` está vacía.</Tarjeta>
+  <Tarjeta frente="`@let x = expr;`">Variable de plantilla para no repetir una expresión. Acaba en `;`.</Tarjeta>
+  <Tarjeta frente="`@switch` / `@case` / `@default`">Elige un bloque según un valor. Sin `break`.</Tarjeta>
+  <Tarjeta frente="Los cuatro estados de una pantalla con datos">Cargando, error, vacío y con datos (`@if / @else if / @else`).</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Catálogo con estados" dificultad="media">
+  Tienes en la clase `products: Product[] = []`, `loading = true` y `error = ''`. Escribe la plantilla para que muestre "Cargando..." mientras `loading` sea verdadero, el mensaje de error si `error` tiene texto, "No hay productos" si la lista está vacía y, si no, una lista numerada `1. título — precio €`.
+
+  <Pista>Encadena `@if / @else if / @else` y, dentro del último caso, un `@for`.</Pista>
+  <Pista>Para numerar, `$index + 1`. Para la lista vacía puedes usar `@empty`.</Pista>
+
+  <Solucion>
+
+```html title="app.component.html"
+@if (loading) {
+  <p>Cargando...</p>
+} @else if (error) {
+  <p>{{ error }}</p>
+} @else {
+  <ul>
+    @for (product of products; track product.id) {
+      <li>{{ $index + 1 }}. {{ product.title }} — {{ product.price }} €</li>
+    } @empty {
+      <li>No hay productos</li>
+    }
+  </ul>
+}
+```
+
+`error = ''` cuenta como falso, así que solo entra en esa rama cuando tiene texto.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Lámpara con @switch" dificultad="facil">
+  La lámpara tiene una propiedad `modo: 'apagada' | 'tenue' | 'encendida' = 'apagada'`. Pinta "APAGADA", "TENUE" o "ENCENDIDA" según el modo, y usa `@let` para guardar si está encendida del todo y ponerle la clase `brillo` a un `div`.
+
+  <Solucion>
+
+```html title="lampara.component.html"
+@let aTope = modo === 'encendida';
+
+<div class="bombilla" [class.brillo]="aTope">
+  @switch (modo) {
+    @case ('apagada') { APAGADA }
+    @case ('tenue') { TENUE }
+    @default { ENCENDIDA }
+  }
+</div>
+```
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

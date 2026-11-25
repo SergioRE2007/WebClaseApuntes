@@ -1,0 +1,16 @@
+{
+  "title": "Backend para el proyecto",
+  "icon": "ServerCog",
+  "pages": [
+    "index",
+    "requisitos",
+    "hitos",
+    "modelo-y-seed",
+    "consultas-relacionadas",
+    "listado-paginado",
+    "errores-http",
+    "transacciones",
+    "cors-y-token",
+    "errores-tipicos"
+  ]
+}

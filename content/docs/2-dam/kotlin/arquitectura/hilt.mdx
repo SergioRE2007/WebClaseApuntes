@@ -1,0 +1,547 @@
+---
+title: Inyección de dependencias con Hilt
+description: Qué problema resuelve Hilt y cómo se usó en clase. @HiltAndroidApp en la Application, @AndroidEntryPoint en la Activity, @Inject constructor en cada clase, @HiltViewModel y hiltViewModel(), con los errores que salieron.
+icon: Syringe
+---
+
+En las páginas anteriores, cada clase **recibe** lo que necesita en su constructor: el ViewModel recibe un `TaskRepository`, el repositorio de la PokeApp recibe sus DataSource… Pero alguien tiene que crear esos objetos y pasárselos. Ese alguien es **Hilt**, la librería de inyección de dependencias de Android, construida sobre Dagger. Se empezó a usar el 09/10 y salió en todas las clases siguientes.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué es la <Concepto termino="Inyección de dependencias" definicion="Que una clase reciba lo que necesita (sus dependencias) en el constructor en vez de crearlo ella. Así se puede cambiar una pieza sin tocar el resto.">inyección de dependencias</Concepto> y qué gana tu app con ella.
+  - Las anotaciones de Hilt de clase: `@HiltAndroidApp`, `@AndroidEntryPoint`, `@Inject`, `@HiltViewModel`.
+  - Cómo obtiene una pantalla su ViewModel con `hiltViewModel()`.
+  - Qué genera Hilt al compilar y cómo se añade al proyecto.
+  - Los **módulos** (`@Binds`, `@Provides`, `@Singleton`) tienen su propia página: [Módulos de Hilt](/docs/2-dam/kotlin/arquitectura/hilt-modulos).
+</Callout>
+
+## El problema: ¿quién hace el `new`?
+
+En Java, lo normal sería que cada clase creara lo que usa:
+
+```java title="TaskListViewModel.java (así no)"
+public class TaskListViewModel extends ViewModel {
+    private final TaskRepository repository = new TaskRepositoryInMemory();
+}
+```
+
+Funciona, pero el ViewModel queda **atado** a `TaskRepositoryInMemory`. Si mañana quieres Room, tienes que tocar todos los ViewModels. Y si cada pantalla hace su propio `new`, cada una tiene **su propia lista de tareas**: lo que creas en una no aparece en la otra.
+
+Antes de Hilt, en clase se vieron apaños de este estilo:
+
+- 07/10: el ViewModel como valor por defecto, `viewModel: TipCalculatorViewModel = TipCalculatorViewModel()`.
+- 09/10: la pantalla con `repository: TaskRepository = TaskRepositoryInMemory()` para que compilara, con dos comentarios del profesor: `TODO Cambiar a viewModel` y `TODO COMO HAGO ESTO QUE SEA OBSERVABLE?`.
+
+Con inyección de dependencias, cada clase **declara** lo que necesita en su constructor y no crea nada:
+
+```kotlin title="ui/TaskListViewModel.kt (09/10)"
+@HiltViewModel
+class TaskListViewModel @Inject constructor(
+    private val _repository: TaskRepository
+) : ViewModel() {
+    // ...
+}
+```
+
+Hilt lee esas anotaciones al compilar, sabe qué hay que crear y en qué orden, y lo hace él.
+
+## Las piezas de Hilt
+
+| Anotación | Dónde va | Para qué | En clase |
+| --- | --- | --- | --- |
+| `@HiltAndroidApp` | La clase `Application` de tu app | Arranca Hilt y crea el contenedor de toda la app. | 26/10, 13/11 |
+| `@AndroidEntryPoint` | La `Activity` (en clase, `MainActivity`) | Deja que Hilt inyecte cosas en la Activity y en lo que cuelga de ella. | 09/10, 26/10, 13/11 |
+| `@Inject constructor(...)` | Cualquier clase que Hilt deba crear | Le dice a Hilt "créala con este constructor y pásale esto". | 09/10 y siguientes |
+| `@HiltViewModel` | Cada ViewModel | Hilt crea el ViewModel y le pasa sus dependencias. | 09/10 y siguientes |
+| `@Module` + `@InstallIn` | Una clase o interfaz de configuración | Explica a Hilt cómo crear lo que no puede crear solo (interfaces, Retrofit, Room). | Ver [Módulos de Hilt](/docs/2-dam/kotlin/arquitectura/hilt-modulos) |
+
+### Qué pasa cuando una pantalla pide su ViewModel
+
+El recorrido de abajo cuenta la idea paso a paso. En realidad, la búsqueda en los módulos la hace Hilt **al compilar** (lo verás más abajo): al ejecutar, solo corre el código que generó.
+
+<Flujo titulo="Hilt construye TaskListViewModel" nodos={["Pantalla", "hiltViewModel()", "Hilt", "ApplicationModule", "Repositorio"]}>
+  <Mensaje de="Pantalla" a="hiltViewModel()" titulo="viewModel = hiltViewModel()">
+    `TaskListScreen` tiene el parámetro `viewModel: TaskListViewModel = hiltViewModel()`. Al componerse por primera vez, pide su ViewModel.
+  </Mensaje>
+  <Mensaje de="hiltViewModel()" a="Hilt" titulo="¿Cómo creo TaskListViewModel?">
+    Como la clase lleva `@HiltViewModel`, se lo pide a Hilt.
+  </Mensaje>
+  <Mensaje de="Hilt" a="Hilt" titulo="@Inject constructor(TaskRepository)">
+    Hilt mira el constructor: necesita un `TaskRepository`. Es una interfaz, así que no sabe crearlo solo.
+  </Mensaje>
+  <Mensaje de="Hilt" a="ApplicationModule" titulo="¿Quién es TaskRepository?">
+    Busca en los módulos instalados una función que devuelva `TaskRepository`.
+  </Mensaje>
+  <Mensaje de="ApplicationModule" a="Hilt" tipo="respuesta" titulo="@Binds: TaskRepositoryInMemory">
+    El `@Binds` del módulo responde: usa `TaskRepositoryInMemory`, y con `@Singleton`, una sola instancia para toda la app.
+  </Mensaje>
+  <Mensaje de="Hilt" a="Repositorio" titulo="@Inject constructor()">
+    Si aún no existe, Hilt crea `TaskRepositoryInMemory` con su `@Inject constructor()`. Si ya existe, reutiliza la misma.
+  </Mensaje>
+  <Mensaje de="Hilt" a="hiltViewModel()" tipo="respuesta" titulo="TaskListViewModel(repositorio)">
+    Con el repositorio en la mano, Hilt llama al constructor del ViewModel.
+  </Mensaje>
+  <Mensaje de="hiltViewModel()" a="Pantalla" tipo="respuesta" titulo="El ViewModel">
+    La pantalla recibe su ViewModel. En las recomposiciones siguientes, `hiltViewModel()` devuelve **el mismo**, no uno nuevo.
+  </Mensaje>
+</Flujo>
+
+## `@HiltAndroidApp` en la Application
+
+<DeClase fecha="26/10" proyecto="PokeApp2627" />
+
+La clase `Application` representa la app entera: Android la crea antes que cualquier Activity. Hilt necesita una propia, anotada, para montar el contenedor de toda la app.
+
+```kotlin title="core/PokeApplication.kt"
+@HiltAndroidApp
+class PokeApplication() : Application()
+```
+
+Y hay que **registrarla en el manifest**, porque si no, Android usa la `Application` por defecto y Hilt no arranca:
+
+```xml title="AndroidManifest.xml"
+<application android:name=".core.PokeApplication" ...>
+```
+
+El 13/11, en el proyecto Room, se repitió en el paquete `di`: `class RoomApplication(): Application()` con `@HiltAndroidApp` y `android:name=".di.RoomApplication"`.
+
+<Comparar titulo="La anotación de la Application (26/10)" columnas>
+  <Lado tipo="evitar" titulo="El primer intento en clase">
+
+```kotlin
+@AndroidEntryPoint
+class PokeApplication() : Application()
+```
+
+`@AndroidEntryPoint` es para la Activity, no para la Application.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Cómo quedó en clase">
+
+```kotlin
+@HiltAndroidApp
+class PokeApplication() : Application()
+```
+
+Se corrigió en la misma clase.
+
+  </Lado>
+</Comparar>
+
+<NoSeVio titulo="ToDoApplication">
+  En la ToDoApp, `ToDoApplication` aparece en el árbol del paquete `di`, pero su contenido no se abre en ninguna captura. Por los otros proyectos, sería una clase vacía con `@HiltAndroidApp` registrada en el manifest.
+</NoSeVio>
+
+## `@AndroidEntryPoint` en la Activity
+
+<DeClase fecha="09/10" proyecto="ToDoApp" />
+
+La Activity es el **punto de entrada** de la interfaz. Con `@AndroidEntryPoint`, Hilt puede inyectar cosas en ella y, sobre todo, `hiltViewModel()` puede crear los ViewModels de las pantallas que cuelgan de ella.
+
+Antes de tener ViewModels, el 09/10 la Activity recibía el repositorio por **inyección en un campo** y se lo pasaba a mano a la pantalla:
+
+```kotlin title="MainActivity.kt (09/10, primera versión)"
+@AndroidEntryPoint
+class MainActivity : ComponentActivity() {
+    @Inject
+    lateinit var repository: TaskRepository
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            ToDoAppTheme {
+                TaskListScreen(repository = repository)
+            }
+        }
+    }
+}
+```
+
+- `@Inject lateinit var`: Hilt rellena el campo antes de `onCreate`. `lateinit` significa "no lo inicializo al declararlo, pero prometo que tendrá valor antes de usarlo" (en Kotlin una propiedad no nulable tiene que empezar con valor).
+- La Activity no puede usar `@Inject constructor`, porque **la crea Android**, no Hilt. Por eso se inyecta en un campo.
+
+Ese mismo día, `TaskListScreen(repository = repository)` se cambió por `ToDoNavHost()` y la pantalla pasó a recibir su ViewModel. La Activity siguió con el campo `repository` inyectado, aunque ya no lo usaba.
+
+## `@Inject constructor` en tus clases
+
+Cualquier clase tuya que Hilt deba crear lleva `@Inject` delante del constructor. Hilt mira sus parámetros, los crea (o los busca) y llama al constructor. Así se encadenan todas las capas:
+
+<Tabs items={['ToDoApp', 'PokeApp2627', 'ToDoOfflineFirst']}>
+  <Tab value="ToDoApp">
+
+```kotlin
+class TaskRepositoryInMemory @Inject constructor() : TaskRepository { /* ... */ }
+
+@HiltViewModel
+class TaskListViewModel @Inject constructor(
+    private val _repository: TaskRepository
+) : ViewModel() { /* ... */ }
+```
+
+`@Inject constructor()` con paréntesis vacíos: la clase no necesita nada, pero Hilt tiene que saber que puede crearla.
+
+  </Tab>
+  <Tab value="PokeApp2627">
+
+```kotlin
+class PokemonRemoteDataSourceImpl @Inject constructor(
+    private val _api: PokeApi
+) : PokemonRemoteDataSource { /* ... */ }
+
+class PokemonRepositoryImpl @Inject constructor(
+    private val _remoteDataSource: PokemonRemoteDataSource,
+    private val _localDataSource: PokemonLocalDataSource,
+) : PokemonRepository { /* ... */ }
+```
+
+El repositorio del 09/11 pide **dos** DataSource. Hilt crea los dos y se los pasa.
+
+  </Tab>
+  <Tab value="ToDoOfflineFirst">
+
+```kotlin
+class SettingsDataStore @Inject constructor(
+    private val dataStore: DataStore<Preferences>
+) : SettingsDatasource { /* ... */ }
+
+class SettingsRepositoryImpl @Inject constructor(
+    private val settingsDS: SettingsDatasource
+) : SettingsRepository { /* ... */ }
+```
+
+Cada capa recibe la **interfaz** de la de abajo.
+
+  </Tab>
+</Tabs>
+
+<Callout type="warn" title="javax.inject.Inject, no jakarta">
+  Al importar `@Inject`, el IDE ofrece `javax.inject.Inject` y `jakarta.inject.Inject`. En clase se usó **`javax.inject.Inject`**, que es el que usa Hilt. Si el `@Inject` sale en rojo, normalmente solo falta el import (Alt+Intro).
+</Callout>
+
+## `@HiltViewModel`
+
+<DeClase fecha="16/10" proyecto="ToDoApp" nota="TaskCreateViewModel paso a paso" />
+
+El 16/10 se escribió `TaskCreateViewModel` desde cero, pieza a pieza:
+
+<Steps>
+  <Step>
+
+#### Hereda de `ViewModel()`
+
+  `class TaskCreateViewModel : ViewModel()`. Es un ViewModel normal.
+
+  </Step>
+  <Step>
+
+#### `@Inject constructor(...)`
+
+  Se añade el constructor con lo que necesita: `@Inject constructor(private val _repository: TaskRepository)`.
+
+  </Step>
+  <Step>
+
+#### `@HiltViewModel`
+
+  Encima de la clase. Con esto, `hiltViewModel()` sabe que este ViewModel lo crea Hilt (import `dagger.hilt.android.lifecycle.HiltViewModel`).
+
+  </Step>
+</Steps>
+
+### Aunque no reciba nada, lleva `@Inject constructor()`
+
+<DeClase fecha="13/11" proyecto="Room" nota="MainViewModel de la Splash" />
+
+El `MainViewModel` de la Splash Screen no necesitaba nada y se escribió sin constructor. Al compilar, Hilt protestó (salió mezclado con errores de Room, con *Processing did not complete*). Se arregló añadiendo `@Inject constructor()`:
+
+```kotlin title="MainViewModel.kt (13/11)"
+@HiltViewModel
+class MainViewModel @Inject constructor(): ViewModel() {
+    private val _uiState: MutableStateFlow<Boolean> = MutableStateFlow(value = false)
+    val uiState: StateFlow<Boolean>
+        get() = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            delay(duration = 1.seconds)
+            _uiState.value = true
+        }
+    }
+}
+```
+
+### Sin `@HiltViewModel`, la app se cae
+
+<DeClase fecha="18/11" proyecto="ToDoOfflineFirst" />
+
+El 18/11, al conectar la pantalla de ajustes, se olvidó `@HiltViewModel` en `SettingsViewModel`. **Compiló**, pero al abrir la pantalla la app se cerró. En el Logcat:
+
+<Terminal titulo="Logcat (paquete recortado)">
+{`java.lang.RuntimeException: Cannot create an instance of class ...SettingsViewModel
+Caused by: java.lang.NoSuchMethodException: ...SettingsViewModel.<init> []`}
+</Terminal>
+
+Sin la anotación, Hilt no conoce ese ViewModel, así que `hiltViewModel()` intenta crearlo **por reflexión con un constructor vacío** (`<init> []` es "constructor sin parámetros"). `SettingsViewModel` solo tiene un constructor que pide un `SettingsRepository`, y no lo encuentra. Se arregló poniendo `@HiltViewModel`.
+
+<Callout type="error" title="Dos errores parecidos, dos momentos distintos">
+  - `@HiltViewModel` **sin** `@Inject constructor`: falla **al compilar** (13/11).
+  - `@Inject constructor` **sin** `@HiltViewModel`: compila y falla **al abrir la pantalla**, con `NoSuchMethodException` (18/11).
+</Callout>
+
+## `hiltViewModel()` en la pantalla
+
+<DeClase fecha="09/10" proyecto="ToDoApp" />
+
+Las pantallas reciben su ViewModel como parámetro con valor por defecto:
+
+```kotlin title="ui/TaskListScreen.kt"
+@Composable
+fun TaskListScreen(
+    modifier: Modifier = Modifier,
+    toCreate: () -> Unit,
+    toDetail: (Int) -> Unit,
+    viewModel: TaskListViewModel = hiltViewModel(),
+) {
+    // ...
+}
+```
+
+- `hiltViewModel()` devuelve el ViewModel ligado al dueño actual. Dentro de un `NavHost`, ese dueño es **la entrada de la pila de navegación** de esa pantalla: el ViewModel vive mientras la pantalla está en la pila y se destruye al salir de ella.
+- Al ser un valor por defecto, en una `@Preview` o en un test se podría pasar otro.
+- La chuleta de Moodle de esa clase ("Arquitectura en Android") resumía cuándo usar cada función: **con Compose, Navigation y Hilt, `hiltViewModel()`**, no `viewModel()`. `viewModel()` usa la fábrica normal, que no sabe pasarle a tu ViewModel sus dependencias.
+- En una Activity no se usa `hiltViewModel()`, sino el delegado `by viewModels()` (13/11). Lo tienes al final de [ViewModel y StateFlow](/docs/2-dam/kotlin/arquitectura/viewmodel-y-stateflow).
+
+### De qué paquete sale
+
+`hiltViewModel()` existe en dos librerías, y el autocompletado ofreció las dos:
+
+| Paquete | Librería | En clase |
+| --- | --- | --- |
+| `androidx.hilt.navigation.compose` | `androidx.hilt:hilt-navigation-compose` | Es la que se añadió al Gradle el 09/10. |
+| `androidx.hilt.lifecycle.viewmodel.compose` | `androidx.hilt:hilt-lifecycle-viewmodel-compose` (1.4.0 en la documentación) | Es el paquete nuevo. El 18/11 se importó desde aquí. |
+
+- El 09/10 no se ve cuál se importó al final: la documentación que se enseñó era la del paquete nuevo, pero la dependencia que se añadió fue <Dudoso nota="La versión no se lee en las capturas.">`hilt-navigation-compose`</Dudoso>.
+
+<NoSeVio titulo="Cannot infer type for type parameter 'VM'">
+  El 09/10, al escribir `viewModel: TaskListViewModel = hiltViewModel()`, salió este error al compilar aunque el tipo estaba escrito. Al rato compiló y la app se instaló bien, pero las capturas no muestran qué lo arregló. Seguramente se compiló mientras Gradle aún sincronizaba.
+</NoSeVio>
+
+## Hilt genera código al compilar
+
+Hilt no hace magia en tiempo de ejecución: lee tus anotaciones **al compilar** (con KSP, el procesador de anotaciones) y escribe el código que crea cada objeto. En el Build Output de clase se ven sus tareas:
+
+<Terminal titulo="Build Output (tareas que salieron en clase)">
+{`> Task :app:kspDebugKotlin
+> Task :app:hiltCollectClassesDebug
+> Task :app:hiltAggregateDepsDebug
+> Task :app:hiltJavaCompileDebug
+BUILD SUCCESSFUL`}
+</Terminal>
+
+- El 09/11 el profesor enseñó las clases `..._Factory.java` que se generan en `build/generated/ksp/debug/`. Son las que hacen los `new` que tú no escribes.
+- Al renombrar una interfaz con *Refactor > Rename*, la Factory generada cambiaba también.
+- En la ToDoApp, al pasar el ratón sobre `TaskRepositoryInMemory`, el IDE mostraba "TaskRepositoryInMemory() provides for bindTaskRepository": Hilt enseñando qué constructor usa para cada `@Binds`.
+- Como el código se genera al compilar, **muchos errores de Hilt salen en el Build Output**, no al ejecutar. Lee siempre el **primero** de la lista: un error de Room en KSP también hace que falle Hilt (13/11).
+
+## Añadir Hilt al proyecto
+
+<DeClase fecha="09/10, 13/11" />
+
+El 09/10 las dependencias se escribieron directamente en `app/build.gradle.kts`:
+
+```kotlin title="app/build.gradle.kts (09/10, fragmento)"
+//hilt
+implementation("com.google.dagger:hilt-android:2.60.1")
+ksp("com.google.dagger:hilt-android-compiler:2.60.1")
+implementation("androidx.hilt:hilt-navigation-compose:...")
+```
+
+El 13/11 se pasaron al catálogo de versiones, con el plugin declarado en el build raíz y aplicado en `app`:
+
+<Tabs items={['libs.versions.toml', 'build.gradle.kts (raíz)', 'app/build.gradle.kts']}>
+  <Tab value="libs.versions.toml">
+
+```toml title="gradle/libs.versions.toml (fragmento)"
+[versions]
+ksp = "2.3.12"
+hilt = "2.60.1"
+
+[libraries]
+hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
+hilt-android-compiler = { module = "com.google.dagger:hilt-android-compiler", version.ref = "hilt" }
+
+[plugins]
+hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+```
+
+  </Tab>
+  <Tab value="build.gradle.kts (raíz)">
+
+```kotlin title="build.gradle.kts"
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.ksp) apply false
+    alias(libs.plugins.hilt) apply false
+}
+```
+
+  </Tab>
+  <Tab value="app/build.gradle.kts">
+
+```kotlin title="app/build.gradle.kts (fragmento)"
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
+}
+
+dependencies {
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.android.compiler)
+}
+```
+
+  </Tab>
+</Tabs>
+
+- `implementation(...)` para la librería que usa tu app y `ksp(...)` para el **compilador**, que genera el código.
+- Plugin y dependencia van por separado. El 13/11, con el plugin puesto y sin la dependencia, el *sync* falló con este error:
+
+<Terminal titulo="Sync">
+{`The Hilt Android Gradle plugin is applied but no com.google.dagger:hilt-android dependency was found.`}
+</Terminal>
+
+## Ponlo a prueba
+
+<Quiz titulo="Test: Hilt" descripcion="8 preguntas">
+  <Pregunta enunciado="¿Dónde va `@HiltAndroidApp`?" explicacion="En la clase que hereda de `Application`, registrada en el manifest con `android:name`. El 26/10 se le puso primero `@AndroidEntryPoint` por error.">
+    <Opcion correcta>En la clase que hereda de `Application`</Opcion>
+    <Opcion>En `MainActivity`</Opcion>
+    <Opcion>En cada ViewModel</Opcion>
+    <Opcion>En el módulo de Hilt</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Basta con poner `@HiltAndroidApp` en la `Application`; no hace falta tocar el manifest." respuesta={false} explicacion="Hay que registrarla con `android:name` en `<application>`. Si no, Android arranca con la `Application` por defecto y Hilt no se inicia." />
+  <Pregunta enunciado="¿Por qué en la Activity se inyecta con `@Inject lateinit var` y no con `@Inject constructor`?" explicacion="La Activity la crea Android, no Hilt, así que Hilt no puede llamar a su constructor. Lo que hace es rellenar los campos marcados con `@Inject` antes de `onCreate`.">
+    <Opcion correcta>Porque la Activity la crea Android, no Hilt</Opcion>
+    <Opcion>Porque Kotlin no permite constructores en las Activity</Opcion>
+    <Opcion>Porque `lateinit` es más rápido</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Un ViewModel tiene `@Inject constructor(private val repo: TaskRepository)` pero no `@HiltViewModel`. ¿Qué pasa?" explicacion="Compila, pero al abrir la pantalla `hiltViewModel()` intenta crearlo con un constructor vacío y la app se cae con `NoSuchMethodException` (18/11).">
+    <Opcion>No compila</Opcion>
+    <Opcion correcta>Compila, pero la app se cae al abrir la pantalla con `NoSuchMethodException`</Opcion>
+    <Opcion>Funciona igual, la anotación es opcional</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Un ViewModel que no necesita nada lleva `@HiltViewModel`. ¿Qué constructor necesita?" explicacion="`@Inject constructor()`, con paréntesis vacíos. Sin él, el build falla (13/11, `MainViewModel`).">
+    <Opcion correcta>`@Inject constructor()`</Opcion>
+    <Opcion>Ninguno: si no recibe nada, no hace falta</Opcion>
+    <Opcion>`constructor(@Inject)`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué `@Inject` se usó en clase con Hilt?" explicacion="`javax.inject.Inject`. El IDE también ofrece `jakarta.inject.Inject`, pero en clase se eligió el de `javax`.">
+    <Opcion correcta>`javax.inject.Inject`</Opcion>
+    <Opcion>`jakarta.inject.Inject`</Opcion>
+    <Opcion>`dagger.hilt.Inject`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Con Compose, Navigation y Hilt, ¿cómo obtiene una pantalla su ViewModel?" explicacion="Con `hiltViewModel()` como valor por defecto del parámetro. `viewModel()` no sabe pasarle las dependencias.">
+    <Opcion correcta>`viewModel: TaskListViewModel = hiltViewModel()`</Opcion>
+    <Opcion>`viewModel: TaskListViewModel = viewModel()`</Opcion>
+    <Opcion>`viewModel: TaskListViewModel = TaskListViewModel()`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En `build.gradle.kts`, ¿cómo se añade el compilador de Hilt?" explicacion="El compilador genera código al compilar, así que va con `ksp(...)`. La librería que usa la app va con `implementation(...)`.">
+    <Opcion correcta>`ksp("com.google.dagger:hilt-android-compiler:2.60.1")`</Opcion>
+    <Opcion>`implementation("com.google.dagger:hilt-android-compiler:2.60.1")`</Opcion>
+    <Opcion>No hace falta: basta con el plugin</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: Hilt">
+  <Tarjeta frente="Inyección de dependencias">La clase recibe lo que necesita en el constructor en vez de crearlo. Hilt crea los objetos y se los pasa.</Tarjeta>
+  <Tarjeta frente="`@HiltAndroidApp`">En la `Application`. Arranca Hilt. Hay que registrarla en el manifest con `android:name`.</Tarjeta>
+  <Tarjeta frente="`@AndroidEntryPoint`">En la Activity. Permite inyectar en ella y que `hiltViewModel()` funcione en sus pantallas.</Tarjeta>
+  <Tarjeta frente="`@Inject constructor(...)`">Le dice a Hilt cómo crear tu clase y qué pasarle. Sin parámetros: `@Inject constructor()`.</Tarjeta>
+  <Tarjeta frente="`@HiltViewModel`">En cada ViewModel. Sin ella, la app se cae con `NoSuchMethodException ... <init> []`.</Tarjeta>
+  <Tarjeta frente="`hiltViewModel()`">Devuelve el ViewModel de la pantalla, ligado a su entrada en la pila de navegación. Siempre el mismo mientras la pantalla siga en la pila.</Tarjeta>
+  <Tarjeta frente="¿Cuándo trabaja Hilt?">Al compilar: KSP lee las anotaciones y genera las `..._Factory.java`. Por eso muchos errores salen en el Build Output.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Pon las anotaciones" dificultad="facil">
+  Esta app de notas no arranca porque le faltan todas las anotaciones de Hilt. Añádelas (y lo que haga falta en el manifest) para que `NoteListScreen` reciba su ViewModel con `hiltViewModel()`. Supón que el módulo con el `@Binds` de `NoteRepository` ya está hecho.
+
+```kotlin
+class NotesApplication : Application()
+
+class MainActivity : ComponentActivity() { /* setContent { ... } */ }
+
+class NoteRepositoryInMemory : NoteRepository { /* ... */ }
+
+class NoteListViewModel(
+    private val _repository: NoteRepository
+) : ViewModel() { /* ... */ }
+```
+
+  <Pista>Las cuatro clases necesitan al menos una anotación (el ViewModel, dos), y hay que añadir una línea en el manifest.</Pista>
+  <Pista>La que no recibe nada también necesita `@Inject constructor()`.</Pista>
+
+  <Solucion>
+
+```kotlin
+@HiltAndroidApp
+class NotesApplication : Application()
+
+@AndroidEntryPoint
+class MainActivity : ComponentActivity() { /* setContent { ... } */ }
+
+class NoteRepositoryInMemory @Inject constructor() : NoteRepository { /* ... */ }
+
+@HiltViewModel
+class NoteListViewModel @Inject constructor(
+    private val _repository: NoteRepository
+) : ViewModel() { /* ... */ }
+```
+
+```xml title="AndroidManifest.xml"
+<application android:name=".NotesApplication" ...>
+```
+
+El `android:name` depende del paquete donde esté la clase: en la PokeApp2627 era `.core.PokeApplication` y en el proyecto Room, `.di.RoomApplication`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="¿Quién crea cada objeto?" dificultad="media">
+  En la defensa del proyecto te pueden pedir que expliques quién crea cada objeto. Explica, paso a paso, cómo llega `TaskRepositoryInMemory` a `TaskCreateViewModel` en la ToDoApp, desde que se abre la pantalla de crear tarea, sin que nadie escriba `TaskRepositoryInMemory()`. Di también por qué la tarea creada aparece luego en la lista.
+
+  <Pista>Empieza por el parámetro `viewModel = hiltViewModel()` de `TaskCreateScreen`.</Pista>
+  <Pista>Piensa en qué anotación tiene cada clase y en qué dice el módulo.</Pista>
+
+  <Solucion>
+
+1. Al abrir la pantalla, `TaskCreateScreen` llama a `hiltViewModel()` para obtener su `TaskCreateViewModel`.
+2. Como `TaskCreateViewModel` lleva `@HiltViewModel`, `hiltViewModel()` se lo pide a Hilt. Esto funciona porque `MainActivity` lleva `@AndroidEntryPoint` y `ToDoApplication`, `@HiltAndroidApp`.
+3. Hilt mira su `@Inject constructor(private val _repository: TaskRepository)`: necesita un `TaskRepository`.
+4. `TaskRepository` es una interfaz. Hilt busca en `ApplicationModule` (instalado en `SingletonComponent`) y encuentra `@Binds bindTaskRepository(repository: TaskRepositoryInMemory): TaskRepository`.
+5. Para crear `TaskRepositoryInMemory` usa su `@Inject constructor()`. Como el `@Binds` lleva `@Singleton`, si ya lo había creado para `TaskListViewModel`, reutiliza **esa misma instancia**.
+6. Hilt llama al constructor de `TaskCreateViewModel` con ese repositorio y la pantalla recibe su ViewModel.
+
+La tarea aparece en la lista porque los dos ViewModels comparten **el mismo** objeto repositorio gracias a `@Singleton`, y por tanto la misma lista en memoria. Todo ese código lo genera Hilt al compilar (las `..._Factory.java`).
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Hilt">Librería de inyección de dependencias de Android, basada en Dagger. Crea los objetos y se los pasa a quien los pide.</Termino>
+  <Termino nombre="@HiltAndroidApp">En la `Application`, registrada en el manifest. Arranca Hilt.</Termino>
+  <Termino nombre="@AndroidEntryPoint">En la Activity. Punto de entrada de Hilt en la interfaz.</Termino>
+  <Termino nombre="@Inject constructor">Cómo crear una clase tuya y qué necesita.</Termino>
+  <Termino nombre="@HiltViewModel">Marca un ViewModel que crea Hilt. Va siempre con `@Inject constructor`.</Termino>
+  <Termino nombre="hiltViewModel()">Obtiene en un composable el ViewModel de esa pantalla.</Termino>
+  <Termino nombre="KSP">Procesador de anotaciones que genera el código de Hilt (y de Room) al compilar.</Termino>
+</Glosario>
+
+<MarcarCompletado />

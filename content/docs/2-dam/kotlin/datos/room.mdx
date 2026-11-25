@@ -1,0 +1,562 @@
+---
+title: "Room 3: entidades, DAO y base de datos con Hilt"
+description: "La base de datos local de Android como se dio el 13/11: Gradle con KSP y Hilt, @Entity, @Dao con @Insert, @Update y @Query, @Database, el módulo de Hilt y los errores que salieron."
+icon: Database
+---
+
+**Room** es la base de datos local de Android: por debajo es SQLite, pero en vez de escribir el SQL de las tablas y leer cursores a mano, escribes clases y anotaciones y Room genera el código al compilar. El 13/11 se montó desde cero en un proyecto nuevo, **Room**, con Room 3, KSP y Hilt.
+
+<DeClase fecha="13/11" proyecto="Room" />
+
+El paquete del proyecto es <Dudoso nota="En algunas capturas se lee com.turinglan.room; seguramente es un error de lectura.">`com.turingalan.room`</Dudoso>.
+
+<Callout type="warn" title="Room 3 no se escribe igual que Room 2">
+  En clase se usa **Room 3**: los artefactos son `androidx.room3:room3-runtime` y `room3-compiler`, y los imports, `androidx.room3.*` (no `androidx.room.*`). Casi todo lo que hay en internet es de Room 2, y algunas cosas, como `@Relation`, cambian.
+</Callout>
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Las tres piezas de Room: entidades, DAO y base de datos.
+  - Preparar Gradle con el catálogo de versiones, KSP y Hilt.
+  - Escribir una entidad, un DAO con `@Insert`, `@Update` y `@Query`, y la clase `@Database`.
+  - Crear la base de datos con un módulo de Hilt y entender los errores de KSP.
+</Callout>
+
+## Las tres piezas
+
+Es el diagrama de la documentación oficial que se vio al empezar la clase (*Primary components*):
+
+<Mermaid
+  titulo="Componentes de Room"
+  chart={`flowchart LR
+    APP[Resto de la app] -- "pide el DAO" --> DB["Base de datos (@Database)"]
+    DB -- "devuelve" --> DAO["DAO (@Dao)"]
+    APP -- "llama a sus funciones" --> DAO
+    DAO -- "lee y guarda" --> ENT["Entidades (@Entity)"]
+    APP -- "usa y cambia" --> ENT`}
+/>
+
+| Pieza | Qué es | En clase |
+| --- | --- | --- |
+| **Entidad** (`@Entity`) | Una `data class` que es una **tabla**. Cada objeto es una fila. | `PokemonEntity` |
+| **DAO** (`@Dao`) | Una `interface` con las funciones que leen y escriben. Room la implementa. | `PokeDao` |
+| **Base de datos** (`@Database`) | Una `abstract class` que es el punto de acceso. Le pides los DAO. | `PokemonDatabase` |
+
+## Preparar Gradle
+
+Room 3 y Hilt generan código al compilar con **KSP** (*Kotlin Symbol Processing*), el procesador de anotaciones. En clase se añadió todo a mano y salieron varios errores de sincronización por el camino.
+
+<Steps>
+  <Step>
+
+#### Versiones y plugins en el catálogo
+
+  En `gradle/libs.versions.toml` van los números en `[versions]`, las librerías en `[libraries]` y los plugins en `[plugins]`, unidos con `version.ref`.
+
+  </Step>
+  <Step>
+
+#### Plugins en el build raíz, con `apply false`
+
+  El `build.gradle.kts` de la raíz **declara** los plugins sin aplicarlos.
+
+  </Step>
+  <Step>
+
+#### Plugins y dependencias en `app`
+
+  El `app/build.gradle.kts` aplica los plugins (sin `apply false`) y añade las dependencias: `implementation(...)` para lo que va dentro de la app y `ksp(...)` para los compiladores que generan código.
+
+  </Step>
+  <Step>
+
+#### Sync Now
+
+  Después de tocar el catálogo, Gradle no puede reutilizar su caché de configuración: hay que pulsar **Sync Now**.
+
+  </Step>
+</Steps>
+
+<Tabs items={['libs.versions.toml', 'build.gradle.kts (raíz)', 'app/build.gradle.kts']}>
+  <Tab value="libs.versions.toml">
+
+```toml title="gradle/libs.versions.toml (lo que se añadió)"
+[versions]
+agp = "9.2.1"
+kotlin = "2.2.10"
+composeBom = "2026.02.01"
+ksp = "2.3.12"
+hilt = "2.60.1"
+coreSplashscreen = "1.2.0"
+
+[libraries]
+hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
+hilt-android-compiler = { module = "com.google.dagger:hilt-android-compiler", version.ref = "hilt" }
+androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "coreSplashscreen" }
+
+[plugins]
+hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+```
+
+  </Tab>
+  <Tab value="build.gradle.kts (raíz)">
+
+```kotlin title="build.gradle.kts"
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.ksp) apply false
+    alias(libs.plugins.hilt) apply false
+}
+```
+
+  </Tab>
+  <Tab value="app/build.gradle.kts">
+
+```kotlin title="app/build.gradle.kts"
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
+}
+
+android {
+    compileSdk { version = release(37) { minorApiLevel = 1 } }
+    defaultConfig { minSdk = 35; targetSdk = 37 }
+}
+
+dependencies {
+    implementation(libs.androidx.core.splashscreen)
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.11.0")
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.android.compiler)
+    implementation("androidx.room3:room3-runtime:3.0.3")
+    ksp("androidx.room3:room3-compiler:3.0.3")
+}
+```
+
+  </Tab>
+</Tabs>
+
+- La versión de Kotlin del catálogo se lee como <Dudoso nota="En otra captura se lee 2.3.10; puede que el profesor la cambiara por el aviso «Kotlin 2.3.10 is available».">2.2.10</Dudoso>. El código que no es de clase de estas páginas está comprobado con Kotlin 2.4.
+- Las dependencias de Room se escribieron **directamente** en el build, sin pasar por el catálogo. Primero se intentó con una variable `$room_version` que nunca se llegó a declarar, y se cambió por `3.0.3` a mano.
+- `lifecycle-viewmodel-ktx` y `core-splashscreen` son para la Splash Screen de la segunda parte de la clase, que no es de este bloque.
+
+### Errores de Gradle que salieron
+
+<Accordions type="multiple">
+  <Accordion title="checkDebugAarMetadata: una librería pide compileSdk 37">
+    Una librería pedía compilar contra la API 37 y el proyecto usaba `android-36.1`. Se arregló subiendo los tres SDK: `compileSdk` a `release(37)` (con la sintaxis nueva de AGP 9, `release(37) { minorApiLevel = 1 }`), `minSdk` de 34 a 35 y `targetSdk` de 36 a 37. El sync descargó la Android SDK Platform 37.1.
+  </Accordion>
+  <Accordion title="The Hilt Android Gradle plugin is applied but no com.google.dagger:hilt-android dependency was found">
+    El plugin y la dependencia van por separado. Se había aplicado el plugin de Hilt sin añadir `implementation(libs.hilt.android)` y `ksp(libs.hilt.android.compiler)`. Al añadirlas, BUILD SUCCESSFUL.
+  </Accordion>
+  <Accordion title="Syntax error: Expecting qualified name (PokemonDAO.kt:5:7)">
+    Un `import` a medio escribir. Para encontrarlo, el profesor leyó el primer error del panel **Build Output** y fue comentando líneas con `//` hasta que compiló.
+  </Accordion>
+  <Accordion title="INSTALL_FAILED_OLDER_SDK en tu móvil (no salió en clase)">
+    En clase no salió, pero te puede pasar a ti: con `minSdk = 35` la app solo se instala en Android 15 o más. Si tu móvil es más antiguo, bájalo (con 26 vale para todo lo de clase).
+  </Accordion>
+</Accordions>
+
+| SDK | Qué decide |
+| --- | --- |
+| `compileSdk` | Contra qué versión de la API de Android se compila. |
+| `targetSdk` | Para qué versión está pensada: qué comportamientos de ejecución adopta. |
+| `minSdk` | La versión más antigua en la que se puede instalar. |
+
+## La entidad
+
+Una entidad es una `data class` con `@Entity`. Cada propiedad es una columna.
+
+```kotlin title="data/Pokemon.kt (versión final)"
+@Entity(tableName = "pokemon")
+data class PokemonEntity(
+    @PrimaryKey
+    val id: Int,
+    val name: String,
+    val imageUrl: String?,
+)
+```
+
+- `tableName` fija el nombre de la tabla. Sin él, la tabla se llamaría como la clase. En unas capturas sale <Dudoso nota="En otras capturas aparece @Entity sin tableName.">`@Entity(tableName = "pokemon")`</Dudoso> y en otras no.
+- `@PrimaryKey` marca la clave primaria.
+- Un tipo **nulable** (`String?`) es una columna que admite `NULL`. Los no nulables son `NOT NULL`.
+- La entidad se llama `PokemonEntity` para no confundirla con el modelo `Pokemon` del resto de la app.
+
+La primera versión (minutos 19 a 24) enseñaba `@ColumnInfo`, que cambia el nombre de la columna en SQL:
+
+```kotlin title="data/Pokemon.kt (primera versión)"
+@Entity
+data class Pokemon(
+    @PrimaryKey
+    val id: Int,
+    val name: String,
+    @ColumnInfo(name = "image_url")
+    val imageUrl: String?,
+)
+```
+
+En la versión final `imageUrl` aparece sin `@ColumnInfo` y su import sale como no usado: no se sabe si se quitó a propósito. El tooltip de `@Entity` enseñó también sus otros parámetros: `indices`, `inheritSuperIndices`, `primaryKeys`, `foreignKeys`, `ignoredColumns` y `withoutRowId`.
+
+## El DAO
+
+El DAO es una `interface` con `@Dao`. Tú escribes la firma y la anotación, y Room genera la implementación.
+
+<Recorrido
+  titulo="data/Pokemon.kt (el DAO)"
+  lenguaje="kotlin"
+  codigo={`@Dao
+interface PokeDao {
+    @Insert
+    suspend fun insert(vararg p: PokemonEntity)
+    @Insert
+    suspend fun insert(p: List<PokemonEntity>)
+    @Update
+    suspend fun update(p: PokemonEntity)
+    @Query(value = "SELECT * FROM pokemon")
+    suspend fun getAllPokemon(): List<PokemonEntity>
+    @Query(value = "SELECT * FROM pokemon WHERE id = :id")
+    suspend fun getPokemonById(id: Int): PokemonEntity
+}`}
+>
+  <Paso lineas="1-2" titulo="Una interfaz con @Dao">
+    No se implementa a mano: KSP genera la clase que hace el SQL.
+  </Paso>
+  <Paso lineas="3-6" titulo="@Insert sobrecargado">
+    La misma función con `vararg` (uno o varios sueltos: `insert(a, b, c)`) y con `List`. Room genera el `INSERT` a partir de la entidad.
+  </Paso>
+  <Paso lineas="7-8" titulo="@Update">
+    Actualiza la fila que tenga la misma clave primaria que la entidad que le pasas.
+  </Paso>
+  <Paso lineas="9-10" titulo="@Query">
+    Para leer se escribe el SQL. `FROM pokemon` es el `tableName` de la entidad.
+  </Paso>
+  <Paso lineas="11-12" titulo="Parámetros con :nombre">
+    `:id` se sustituye por el parámetro `id` de la función. Solo sirve para **valores**, no para nombres de tabla ni de columna.
+  </Paso>
+  <Paso titulo="Todo suspend">
+    Todas las funciones son `suspend`: el acceso a la base se hace con corrutinas, fuera del hilo principal. Se llaman desde `viewModelScope.launch` o desde otra `suspend`.
+  </Paso>
+</Recorrido>
+
+- El DAO se escribió primero como `PokemonDAO` con un `create(pokemon: Pokemon)`, se rehízo como `PokeDao` y acabó en el mismo archivo que la entidad, `Pokemon.kt`. No se sabe si el archivo `PokeDao.kt` se borró o se quedó vacío <Dudoso />.
+- Había también un `insert(p: PokemonEntity)` de una sola entidad, que acaba comentado.
+
+### El error de KSP con el SQL
+
+Room **comprueba el SQL al compilar**. Al ejecutar la app, al final de la clase, el build falló con errores de KSP en las dos consultas: se habían escrito con el nombre de la tabla como parámetro.
+
+<Comparar titulo="El nombre de la tabla en @Query">
+  <Lado tipo="evitar" titulo="Lo que falló">
+
+```kotlin
+@Query(value = "SELECT * FROM :pokemon")
+suspend fun getAllPokemon(): List<PokemonEntity>
+```
+
+Los errores que se leyeron: `mismatched input ':pokemonentity'`, `SQLITE_ERROR` y `Unused parameter: id` (un parámetro de la función que no se usa en la consulta).
+
+  </Lado>
+  <Lado tipo="bien" titulo="Como estaba en la primera parte">
+
+```kotlin
+@Query(value = "SELECT * FROM pokemon")
+suspend fun getAllPokemon(): List<PokemonEntity>
+```
+
+El nombre de la tabla va escrito tal cual. Los `:nombre` solo valen para valores, como en `WHERE id = :id`.
+
+  </Lado>
+</Comparar>
+
+<NoSeVio titulo="Las consultas corregidas">
+  Para seguir avanzando, el profesor **comentó las dos `@Query`** y así el build salió bien. No se ve la versión corregida del final de la clase.
+</NoSeVio>
+
+Un error de Room en KSP hace fallar también el procesado de Hilt (*Processing did not complete*). En la lista de errores hay que leer **el primero**.
+
+## La base de datos
+
+```kotlin title="data/PokemonDatabase.kt"
+@Database(entities = [PokemonEntity::class], version = 1)
+abstract class PokemonDatabase(): RoomDatabase() {
+    abstract fun pokemonDao(): PokeDao
+}
+```
+
+- Es una `abstract class` que **hereda de `RoomDatabase()`**, con una función abstracta por cada DAO. Room genera la implementación.
+- `entities` es la lista de tablas y `version` el número de versión del esquema. El tooltip enseñó también `views`, `exportSchema` (por defecto `true`) y `autoMigrations`.
+- En clase la clase se escribió primero sin heredar de nada. Se vio el fallo al intentar tipar `val db: RoomDatabase` en el módulo de Hilt, y se corrigió.
+
+### El aviso del esquema
+
+Al compilar salió el aviso *Schema export directory was not provided*: con `exportSchema = true` (el valor por defecto), Room quiere guardar el esquema en una carpeta que no se le ha dicho. En clase solo se vio el aviso.
+
+<NoDadoEnClase titulo="Quitar el aviso">
+
+```kotlin
+@Database(entities = [PokemonEntity::class], version = 1, exportSchema = false)
+abstract class PokemonDatabase : RoomDatabase() {
+    abstract fun pokemonDao(): PokeDao
+}
+```
+
+  Con `exportSchema = false` Room no intenta exportar el esquema y el aviso desaparece.
+
+</NoDadoEnClase>
+
+## Crear la base de datos con Hilt
+
+La base de datos no tiene `@Inject constructor`: se **construye** con `Room.databaseBuilder`. Por eso va en un módulo con `@Provides`, igual que Retrofit en el `NetworkModule`.
+
+<Recorrido
+  titulo="di/AppModule.kt"
+  lenguaje="kotlin"
+  codigo={`@Module
+@InstallIn(SingletonComponent::class)
+class AppModule {
+    @Provides
+    fun providesDatabase(@ApplicationContext context: Context): PokemonDatabase {
+        val db = Room.databaseBuilder<PokemonDatabase>(
+            context = context,
+            name = "pokemon_db"
+        ).build()
+        return db
+    }
+
+    @Provides
+    fun providesPokemonDao(db: PokemonDatabase): PokeDao {
+        return db.pokemonDao()
+    }
+}`}
+>
+  <Paso lineas="1-3" titulo="Un módulo con @Provides">
+    `@Module` + `@InstallIn(SingletonComponent::class)`, como `class`. `@Provides` se usa porque hay que construir el objeto; `@Binds` solo ata una interfaz a su implementación.
+  </Paso>
+  <Paso lineas="5" titulo="@ApplicationContext">
+    Room necesita un `Context`. Con `@ApplicationContext context: Context` Hilt pasa el de la aplicación (import de `dagger.hilt.android.qualifiers.ApplicationContext`).
+  </Paso>
+  <Paso lineas="6-9" titulo="Room.databaseBuilder">
+    Crea la base de datos con su nombre de archivo. Se reescribió con argumentos con nombre, y el nombre pasó de `pokemon.db` a `pokemon_db`. El popup enseñaba otras sobrecargas del builder (con `klass` y con `factory`).
+  </Paso>
+  <Paso lineas="13-16" titulo="Provides encadenados">
+    Para dar el DAO, la función recibe la `PokemonDatabase`, que Hilt ya sabe crear con el otro `@Provides`, y le pide `pokemonDao()`. Así el repositorio puede pedir directamente un `PokeDao`.
+  </Paso>
+</Recorrido>
+
+<Comparar titulo="Una sola base de datos">
+  <Lado tipo="evitar">
+
+```kotlin
+@Provides
+fun providesDatabase(@ApplicationContext context: Context): PokemonDatabase {
+    val db = Room.databaseBuilder<PokemonDatabase>(
+        context = context,
+        name = "pokemon_db"
+    ).build()
+    return db
+}
+```
+
+Sin `@Singleton`, Hilt ejecuta la función cada vez que alguien pide la base de datos o el DAO: se crearía una base nueva en cada inyección.
+
+  </Lado>
+  <Lado tipo="bien">
+
+<NoDadoEnClase inline />
+
+```kotlin
+@Module
+@InstallIn(SingletonComponent::class)
+object DatabaseModule {
+    @Provides
+    @Singleton
+    fun providesDatabase(@ApplicationContext context: Context): PokemonDatabase =
+        Room.databaseBuilder<PokemonDatabase>(context = context, name = "pokemon_db").build()
+
+    @Provides
+    fun providesPokemonDao(db: PokemonDatabase): PokeDao = db.pokemonDao()
+}
+```
+
+Con `@Singleton` hay una sola base de datos para toda la app. El DAO no lo necesita: sale siempre de esa misma base. Con `object` no hace falta crear instancias del módulo.
+
+  </Lado>
+</Comparar>
+
+Para que Hilt funcione hacen falta además la `Application` con `@HiltAndroidApp` (aquí `RoomApplication`, en el paquete `di`, registrada con `android:name=".di.RoomApplication"`) y `@AndroidEntryPoint` en la Activity.
+
+<Callout type="error" title="Salió en clase: @HiltViewModel sin @Inject constructor">
+  En la misma clase el build falló a la vez por las consultas de Room y por Hilt (*Processing did not complete* en `MainViewModel`). Se añadió `@Inject constructor()` al ViewModel, porque un `@HiltViewModel` lo necesita **aunque no tenga parámetros**, y se comentaron las consultas. No se ve si el profesor explicó cuál de los dos arreglos quitaba cada error.
+</Callout>
+
+## Ver la base de datos: Database Inspector
+
+<DeClase fecha="16/11" proyecto="PokeApp2627" />
+
+Con la app ejecutándose en el emulador, **View → Tool Windows → App Inspection** abre el **Database Inspector**: lista las bases de la app y deja ver sus tablas en tiempo real. El 16/11 se ve la base `pokemon-db` de la PokeApp con su tabla `pokemon` (`id`, `name`, `imageUrl`) llena de pokémon, y también la tabla interna `room_master_table`, que crea Room.
+
+Es la forma más rápida de comprobar si los datos se están guardando de verdad. La PokeApp leyendo de Room está en [Offline-first](/docs/2-dam/kotlin/datos/offline-first).
+
+## Lo que no se dio de Room <NoDadoEnClase inline />
+
+En clase solo hubo una tabla y funciones `suspend`. Para el proyecto hacen falta, y están explicadas en [Room con relaciones](/docs/2-dam/kotlin/para-el-proyecto/room-relaciones) y [Room como fuente de verdad](/docs/2-dam/kotlin/para-el-proyecto/offline-first):
+
+- **Consultas que devuelven `Flow`**, para que la pantalla se actualice sola cuando cambia la tabla. Esas no llevan `suspend`.
+- **Relaciones** entre tablas (no salieron en ninguna clase): `ForeignKey`, `@Embedded` y `@Relation`. En Room 3, `@Relation` se escribe con `parentColumns = ["id"]` y `entityColumns = ["categoriaId"]`, en plural y con corchetes; la forma de Room 2 (`parentColumn = "id"`) da el error *Cannot have empty 'parentColumns' in @Relation*.
+- `@Upsert` (insertar o actualizar) y `@Delete`.
+- **Migraciones**: si cambias una entidad, hay que subir `version`. En desarrollo basta con desinstalar la app.
+
+## Practica
+
+<CompletarCodigo
+  titulo="Una consulta con parámetro"
+  enunciado="Completa el DAO para buscar un pokémon por su nombre."
+  lenguaje="kotlin"
+  codigo={`@[[Dao]]
+interface PokeDao {
+    @[[Query]](value = "SELECT * FROM [[pokemon]] WHERE name = [[:name]]")
+    suspend fun getPokemonByName(name: String): PokemonEntity?
+}`}
+/>
+
+<Quiz titulo="Test: Room 3">
+  <Pregunta enunciado="¿Cuáles son las tres piezas de Room?" explicacion="Entidades (tablas), DAO (consultas) y la clase de base de datos (el punto de acceso).">
+    <Opcion correcta>`@Entity`, `@Dao` y `@Database`</Opcion>
+    <Opcion>`@Table`, `@Repository` y `@Database`</Opcion>
+    <Opcion>`@Entity`, `@Module` y `@Provides`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué import es el de Room 3?" explicacion="Room 3 usa el paquete `androidx.room3`. `androidx.room` es Room 2.">
+    <Opcion>`androidx.room.Entity`</Opcion>
+    <Opcion correcta>`androidx.room3.Entity`</Opcion>
+    <Opcion>`android.database.Entity`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué falló `@Query(&quot;SELECT * FROM :pokemon&quot;)`?" explicacion="Los parámetros `:nombre` solo sirven para valores. El nombre de la tabla va escrito tal cual: `FROM pokemon`.">
+    <Opcion>Porque falta `suspend`</Opcion>
+    <Opcion correcta>Porque el nombre de la tabla no puede ser un parámetro</Opcion>
+    <Opcion>Porque Room no admite `SELECT *`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Room comprueba el SQL de las `@Query` al compilar." respuesta={true} explicacion="Lo hace KSP al generar el código. Por eso un SQL mal escrito hace fallar el build." />
+  <Pregunta enunciado="¿Qué tiene que ser la clase `PokemonDatabase`?" explicacion="Una `abstract class` con `@Database` que hereda de `RoomDatabase()` y tiene una función abstracta por DAO.">
+    <Opcion>Una `interface` con `@Database`</Opcion>
+    <Opcion correcta>Una `abstract class` que hereda de `RoomDatabase()`</Opcion>
+    <Opcion>Una `data class`</Opcion>
+    <Opcion>Un `object`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En Gradle, ¿cómo se añade el compilador de Room?" explicacion="Los compiladores que generan código van con `ksp(...)`; el runtime, con `implementation(...)`.">
+    <Opcion>`implementation(&quot;androidx.room3:room3-compiler:3.0.3&quot;)`</Opcion>
+    <Opcion correcta>`ksp(&quot;androidx.room3:room3-compiler:3.0.3&quot;)`</Opcion>
+    <Opcion>`kapt(&quot;androidx.room3:room3-compiler:3.0.3&quot;)`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué pasa si el `@Provides` de la base de datos no lleva `@Singleton`?" explicacion="Hilt ejecuta la función cada vez que alguien la pide: se crearía una base de datos nueva en cada inyección.">
+    <Opcion>No compila</Opcion>
+    <Opcion correcta>Se crea una base de datos nueva cada vez que se inyecta</Opcion>
+    <Opcion>Nada, Room ya es único</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Un `@HiltViewModel` sin parámetros no necesita `@Inject constructor()`." respuesta={false} explicacion="Lo necesita siempre. El 13/11, cuando falló el build, se le añadió `@Inject constructor()` a `MainViewModel`, que no tenía parámetros." />
+</Quiz>
+
+<Flashcards titulo="Repaso: Room 3">
+  <Tarjeta frente="`@Entity(tableName = &quot;pokemon&quot;)`">Convierte una `data class` en una tabla con ese nombre. Cada propiedad es una columna.</Tarjeta>
+  <Tarjeta frente="`@PrimaryKey`">Marca la clave primaria de la entidad.</Tarjeta>
+  <Tarjeta frente="`@ColumnInfo(name = &quot;image_url&quot;)`">Cambia el nombre de la columna en SQL.</Tarjeta>
+  <Tarjeta frente="Columna que admite NULL">Una propiedad nulable, como `val imageUrl: String?`.</Tarjeta>
+  <Tarjeta frente="`@Dao`">Interfaz con las funciones de acceso. Room genera la implementación.</Tarjeta>
+  <Tarjeta frente="`:id` en una `@Query`">Se sustituye por el parámetro `id` de la función. Solo vale para valores, no para tablas.</Tarjeta>
+  <Tarjeta frente="`@Database(entities, version)`">Sobre una `abstract class` que hereda de `RoomDatabase()`, con un `abstract fun` por DAO.</Tarjeta>
+  <Tarjeta frente="`ksp(...)` frente a `implementation(...)`">`ksp` para los compiladores que generan código (Room, Hilt). `implementation` para lo que va dentro de la app.</Tarjeta>
+  <Tarjeta frente="Database Inspector">View → Tool Windows → App Inspection. Enseña las tablas de Room con la app en marcha.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Una tabla de tareas" dificultad="facil">
+  Escribe la entidad de Room 3 para una tarea con `id` (clave primaria), `title`, `description` (que puede ser nula) e `isCompleted`. La tabla se tiene que llamar `task`.
+
+  <Pista>Una `data class` con `@Entity(tableName = ...)` y `@PrimaryKey` en el `id`.</Pista>
+  <Pista>Lo que puede ser nulo se declara con `?`.</Pista>
+
+  <Solucion>
+
+```kotlin
+import androidx.room3.Entity
+import androidx.room3.PrimaryKey
+
+@Entity(tableName = "task")
+data class TaskEntity(
+    @PrimaryKey
+    val id: Int,
+    val title: String,
+    val description: String?,
+    val isCompleted: Boolean,
+)
+```
+
+  `description` será una columna que admite `NULL`; el resto, `NOT NULL`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="DAO, base de datos y módulo" dificultad="media">
+  Para la `TaskEntity` del ejercicio anterior, escribe:
+
+  1. Un `TaskDao` con una función para insertar una lista, otra para actualizar una tarea y una consulta que devuelva las tareas completadas.
+  2. La `TaskDatabase`.
+  3. El módulo de Hilt que crea la base de datos (con el nombre `task_db`) y da el DAO, sin olvidar que solo debe haber una base de datos.
+
+  <Pista>Para las completadas: `WHERE isCompleted = 1`. En SQLite los `Boolean` se guardan como 0 y 1.</Pista>
+  <Pista>Es igual que el `AppModule` de clase, con `@Singleton` en la base de datos.</Pista>
+
+  <Solucion>
+
+```kotlin
+@Dao
+interface TaskDao {
+    @Insert
+    suspend fun insert(tasks: List<TaskEntity>)
+
+    @Update
+    suspend fun update(task: TaskEntity)
+
+    @Query("SELECT * FROM task WHERE isCompleted = 1")
+    suspend fun getCompleted(): List<TaskEntity>
+}
+
+@Database(entities = [TaskEntity::class], version = 1, exportSchema = false)
+abstract class TaskDatabase : RoomDatabase() {
+    abstract fun taskDao(): TaskDao
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+object DatabaseModule {
+    @Provides
+    @Singleton
+    fun providesDatabase(@ApplicationContext context: Context): TaskDatabase =
+        Room.databaseBuilder<TaskDatabase>(context = context, name = "task_db").build()
+
+    @Provides
+    fun providesTaskDao(db: TaskDatabase): TaskDao = db.taskDao()
+}
+```
+
+  Los imports de Room son de `androidx.room3` (`Dao`, `Insert`, `Update`, `Query`, `Database`, `Room`, `RoomDatabase`). El `@Singleton` y el `exportSchema = false` no se pusieron en clase, pero conviene ponerlos.
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Room">Base de datos local de Android sobre SQLite, con clases y anotaciones en vez de SQL a mano.</Termino>
+  <Termino nombre="Entity">Una `data class` con `@Entity` que es una tabla.</Termino>
+  <Termino nombre="DAO">La interfaz con `@Insert`, `@Update` y `@Query`. Room escribe su implementación.</Termino>
+  <Termino nombre="@Database">La clase abstracta que hereda de `RoomDatabase` y da los DAO.</Termino>
+  <Termino nombre="KSP">El procesador que lee las anotaciones y genera código al compilar. Lo usan Room y Hilt.</Termino>
+  <Termino nombre="@ApplicationContext">Calificador de Hilt para recibir el `Context` de la aplicación.</Termino>
+  <Termino nombre="Database Inspector">Herramienta de Android Studio para ver las tablas de Room en tiempo real.</Termino>
+</Glosario>
+
+<MarcarCompletado />

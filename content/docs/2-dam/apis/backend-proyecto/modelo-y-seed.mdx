@@ -1,0 +1,539 @@
+---
+title: Modelo con relaciones y seed
+description: Cómo pasar del modelo User de clase a un schema.prisma con varias entidades, claves ajenas, relaciones 1 a N y N a N, onDelete, índices y Decimal, y cómo llenar la base con un seed.
+icon: Database
+---
+
+Los requisitos piden **varias entidades relacionadas**, con claves ajenas, campos obligatorios y opcionales, únicos y relaciones 1 a N que se usen de verdad, además de **migraciones** en el repositorio y un **seed** (requisitos, §3). En clase se vio Prisma con el modelo `User` del profesor. Aquí está lo que se vio y cómo llegar a un modelo de verdad.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Leer el `schema.prisma` de clase y sus atributos.
+  - Escribir un modelo con relaciones 1 a N y N a N, y decidir qué pasa al borrar (`onDelete`).
+  - Por qué el dinero va en `Decimal` y las claves ajenas llevan `@@index`.
+  - Crear la migración y un seed que se pueda repetir.
+</Callout>
+
+## Lo que se vio en clase
+
+<DeClase fecha="20/10, 27/10, 03/11" proyecto="node-server-26-27" />
+
+El repositorio de referencia del profesor tiene un `schema.prisma` con tres bloques: el `generator` (genera el cliente), el `datasource` (PostgreSQL, con la URL en `DATABASE_URL`) y los `model`. Desde la v1.1 tiene, además de `User`, el modelo `Media`, con una relación 1 a N: un usuario tiene muchos archivos.
+
+```prisma title="prisma/schema.prisma (repositorio de clase, con Media)"
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  media        Media[]
+}
+
+model Media {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  publicId     String   @unique
+  secureUrl    String
+  format       String
+  resourceType String
+  bytes        Int
+  width        Int?
+  height       Int?
+  originalName String?
+  folder       String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+```
+
+- El modelo `Media` está reconstruido a partir del diff que salió al hacer `db pull` el 03/11: es <Dudoso nota="Reconstruido a partir del diff de `db pull`; los campos pueden no ser exactos.">dudoso en los detalles</Dudoso>. Las migraciones del repositorio son `20251104112830_init` y `20251120090028_add_media_table`.
+
+<NoSeVio titulo="El resto de add_media_table">
+  No se ve el resto de la migración `add_media_table` (los índices y la clave ajena), y el final de la clave ajena que genera `db pull` sale cortado (`map: "Media_us…"`). Tampoco se ve el módulo `media` (Cloudinary y Multer): solo el modelo y las variables de entorno.
+</NoSeVio>
+
+Los atributos que salieron:
+
+| Atributo | Qué hace |
+| --- | --- |
+| `@id` | Clave primaria. |
+| `@default(autoincrement())` | La base pone el número (`SERIAL` en Postgres). |
+| `@unique` | No puede repetirse. Si se repite, Prisma lanza `P2002` (en clase se tradujo a `409`). |
+| `@default(now())` | Fecha y hora al crear la fila. |
+| `?` detrás del tipo | Campo opcional: puede ser `NULL`. |
+| `@relation(fields, references, onDelete)` | Clave ajena: qué columna apunta a qué, y qué pasa al borrar el padre. |
+| `@@index([...])` | Índice sobre una o varias columnas. |
+
+Y los comandos de migración, con lo que se demostró el 03/11 provocando un *drift* a propósito:
+
+| Comando | Para qué |
+| --- | --- |
+| `npx prisma migrate dev --name x` | Crea una migración nueva a partir de los cambios del schema y la aplica. Detecta el *drift* y pide un reset. |
+| `npx prisma migrate status` | Mira solo la tabla `_prisma_migrations`: **no** ve el *drift*. |
+| `npx prisma migrate reset` | Borra la base y aplica todas las migraciones otra vez. Se pierden los datos. (Si tienes seed, también lo ejecuta: lo verás más abajo.) |
+| `npx prisma migrate deploy` | Aplica las migraciones pendientes en producción, sin preguntar. |
+| `npx prisma db pull` | Reescribe el schema a partir de la base (introspección). Después, `generate`. |
+| `npx prisma db push` | Lleva el schema a la base **sin** crear migración. |
+| `npx prisma generate` | Genera el cliente con los tipos. Después de cada cambio del schema y de cada `npm install`. |
+
+Después de un `git pull` el orden es: `npm install` → `npx prisma generate` → `npx prisma migrate dev`.
+
+## Un modelo con relaciones de verdad <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  El repositorio del profesor solo tiene `User` (y `Media`). Un modelo con varias entidades, relaciones N a N, `onDelete: Restrict`, `enum` y `Decimal` no se ha dado en clase. Si en la defensa te preguntan, di que lo has buscado tú.
+</NoDadoEnClase>
+
+El ejemplo de todo el bloque es una tienda: **categorías**, **productos**, **pedidos** y las **líneas** de cada pedido.
+
+<Mermaid
+  titulo="Entidades y relaciones de la tienda"
+  chart={`erDiagram
+  Categoria ||--o{ Producto : "tiene"
+  Producto ||--o{ LineaPedido : "aparece en"
+  Pedido ||--|{ LineaPedido : "tiene"
+  Categoria {
+    Int id PK
+    String nombre UK
+  }
+  Producto {
+    Int id PK
+    String nombre
+    String descripcion "opcional"
+    Decimal precio
+    Int stock
+    Int categoriaId FK
+    DateTime createdAt
+  }
+  Pedido {
+    Int id PK
+    EstadoPedido estado
+    DateTime createdAt
+  }
+  LineaPedido {
+    Int id PK
+    Int cantidad
+    Int pedidoId FK
+    Int productoId FK
+  }`}
+/>
+
+<Recorrido
+  titulo="prisma/schema.prisma"
+  lenguaje="prisma"
+  codigo={`model Categoria {
+  id        Int        @id @default(autoincrement())
+  nombre    String     @unique
+  productos Producto[]
+}
+
+model Producto {
+  id          Int           @id @default(autoincrement())
+  nombre      String
+  descripcion String?
+  precio      Decimal       @db.Decimal(10, 2)
+  stock       Int           @default(0)
+  categoriaId Int
+  categoria   Categoria     @relation(fields: [categoriaId], references: [id], onDelete: Restrict)
+  lineas      LineaPedido[]
+  createdAt   DateTime      @default(now())
+
+  @@index([categoriaId])
+}
+
+enum EstadoPedido {
+  PENDIENTE
+  CONFIRMADO
+  CANCELADO
+}
+
+model Pedido {
+  id        Int           @id @default(autoincrement())
+  estado    EstadoPedido  @default(PENDIENTE)
+  lineas    LineaPedido[]
+  createdAt DateTime      @default(now())
+}
+
+model LineaPedido {
+  id         Int      @id @default(autoincrement())
+  cantidad   Int
+  pedidoId   Int
+  productoId Int
+  pedido     Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Restrict)
+
+  @@index([pedidoId])
+  @@index([productoId])
+}`}
+>
+  <Paso lineas="1-5" titulo="Un nombre único">
+    `@unique` en `nombre`: no puede haber dos categorías que se llamen igual. Si se repite, Prisma lanza `P2002`, que tu API traduce a `409`. `productos Producto[]` es el lado "muchos" de la relación.
+  </Paso>
+  <Paso lineas="9-10" titulo="Obligatorio y opcional">
+    `String` es obligatorio (`NOT NULL`) y `String?` es opcional: la descripción puede no existir.
+  </Paso>
+  <Paso lineas="11" titulo="Decimal para el dinero">
+    `Decimal` con `@db.Decimal(10, 2)`: hasta 10 cifras, 2 de ellas decimales. `Float` redondea mal. En el JSON, Prisma manda los `Decimal` como texto (`"59.9"`) para no perder precisión.
+  </Paso>
+  <Paso lineas="13-14" titulo="La clave ajena: 1 a N">
+    `categoriaId` es la columna que se guarda en la tabla. `categoria` no es una columna: es el campo de relación que Prisma usa para hacer `include`. `onDelete: Restrict` no deja borrar una categoría que tenga productos (error `P2003`).
+  </Paso>
+  <Paso lineas="18" titulo="Índice en la clave ajena">
+    Postgres **no** crea índices en las claves ajenas por su cuenta. Sin `@@index([categoriaId])`, buscar los productos de una categoría recorre la tabla entera.
+  </Paso>
+  <Paso lineas="21-25, 29" titulo="Un enum para el estado">
+    `enum` limita los valores posibles y en Postgres se crea como un tipo propio. `@default(PENDIENTE)`: todo pedido nace pendiente.
+  </Paso>
+  <Paso lineas="34-44" titulo="N a N con datos: la tabla de en medio">
+    Un pedido tiene muchos productos y un producto está en muchos pedidos. Se resuelve con `LineaPedido`, que además guarda la `cantidad`. Tiene dos claves ajenas.
+  </Paso>
+  <Paso lineas="39-40" titulo="Dos onDelete distintos">
+    Al borrar un pedido, sus líneas no tienen sentido: `Cascade` las borra con él. Pero un producto que está en algún pedido no se debe poder borrar: `Restrict`.
+  </Paso>
+</Recorrido>
+
+Lo que te preguntarán en la defensa, resumido:
+
+- **1 a N:** `Categoria` tiene `productos Producto[]` (muchos) y `Producto` tiene `categoriaId` + `categoria` (uno). Solo `categoriaId` existe en la base; `categoria` y `productos` solo existen en Prisma.
+- **N a N con datos:** una tabla en medio (`LineaPedido`) con las dos claves ajenas y los datos propios de la relación (`cantidad`).
+- **Obligatorio u opcional:** `String` frente a `String?`.
+- **Único:** `@unique`, error `P2002` si se repite.
+- **`onDelete`:** qué pasa con los hijos al borrar el padre.
+- **`Decimal` para el dinero** e **`@@index`** en las claves ajenas.
+
+<Callout title="Si has visto JPA en Java">
+  `categoriaId` + `categoria @relation(...)` es lo que en JPA sería un `@ManyToOne` con `@JoinColumn(name = "categoriaId")`, y `productos Producto[]` el `@OneToMany(mappedBy = "categoria")`. La diferencia es que en Prisma el modelo se escribe en `schema.prisma` y el cliente con los tipos se genera solo.
+</Callout>
+
+### Qué pasa al borrar el padre
+
+| `onDelete` | Al borrar el padre… | Ejemplo |
+| --- | --- | --- |
+| `Cascade` | Se borran también los hijos. | El pedido y sus líneas. En clase, el usuario y sus `Media`. |
+| `Restrict` | No deja borrarlo si tiene hijos: error `P2003`. | Una categoría con productos. |
+| `SetNull` | Los hijos se quedan con la clave ajena a `NULL`. Solo vale si el campo es opcional (`Int?`). | Una tarea cuyo responsable se da de baja. |
+
+Si no pones `onDelete`, Prisma usa `Restrict` cuando la clave ajena es obligatoria y `SetNull` cuando es opcional. Ponlo siempre a mano: así queda claro que lo has decidido tú.
+
+### Por qué Decimal y no Float
+
+<Comparar titulo="El precio en el modelo" columnas>
+  <Lado tipo="evitar" titulo="Con Float">
+
+```prisma
+precio Float
+```
+
+`0.1 + 0.2` da `0.30000000000000004`. Con precios, los totales acaban con céntimos de más o de menos.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Con Decimal">
+
+```prisma
+precio Decimal @db.Decimal(10, 2)
+```
+
+Guarda exactamente 2 decimales. Llega a Angular como texto (`"59.9"`).
+
+  </Lado>
+</Comparar>
+
+### Crear la migración
+
+Con el schema escrito, la migración se crea igual que en clase:
+
+<Terminal titulo="bash">
+{`$ npx prisma migrate dev --name tienda
+Applying migration \`20261209100000_tienda\`
+Your database is now in sync with your schema.`}
+</Terminal>
+
+Genera una carpeta `prisma/migrations/<fecha>_tienda/` con el `migration.sql`. **Súbela al repositorio**, que es uno de los requisitos. Parte de lo que genera para este modelo:
+
+```sql title="migration.sql (fragmento)"
+-- CreateEnum
+CREATE TYPE "EstadoPedido" AS ENUM ('PENDIENTE', 'CONFIRMADO', 'CANCELADO');
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Categoria_nombre_key" ON "Categoria"("nombre");
+CREATE INDEX "Producto_categoriaId_idx" ON "Producto"("categoriaId");
+
+-- AddForeignKey
+ALTER TABLE "Producto" ADD CONSTRAINT "Producto_categoriaId_fkey"
+  FOREIGN KEY ("categoriaId") REFERENCES "Categoria"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+```
+
+El nombre de la carpeta y el texto exacto de la terminal dependen del día y de la versión: lo importante es que sale una migración nueva por cada cambio.
+
+## Seed <NoDadoEnClase inline />
+
+<NoDadoEnClase titulo="Seed con Prisma">
+  El seed no se ha hecho nunca en clase: `db seed` solo apareció en la ayuda de Prisma el 03/11. Los requisitos (§3) lo piden expresamente y el H8 pide que esté operativo.
+</NoDadoEnClase>
+
+Un **seed** es un script que llena la base con datos de prueba, para no meterlos a mano cada vez que la borras. Va en `prisma/seed.ts`:
+
+<Recorrido
+  titulo="prisma/seed.ts"
+  lenguaje="ts"
+  codigo={`import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+async function main() {
+  await prisma.lineaPedido.deleteMany();
+  await prisma.pedido.deleteMany();
+  await prisma.producto.deleteMany();
+  await prisma.categoria.deleteMany();
+
+  const perifericos = await prisma.categoria.create({
+    data: {
+      nombre: 'Periféricos',
+      productos: {
+        create: [
+          { nombre: 'Teclado mecánico', precio: 59.9, stock: 12 },
+          { nombre: 'Ratón inalámbrico', precio: 24.5, stock: 30 },
+        ],
+      },
+    },
+  });
+
+  await prisma.categoria.create({
+    data: {
+      nombre: 'Monitores',
+      productos: {
+        create: [{ nombre: 'Monitor de 27 pulgadas', descripcion: 'IPS, 144 Hz', precio: 229, stock: 5 }],
+      },
+    },
+  });
+
+  const teclado = await prisma.producto.findFirstOrThrow({ where: { nombre: 'Teclado mecánico', categoriaId: perifericos.id } });
+
+  await prisma.pedido.create({
+    data: { lineas: { create: [{ productoId: teclado.id, cantidad: 2 }] } },
+  });
+
+  console.log('Seed terminado');
+}
+
+main()
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());`}
+>
+  <Paso lineas="1-3" titulo="Su propio PrismaClient">
+    El seed se ejecuta aparte de la API, así que crea su propio cliente en vez de importar el de `config/db.ts`.
+  </Paso>
+  <Paso lineas="6-9" titulo="Borrar de hijos a padres">
+    Primero las líneas, luego los pedidos, los productos y las categorías. Al revés, las claves ajenas no dejan (`Restrict`). Así el seed se puede ejecutar muchas veces y siempre deja lo mismo.
+  </Paso>
+  <Paso lineas="11-21" titulo="Escritura anidada">
+    `productos: { create: [...] }` dentro de la categoría crea la categoría y sus productos de una vez. Prisma pone el `categoriaId` solo. El precio se puede pasar como número aunque el campo sea `Decimal`.
+  </Paso>
+  <Paso lineas="32" titulo="Buscar algo ya creado">
+    `findFirstOrThrow` devuelve el primero que cumpla el `where` o lanza un error si no hay ninguno. Hace falta el id del teclado para la línea del pedido. Se busca también por `nombre` porque en Periféricos hay dos productos y, sin `orderBy`, "el primero" puede ser cualquiera.
+  </Paso>
+  <Paso lineas="34-36" titulo="Un pedido con su línea">
+    Otra escritura anidada: el pedido y su línea a la vez. El estado se queda en `PENDIENTE` por el `@default`.
+  </Paso>
+  <Paso lineas="41-46" titulo="Errores y desconexión">
+    Si algo falla, se escribe el error y el proceso termina con código 1 (así `migrate reset` se entera de que ha fallado). Pase lo que pase, `$disconnect()` cierra la conexión.
+  </Paso>
+</Recorrido>
+
+<Callout type="warn" title="Si tu proyecto tiene usuarios">
+  Guarda la contraseña hasheada, igual que en el registro de clase: `passwordHash: await bcrypt.hash('password123', 10)`. Si la guardas en claro, `bcrypt.compare` del login no coincidirá y no podrás entrar con esos usuarios. Y que tenga **al menos 8 caracteres**: el `loginSchema` de clase exige `min(8)`, así que con una contraseña como `1234` el login responde `400` antes de comprobarla.
+</Callout>
+
+### Cómo se ejecuta
+
+En el `package.json`, se le dice a Prisma qué comando lanza el seed:
+
+```json title="package.json"
+"prisma": {
+  "seed": "tsx prisma/seed.ts"
+}
+```
+
+<Terminal titulo="bash">
+{`$ npx prisma db seed
+Seed terminado
+$ npx prisma migrate reset`}
+</Terminal>
+
+- `npx prisma db seed` ejecuta el seed.
+- `npx prisma migrate reset` borra la base, aplica todas las migraciones y **ejecuta el seed** al final. Es lo que conviene enseñar en la defensa: la base vuelve limpia y con datos.
+- Prisma 6 avisa de que la clave `prisma` del `package.json` desaparecerá en Prisma 7 (allí va en `prisma.config.ts`). Con Prisma 6 funciona. También vale un script normal, `"seed": "tsx prisma/seed.ts"` dentro de `scripts`, y ejecutarlo con `npm run seed`.
+
+## Practica
+
+<CompletarCodigo
+  titulo="Una relación 1 a N"
+  enunciado="Un autor tiene muchos libros. Completa el modelo Libro para que no se pueda borrar un autor que tenga libros, y añade el índice de la clave ajena."
+  lenguaje="prisma"
+  codigo={`model Libro {
+  id      Int    @id @default(autoincrement())
+  titulo  String
+  autorId [[Int]]
+  autor   [[Autor]] @relation(fields: [autorId], references: [id], onDelete: [[Restrict|NoAction]])
+
+  @@[[index]]([autorId])
+}`}
+/>
+
+<Quiz titulo="Test: modelo y seed" descripcion="7 preguntas">
+  <Pregunta enunciado="En `Producto`, ¿cuál de estos campos es una columna de la tabla en la base de datos?" explicacion="`categoriaId` es la clave ajena que se guarda. `categoria` y `lineas` son campos de relación: solo existen en Prisma para poder hacer `include`.">
+    <Opcion correcta>`categoriaId`</Opcion>
+    <Opcion>`categoria`</Opcion>
+    <Opcion>`lineas`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Intentas borrar una categoría que tiene productos y la relación tiene `onDelete: Restrict`. ¿Qué pasa?" explicacion="`Restrict` no deja borrar el padre mientras tenga hijos. Prisma lanza `P2003`, que tu API traduce a `409`.">
+    <Opcion>Se borran la categoría y sus productos</Opcion>
+    <Opcion>Los productos se quedan con `categoriaId` a `NULL`</Opcion>
+    <Opcion correcta>No se borra y Prisma lanza el error `P2003`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cómo se hace en Prisma una relación N a N que además guarda la cantidad?" explicacion="Con una entidad en medio (`LineaPedido`) que tiene las dos claves ajenas y sus propios campos.">
+    <Opcion>Con un campo `Producto[]` en `Pedido` y otro `Pedido[]` en `Producto`, sin más</Opcion>
+    <Opcion correcta>Con un modelo intermedio con las dos claves ajenas y el campo `cantidad`</Opcion>
+    <Opcion>Guardando un array de ids en una columna de texto</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="PostgreSQL crea automáticamente un índice en cada clave ajena." respuesta={false} explicacion="Crea índices para las claves primarias y los únicos, pero no para las claves ajenas. Por eso se añade `@@index([categoriaId])`." />
+  <Pregunta tipo="texto" enunciado="¿Qué comando borra la base, aplica todas las migraciones y ejecuta el seed?" respuesta={["npx prisma migrate reset", "prisma migrate reset"]} explicacion="`npx prisma migrate reset`. Pierde todos los datos, así que solo en desarrollo." />
+  <Pregunta enunciado="¿Por qué el seed borra primero las líneas de pedido y al final las categorías?" explicacion="Hay que borrar de hijos a padres. Si borras antes una categoría con productos, `Restrict` lo impide.">
+    <Opcion>Porque es más rápido</Opcion>
+    <Opcion correcta>Porque las claves ajenas no dejan borrar un padre que todavía tiene hijos</Opcion>
+    <Opcion>Porque `deleteMany` solo funciona en ese orden alfabético</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Un producto tiene `precio Decimal`. ¿Cómo llega el precio en el JSON de la API?" explicacion="Prisma convierte los `Decimal` a texto para no perder decimales. Conviértelo a número en el cliente si necesitas operar con él.">
+    <Opcion>Como número: `59.9`</Opcion>
+    <Opcion correcta>Como texto: `"59.9"`</Opcion>
+    <Opcion>Como objeto: `{ "d": [59, 9] }`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: modelo y seed">
+  <Tarjeta frente="`String` frente a `String?`">`String` es obligatorio (`NOT NULL`); `String?` es opcional y puede ser `NULL`.</Tarjeta>
+  <Tarjeta frente="¿Qué error lanza Prisma al repetir un `@unique`?">`P2002`. Se traduce a `409 Conflict`.</Tarjeta>
+  <Tarjeta frente="¿Qué error lanza al borrar un padre con `Restrict`?">`P2003` (falla la clave ajena). También se traduce a `409`.</Tarjeta>
+  <Tarjeta frente="`onDelete: Cascade`">Al borrar el padre, se borran sus hijos. En clase, al borrar un `User` se borran sus `Media`.</Tarjeta>
+  <Tarjeta frente="¿Por qué `@@index` en la clave ajena?">Postgres no indexa las claves ajenas solo; sin índice, buscar los hijos de un padre recorre la tabla entera.</Tarjeta>
+  <Tarjeta frente="Escritura anidada">Crear un registro y sus relacionados de una vez: `categoria.create({ data: { nombre, productos: { create: [...] } } })`.</Tarjeta>
+  <Tarjeta frente="`migrate status` frente a `migrate dev` con *drift*">`status` solo mira `_prisma_migrations` y no lo ve; `migrate dev` sí lo detecta y pide un reset.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Modelo de una app de reservas" dificultad="media">
+  Escribe el `schema.prisma` de una app de reservas de pistas: una **pista** (nombre único, deporte, precio por hora) tiene muchos **huecos** (fecha y hora de inicio, libre u ocupado), y un **usuario** (email único, nombre, `passwordHash`) hace **reservas** de huecos. Cada hueco tiene como mucho una reserva. Decide el `onDelete` de cada relación y añade los índices.
+
+  <Pista>Para "como mucho una reserva por hueco", pon `@unique` en `huecoId` dentro de `Reserva`: eso convierte la relación en 1 a 1.</Pista>
+  <Pista>¿Tiene sentido borrar una pista que tiene reservas? ¿Y un usuario? Piensa qué datos perderías con `Cascade`.</Pista>
+
+  <Solucion>
+
+```prisma title="prisma/schema.prisma"
+model Usuario {
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  nombre       String
+  passwordHash String
+  reservas     Reserva[]
+  createdAt    DateTime  @default(now())
+}
+
+model Pista {
+  id           Int     @id @default(autoincrement())
+  nombre       String  @unique
+  deporte      String
+  precioHora   Decimal @db.Decimal(8, 2)
+  huecos       Hueco[]
+}
+
+model Hueco {
+  id      Int      @id @default(autoincrement())
+  inicio  DateTime
+  libre   Boolean  @default(true)
+  pistaId Int
+  pista   Pista    @relation(fields: [pistaId], references: [id], onDelete: Cascade)
+  reserva Reserva?
+
+  @@index([pistaId])
+}
+
+model Reserva {
+  id        Int      @id @default(autoincrement())
+  usuarioId Int
+  huecoId   Int      @unique
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  hueco     Hueco    @relation(fields: [huecoId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  @@index([usuarioId])
+}
+```
+
+- Borrar una pista borra sus huecos (`Cascade`), pero si algún hueco tiene reserva, el `Restrict` de `Reserva.hueco` lo impide: no se pierden reservas sin querer.
+- `huecoId` es `@unique`, así que ya tiene índice; `usuarioId` necesita el suyo.
+- Otras decisiones también valen si sabes explicarlas.
+
+</Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="El seed de las reservas" dificultad="facil">
+  Escribe el `main()` de un seed para el modelo anterior: borra todo en el orden correcto y crea una pista con tres huecos (con escritura anidada) y un usuario con la contraseña `password123` hasheada.
+
+  <Pista>El orden de borrado es de hijos a padres: reservas, huecos, pistas y usuarios.</Pista>
+  <Pista>Para hashear, `import bcrypt from 'bcrypt'` y `await bcrypt.hash('password123', 10)`.</Pista>
+
+  <Solucion>
+
+```ts title="prisma/seed.ts"
+async function main() {
+  await prisma.reserva.deleteMany();
+  await prisma.hueco.deleteMany();
+  await prisma.pista.deleteMany();
+  await prisma.usuario.deleteMany();
+
+  await prisma.pista.create({
+    data: {
+      nombre: 'Pista 1',
+      deporte: 'pádel',
+      precioHora: 12,
+      huecos: {
+        create: [
+          { inicio: new Date('2027-01-11T17:00:00') },
+          { inicio: new Date('2027-01-11T18:00:00') },
+          { inicio: new Date('2027-01-11T19:00:00') },
+        ],
+      },
+    },
+  });
+
+  await prisma.usuario.create({
+    data: {
+      email: 'prueba@example.com',
+      nombre: 'Usuario de prueba',
+      passwordHash: await bcrypt.hash('password123', 10),
+    },
+  });
+}
+```
+
+</Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

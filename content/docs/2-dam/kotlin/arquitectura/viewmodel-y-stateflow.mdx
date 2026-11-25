@@ -1,0 +1,704 @@
+---
+title: ViewModel y StateFlow
+description: Cómo se pasa el estado de una pantalla de Compose a un ViewModel. Data class con copy(), backing property, MutableStateFlow, collectAsStateWithLifecycle y formularios con TextFieldState, tal como se vio en clase.
+icon: Activity
+---
+
+import { StateFlowIgualdad } from '@/components/temas/arquitectura/stateflow-igualdad';
+
+El **ViewModel** es la clase que guarda el estado de una pantalla. La pantalla lo lee para pintarse y le avisa de lo que hace el usuario. En clase se llegó a él en dos pasos: el 07/10, con el TipCalculator, se sacó el estado del composable a un ViewModel; el 16/10 y el 23/10, en la ToDoApp, ese estado pasó a ser un `StateFlow` que la pantalla **observa**.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Por qué el estado sale del composable y se va a un ViewModel.
+  - El estado como `data class` inmutable y `copy()`.
+  - La <Concepto termino="Backing property" definicion="Un `_estado` privado que solo el ViewModel puede cambiar y un `estado` público de solo lectura que lee la pantalla. Convención: guion bajo delante del privado.">backing property</Concepto> `_state` y `state`.
+  - `MutableStateFlow`, `asStateFlow()` y `collectAsStateWithLifecycle()`.
+  - Formularios con `TextFieldState` dentro del ViewModel.
+  - Cómo obtiene cada pantalla su ViewModel.
+</Callout>
+
+## Del estado en la pantalla al ViewModel
+
+<DeClase fecha="07/10" proyecto="TipCalculator" />
+
+El TipCalculator es una calculadora de propinas: importe, comensales, un `Switch` para añadir propina y un `Slider` para elegir cuánta. La clase empezó con **todo el estado dentro del composable**:
+
+```kotlin title="TipCalculatorScreen.kt (punto de partida)"
+@Composable
+fun TipCalculatorScreen() {
+    var totalAmount by rememberSaveable { mutableStateOf("0.0") }
+    val guestNumberState = remember { TextFieldState(initialText = "0") }
+    var checked by rememberSaveable { mutableStateOf(false) }
+    var tipValue by rememberSaveable { mutableFloatStateOf(0.0F) }
+    var splitResult by rememberSaveable { mutableStateOf("") }
+    // ...
+}
+```
+
+Funciona, pero la pantalla hace dos trabajos: pintar y calcular. El objetivo de la clase fue moverlo todo a un `ViewModel` (de `androidx.lifecycle`), que:
+
+- **guarda el estado** de la pantalla en un solo objeto;
+- tiene **una función por evento** (`changeTip`, `calculateSplit`), así que la pantalla no tiene lógica;
+- **sobrevive al giro del móvil**: Android destruye y vuelve a crear la Activity, pero el ViewModel sigue ahí.
+
+<NoSeVio titulo="Principio del 07/10">
+  El vídeo de esta clase se grabó mal: no hay capturas del minuto 00:00 al 15:42. Lo que se explicó en ese tramo no se puede reconstruir.
+</NoSeVio>
+
+### El estado como data class y `copy()`
+
+<Recorrido
+  titulo="TipCalculatorViewModel.kt"
+  lenguaje="kotlin"
+  codigo={`class TipCalculatorViewModel(): ViewModel() {
+    private var _state = TipCalculatorScreenState()
+    val state: TipCalculatorScreenState
+        get() = _state
+
+    fun calculateSplit() { }
+
+    fun changeTip(isEnabled: Boolean) {
+        _state = _state.copy(
+            tip = isEnabled,
+            tipAmount = if (!isEnabled) 0.0f else _state.tipAmount
+        )
+    }
+}
+
+data class TipCalculatorScreenState(
+    val guests: String = "0",
+    val amount: String = "0.00",
+    val tip: Boolean = false,
+    val tipAmount: Float = 0.0F,
+    val result: String = "",
+    val isCaculateEnabled: Boolean = false
+)`}
+>
+  <Paso lineas="16-23" titulo="Todo el estado en una data class">
+    Cada campo es `val` y tiene **valor por defecto**, así que `TipCalculatorScreenState()` ya es el estado inicial. Una `data class` genera `equals`, `hashCode`, `toString` y `copy()`, lo que en Java te haría un record o mucho código a mano.
+  </Paso>
+  <Paso lineas="2-4" titulo="Backing property">
+    `_state` es privado y se puede reasignar (`var`). Fuera solo se ve `state`, con un getter personalizado (`get() = _state`) y sin setter. La pantalla puede leer el estado, pero no cambiarlo.
+  </Paso>
+  <Paso lineas="8-13" titulo="Un evento, un estado nuevo">
+    `changeTip` no modifica el estado: crea **uno nuevo** con `copy()`, cambiando solo los campos que se nombran (`tip` y `tipAmount`). El resto se copia tal cual.
+  </Paso>
+  <Paso lineas="11" titulo="if como expresión">
+    En Kotlin `if` devuelve un valor (como el operador `? :` de Java). Por eso, cuando se usa como expresión, **necesita `else`**: en clase el IDE marcó error mientras faltaba.
+  </Paso>
+  <Paso lineas="6" titulo="Funciones a medias">
+    `calculateSplit()` se quedó vacía en esta clase, igual que el `onValueChange` del `Slider`.
+  </Paso>
+</Recorrido>
+
+- <Dudoso nota="Casi todas las capturas ponen `isCaculateEnabled`; una pone `isCalculateEnabled`. Puede ser una errata del profesor.">`isCaculateEnabled`</Dudoso>: así se lee el campo en casi todas las capturas.
+
+Antes de llegar ahí, el ViewModel tenía `val state = TipCalculatorScreenState()` y `changeTip` hacía `state.tip = isEnabled`, lo que obligaba a que `tip` fuera `var`. Al pasar todos los campos a `val`, esa línea dejó de compilar y apareció el patrón de `copy()`:
+
+<Comparar titulo="De mutar el estado a copiarlo (07/10)" columnas>
+  <Lado titulo="Primero (min. 24:37)">
+
+```kotlin
+val state = TipCalculatorScreenState()
+
+fun changeTip(isEnabled: Boolean) {
+    state.tip = isEnabled
+}
+```
+
+Necesita `var tip` en la data class.
+
+  </Lado>
+  <Lado titulo="Después (min. 27:15)">
+
+```kotlin
+private var _state = TipCalculatorScreenState()
+
+fun changeTip(isEnabled: Boolean) {
+    _state = _state.copy(tip = isEnabled)
+}
+```
+
+Todos los campos son `val`. (Simplificado: en clase `copy` también cambia `tipAmount`.)
+
+  </Lado>
+</Comparar>
+
+### Conectar la pantalla con el ViewModel
+
+La pantalla lee del estado y manda los eventos al ViewModel. Los controles son **controlados**: su valor sale del estado y el cambio se le pasa al ViewModel.
+
+```kotlin title="TipCalculatorScreen.kt (min. 29:15)"
+Switch(
+    checked = viewModel.state.tip,
+    onCheckedChange = viewModel::changeTip
+)
+Slider(
+    enabled = viewModel.state.tip,
+    value = viewModel.state.tipAmount,
+    onValueChange = { },
+    steps = 3,
+    valueRange = 0f..4f
+)
+Button(
+    enabled = viewModel.state.isCaculateEnabled,
+    onClick = viewModel::calculateSplit
+) {
+    Text("Calcular")
+}
+```
+
+Para el `onClick` del botón se probaron tres formas:
+
+| Forma | ¿Vale? | Qué es |
+| --- | --- | --- |
+| `onClick = viewModel.calculateSplit` | No compila | Una función no se puede nombrar así sin llamarla: Kotlin espera `calculateSplit()` o una referencia con `::`. |
+| `onClick = viewModel::calculateSplit` | Sí | **Referencia a función**: pasas la función sin llamarla, como `this::metodo` en Java. Es la que se quedó. |
+| `onClick = { viewModel.calculateSplit() }` | Sí | Una lambda que llama a la función. Hace lo mismo. |
+
+`onCheckedChange` espera una función `(Boolean) -> Unit`, y `changeTip(isEnabled: Boolean)` encaja, por eso vale `viewModel::changeTip`.
+
+### Lo que falló en el TipCalculator
+
+<Comparar titulo="Un estado que la pantalla no ve cambiar">
+  <Lado tipo="evitar">
+
+```kotlin
+class TipCalculatorViewModel(): ViewModel() {
+    private var _state = TipCalculatorScreenState()
+    val state: TipCalculatorScreenState
+        get() = _state
+}
+```
+
+`_state` es una variable normal. Cuando `changeTip` la reasigna, **Compose no se entera** y no vuelve a pintar la pantalla: el `Switch` no cambia. El profesor dejó el comentario `TODO Corregir esto para que vaya perfecto` y la línea `var screenState by rememberSaveable { viewModel.state }` se quedó con errores.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+class TipCalculatorViewModel : ViewModel() {
+    private val _state = MutableStateFlow(TipCalculatorScreenState())
+    val state: StateFlow<TipCalculatorScreenState>
+        get() = _state.asStateFlow()
+
+    fun changeTip(isEnabled: Boolean) {
+        _state.value = _state.value.copy(
+            tip = isEnabled,
+            tipAmount = if (!isEnabled) 0.0f else _state.value.tipAmount
+        )
+    }
+}
+```
+
+<NoDadoEnClase inline /> Un estado **observable**: es el patrón que se usó en la ToDoApp a partir del 16/10 (lo verás en las secciones de abajo), pero en las capturas no se ve aplicado al TipCalculator.
+
+  </Lado>
+</Comparar>
+
+<NoDadoEnClase titulo="El ViewModel como valor por defecto">
+  En esta clase la pantalla recibía `viewModel: TipCalculatorViewModel = TipCalculatorViewModel()`. No conviene: el valor por defecto se evalúa **cada vez** que se llama a la función, y Compose la vuelve a llamar en cada recomposición, así que crearía un ViewModel nuevo (y perdería el estado) una y otra vez. Tampoco sobrevive al giro. Desde el 09/10 se usó `hiltViewModel()`, que devuelve siempre el mismo ViewModel para esa pantalla.
+</NoDadoEnClase>
+
+## Un estado observable con StateFlow
+
+<DeClase fecha="16/10" proyecto="ToDoApp" rama="dev" nota="clase «Algo de flujo, parte 1»" />
+
+El 09/10 la pantalla de la lista hacía `items(items = viewModel.readAll(), ...)` y el propio código tenía un comentario del profesor: `TODO COMO HAGO ESTO QUE SEA OBSERVABLE?`. La respuesta del 16/10 fue un <Concepto termino="StateFlow" definicion="Un `Flow` que siempre tiene un valor actual. Quien lo recoge recibe ese valor y cada valor nuevo que se publique.">StateFlow</Concepto>:
+
+```kotlin title="ui/TaskListViewModel.kt (16/10)"
+@HiltViewModel
+class TaskListViewModel @Inject constructor(
+    private val _repository: TaskRepository
+) : ViewModel() {
+    val state = MutableStateFlow(value = _repository.readAll())
+}
+```
+
+Al escribirlo, el autocompletado ofrecía dos cosas parecidas y el profesor enseñó la diferencia:
+
+| | Paquete | Para qué |
+| --- | --- | --- |
+| `MutableStateFlow` | `kotlinx.coroutines.flow` | Un flujo con valor actual. No depende de Compose. Es el que se usó en el ViewModel. |
+| `MutableState` (`mutableStateOf`) | Compose | El estado de Compose que usabas con `remember`. |
+
+### Recogerlo en la pantalla
+
+```kotlin title="ui/TaskListScreen.kt (16/10)"
+val state by viewModel.state.collectAsStateWithLifecycle()
+```
+
+- `collectAsStateWithLifecycle()` convierte el `StateFlow` en un `State` de Compose: cada vez que el flujo publica un valor, la pantalla se recompone.
+- `by` es **delegación**: `state` se usa como un valor normal y no como `state.value`. Para que compile hace falta el import `androidx.compose.runtime.getValue` (el IDE lo ofrece).
+- Viene de la librería `lifecycle-runtime-compose`. Si falta, sale `Unresolved reference: collectAsStateWithLifecycle`.
+
+Se comparó con `collectAsState()`, que también existe:
+
+| | Cuándo deja de recoger |
+| --- | --- |
+| `collectAsState()` | Solo cuando el composable sale de la composición. Con la app en segundo plano sigue recogiendo. |
+| `collectAsStateWithLifecycle()` | Cuando el ciclo de vida baja de `STARTED` (por defecto, `minActiveState = STARTED`): por ejemplo, con la app en segundo plano. Es la que se usó en clase. |
+
+<Comparar titulo="Recoger el estado y no usarlo (16/10)">
+  <Lado tipo="evitar">
+
+```kotlin
+val state by viewModel.state.collectAsStateWithLifecycle()
+// ...
+LazyColumn(modifier = modifier) {
+    items(items = viewModel.readAll(), key = { it.id }) {
+        TaskCard(/* ... */)
+    }
+}
+```
+
+Al acabar la clase, la pantalla recogía `state`, pero la lista seguía pintando `viewModel.readAll()`. Además, `MutableStateFlow(_repository.readAll())` se crea una sola vez, así que la lista no cambiaba al crear una tarea.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+val state by viewModel.state.collectAsStateWithLifecycle()
+// ...
+LazyColumn(modifier = modifier) {
+    items(items = state, key = { it.id }) {
+        TaskCard(/* ... */)
+    }
+}
+```
+
+<NoDadoEnClase inline /> La lista sale del estado que se observa. En la clase siguiente (23/10) se rehízo todo con estados sellados, que es lo que ves en [Estados de pantalla](/docs/2-dam/kotlin/arquitectura/estados-de-pantalla).
+
+  </Lado>
+</Comparar>
+
+## Backing property con StateFlow
+
+<DeClase fecha="23/10" proyecto="ToDoApp" rama="dev" />
+
+El 23/10 el estado quedó con la forma que se repite en todos los ViewModels de clase: un `MutableStateFlow` **privado** que solo cambia el ViewModel y un `StateFlow` **público** de solo lectura.
+
+<Tabs items={['Kotlin (clase)', 'La misma idea en Java']}>
+  <Tab value="Kotlin (clase)">
+
+```kotlin title="ui/tasklist/TaskListViewModel.kt"
+private val _state = MutableStateFlow<TaskListScreenState>(TaskListScreenState.Loading)
+val state: StateFlow<TaskListScreenState>
+    get() = _state.asStateFlow()
+```
+
+  </Tab>
+  <Tab value="La misma idea en Java">
+
+```java title="Contador.java"
+public class Contador {
+    private int valor = 0;          // solo la clase lo cambia
+
+    public int getValor() {         // fuera solo se puede leer
+        return valor;
+    }
+}
+```
+
+  </Tab>
+</Tabs>
+
+- `MutableStateFlow<TaskListScreenState>(...)`: el tipo va explícito porque el valor inicial (`Loading`) es un subtipo. Sin él, Kotlin deduciría `MutableStateFlow<Loading>` y no podrías guardar `Success`.
+- `asStateFlow()` lo expone como `StateFlow`, que no tiene `value` modificable. Desde la pantalla no se puede hacer `state.value = ...`.
+- Para cambiar el estado, el ViewModel asigna `_state.value = TaskListScreenState.Success(tasks)`.
+- La convención del guion bajo (`_state`, `_repository`, `_uiState`) se usó en todos los proyectos de clase.
+
+### El viaje del estado
+
+Así se mueven los datos entre la pantalla y el ViewModel de la lista. Los **eventos** suben como llamadas a funciones y el **estado** baja por el `StateFlow`. A esto se le suele llamar flujo unidireccional; el nombre no salió en clase, pero el código lo sigue.
+
+<Flujo titulo="La pantalla de lista observa al ViewModel" nodos={["Pantalla", "ViewModel", "Repositorio"]}>
+  <Mensaje de="Pantalla" a="ViewModel" titulo="collectAsStateWithLifecycle()">
+    La pantalla empieza a recoger `state`. Recibe enseguida el valor actual, `Loading`, y pinta el indicador de carga.
+  </Mensaje>
+  <Mensaje de="ViewModel" a="ViewModel" titulo="init { load() }">
+    Al crearse, el ViewModel llama a `load()`, que lanza una corrutina con `viewModelScope.launch`.
+  </Mensaje>
+  <Mensaje de="ViewModel" a="Repositorio" titulo="readAll()">
+    `readAll()` es `suspend`: la corrutina espera la respuesta sin bloquear la pantalla.
+  </Mensaje>
+  <Mensaje de="Repositorio" a="Repositorio" titulo="delay(5_000L)">
+    El repositorio en memoria simula una red lenta esperando 5 segundos.
+  </Mensaje>
+  <Mensaje de="Repositorio" a="ViewModel" tipo="respuesta" titulo="La lista de tareas">
+    Devuelve una copia de la lista de tareas.
+  </Mensaje>
+  <Mensaje de="ViewModel" a="ViewModel" titulo="_state.value = Success(tasks)">
+    El ViewModel publica el estado nuevo en su `MutableStateFlow` privado.
+  </Mensaje>
+  <Mensaje de="ViewModel" a="Pantalla" tipo="respuesta" titulo="Nuevo state">
+    El `StateFlow` emite, `collectAsStateWithLifecycle()` actualiza el `State` y Compose vuelve a pintar la pantalla con la lista.
+  </Mensaje>
+</Flujo>
+
+## La lista que no se actualiza
+
+<DeClase fecha="16/10, 23/10" proyecto="ToDoApp" />
+
+El repositorio en memoria también expone un `StateFlow`, `tasks`, pero tiene una trampa. Mira esta parte del código de clase:
+
+```kotlin title="data/repository/TaskRepositoryInMemory.kt (23/10, fragmento)"
+private val _taskList = mutableListOf<Task>()
+private val _taskFlow = MutableStateFlow(_taskList)
+
+// dentro de create(...)
+if (_taskList.add(newTask)) {
+    nextId++
+    _taskFlow.value = _taskList
+}
+```
+
+Un `StateFlow` **solo emite si el valor nuevo es distinto del anterior**, y lo comprueba con `equals`. Aquí siempre se le asigna **el mismo objeto** `_taskList`, que se ha modificado por dentro. Para el `StateFlow`, el valor "no ha cambiado", así que no avisa a nadie. Pruébalo:
+
+<StateFlowIgualdad />
+
+En el modo "Así se hizo en clase", la tarea nueva entra en `_taskList`, pero el contador de emisiones no sube y la pantalla sigue con la lista vieja. Con una copia (`toList()`), cada `create` publica una lista nueva, distinta de la anterior, y la pantalla se pinta otra vez.
+
+- Que esto sea la causa de lo que pasó en clase es <Dudoso nota="El resumen revisado lo plantea como probable, no confirmado.">probable</Dudoso>: el 16/10 se vio que la lista no se actualizaba y el 23/10, depurando, se siguió `create()` hasta `_taskFlow.value = _taskList`. Que `readAll()` solo se llamaba una vez, en el `init`, se deduce de esa depuración; no se ve que el profesor lo dijera. El profesor no llegó a cambiar esta línea en las capturas.
+
+<Comparar titulo="Publicar la lista en el StateFlow">
+  <Lado tipo="evitar">
+
+```kotlin
+private val _taskFlow = MutableStateFlow(_taskList)
+
+if (_taskList.add(newTask)) {
+    nextId++
+    _taskFlow.value = _taskList
+}
+```
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+private val _taskFlow = MutableStateFlow<List<Task>>(emptyList())
+
+if (_taskList.add(newTask)) {
+    nextId++
+    _taskFlow.value = _taskList.toList()
+}
+```
+
+<NoDadoEnClase inline /> Cada vez se publica una lista nueva. Ojo: el tipo tiene que ser `MutableStateFlow<List<Task>>`, porque con `MutableStateFlow(_taskList)` Kotlin deduce `MutableList<Task>` y `toList()` no encajaría.
+
+  </Lado>
+</Comparar>
+
+## Formularios con `TextFieldState`
+
+<DeClase fecha="16/10, 23/10" proyecto="ToDoApp" />
+
+La pantalla de crear tarea tiene dos campos de texto. Su contenido también es estado, así que vive en el ViewModel, en dos objetos `TextFieldState`. La pantalla solo los enlaza con `OutlinedTextField(state = ...)`.
+
+<Recorrido
+  titulo="TaskCreateViewModel.kt (16/10)"
+  lenguaje="kotlin"
+  codigo={`@HiltViewModel
+class TaskCreateViewModel @Inject constructor(
+    private val _repository: TaskRepository
+) : ViewModel() {
+
+    val titleState = TextFieldState()
+    val descriptionState = TextFieldState()
+
+    fun onCreate() {
+        _repository.create(
+            title = titleState.text.toString(),
+            description = descriptionState.text.toString(),
+            limitDate = "9999.31.12"
+        )
+    }
+}`}
+>
+  <Paso lineas="1-4" titulo="Se construyó paso a paso">
+    Primero `: ViewModel()`, luego `@Inject constructor`, después `@HiltViewModel` y por último el repositorio como parámetro. Lo verás en [Inyección con Hilt](/docs/2-dam/kotlin/arquitectura/hilt).
+  </Paso>
+  <Paso lineas="6-7" titulo="El estado de cada campo">
+    Al principio se escribió `val titleState: TextFieldState` sin valor y salió *Property must be initialized or be abstract*: en Kotlin una propiedad tiene que inicializarse (o ser `abstract`). Se arregló con `= TextFieldState()`, cuyo constructor tiene `initialText = ""` por defecto.
+  </Paso>
+  <Paso lineas="9-15" titulo="El evento">
+    `onCreate()` lee lo escrito con `.text.toString()` (`text` es un `CharSequence`) y llama al repositorio con **argumentos con nombre**.
+  </Paso>
+  <Paso lineas="13" titulo="Deuda técnica">
+    La fecha va fija. El profesor la marcó con `TODO Deuda técnica`.
+  </Paso>
+</Recorrido>
+
+```kotlin title="TaskCreateScreen.kt (16/10)"
+@Composable
+fun TaskCreateScreen(
+    modifier: Modifier = Modifier,
+    viewModel: TaskCreateViewModel = hiltViewModel(),
+) {
+    Column {
+        OutlinedTextField(state = viewModel.titleState)
+        OutlinedTextField(state = viewModel.descriptionState)
+        Button(onClick = viewModel::onCreate) {
+            Text("Save")
+        }
+    }
+}
+```
+
+La pantalla no tiene lógica: dos campos que pintan el estado del ViewModel y un botón con una referencia a función. El 23/10, `onCreate()` pasó a usar `viewModelScope.launch` y un estado `Creating` y `Created`, porque `create` se volvió `suspend` (lo verás en [Estados de pantalla](/docs/2-dam/kotlin/arquitectura/estados-de-pantalla)).
+
+### Rellenar un formulario al editar
+
+En la pantalla de detalle de la ToDoApp, el ViewModel carga la tarea y escribe su texto en los campos. Se vieron dos formas de hacerlo:
+
+```kotlin title="ui/taskdetail/TaskDetailViewModel.kt (fragmento)"
+init {
+    loadTask()
+}
+
+fun loadTask() {
+    val currentTask = _repository.readOne(id)
+    titleState.edit {
+        replace(0, titleState.text.length, currentTask.title)
+    }
+    descriptionState.setTextAndPlaceCursorAtEnd(currentTask.description)
+}
+```
+
+- `edit { replace(inicio, fin, texto) }` sustituye un rango del texto. Aquí, todo.
+- `setTextAndPlaceCursorAtEnd(texto)` cambia todo el texto y deja el cursor al final. Es más corta. En el código, la línea con `setTextAndPlaceCursorAtEnd` para el título está comentada, y se usa para la descripción.
+- Este código es de las capturas del documento de la ToDoApp, de cuando `readOne` todavía no era `suspend`. Cómo se lee el `id` de la ruta está en [Navegación](/docs/2-dam/kotlin/arquitectura/navegacion#leer-el-argumento-en-el-viewmodel).
+
+## Cómo obtiene cada pantalla su ViewModel
+
+| Dónde | Cómo | Clase |
+| --- | --- | --- |
+| Composable, sin Hilt | `viewModel: TipCalculatorViewModel = TipCalculatorViewModel()` (no conviene, ver arriba) | 07/10 |
+| Composable, con Hilt | `viewModel: TaskListViewModel = hiltViewModel()` como parámetro con valor por defecto | 09/10 y siguientes |
+| Activity, con Hilt | `val viewModel: MainViewModel by viewModels()` | 13/11 |
+
+El 13/11 (proyecto Room, pantalla de Splash) se pidió el ViewModel desde la `MainActivity`, no desde un composable. Primero se escribió `val viewModel = viewModels()`, que da error: `viewModels()` es un **delegado** y hay que usarlo con `by`, y además hay que decir el tipo.
+
+```kotlin title="MainActivity.kt (13/11, fragmento)"
+@AndroidEntryPoint
+class MainActivity : ComponentActivity() {
+    val viewModel: MainViewModel by viewModels()
+    // ...
+}
+```
+
+## Otra forma de construir el estado: `stateIn`
+
+<DeClase fecha="09/11, 18/11" proyecto="PokeApp2627 y ToDoOfflineFirst" />
+
+Cuando el repositorio ya da un `Flow` que avisa de los cambios, el ViewModel no necesita un `MutableStateFlow` ni un `init`: transforma ese `Flow` y lo convierte en `StateFlow` con `stateIn`. Es lo que se hizo en la pantalla de ajustes del 18/11:
+
+```kotlin title="features/task/settings/ui/SettingsViewModel.kt (18/11)"
+@HiltViewModel
+class SettingsViewModel @Inject constructor(
+    private val settingsRepository: SettingsRepository,
+) : ViewModel() {
+
+    val uiState: StateFlow<SettingsUiState> = settingsRepository.settings
+        .map<Boolean, SettingsUiState> { SettingsUiState(it) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000L),
+            initialValue = SettingsUiState()
+        )
+
+    fun changeMode(mode: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setMode(mode)
+        }
+    }
+}
+
+data class SettingsUiState(
+    val darkMode: Boolean = false,
+)
+```
+
+- `map` convierte cada `Boolean` del repositorio en un `SettingsUiState`.
+- `stateIn(...)` lo convierte en `StateFlow` con un valor inicial. Con `WhileSubscribed(5_000L)` sigue escuchando 5 segundos después de que la pantalla deje de mirar, por si solo ha sido un giro.
+- Los eventos siguen siendo funciones (`changeMode`) que lanzan una corrutina.
+- Aquí el estado no es una clase sellada, sino una `data class` con valores por defecto, como en el TipCalculator.
+
+`Flow`, `map` y `stateIn` se explican a fondo en [Flow y stateIn](/docs/2-dam/kotlin/datos/flow-y-statein). Para la arquitectura, quédate con que **los dos patrones acaban igual**: un `StateFlow` público que la pantalla recoge con `collectAsStateWithLifecycle()`.
+
+## Practica
+
+<CompletarCodigo
+  titulo="Backing property"
+  enunciado="Completa el ViewModel para que la pantalla pueda leer el contador pero no cambiarlo."
+  lenguaje="kotlin"
+  codigo={`class CounterViewModel : ViewModel() {
+    private val _count = [[MutableStateFlow]](0)
+    val count: [[StateFlow]]<Int>
+        get() = _count.[[asStateFlow]]()
+
+    fun increment() {
+        _count.[[value]] = _count.value + 1
+    }
+}`}
+/>
+
+<Quiz titulo="Test: ViewModel y StateFlow" descripcion="8 preguntas">
+  <Pregunta enunciado="En el TipCalculator del 07/10, ¿por qué el Switch no cambiaba al pulsarlo?" explicacion="`_state` era una variable normal. Reasignarla no avisa a Compose, así que la pantalla no se vuelve a pintar. Hace falta un estado observable, como un `StateFlow`.">
+    <Opcion>Porque faltaba `@Composable` en el ViewModel</Opcion>
+    <Opcion correcta>Porque `_state` era una variable normal y Compose no se entera de que cambia</Opcion>
+    <Opcion>Porque `copy()` no crea un objeto nuevo</Opcion>
+    <Opcion>Porque `onCheckedChange` no admite referencias a función</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`val propina = if (activado) 0.1f` compila en Kotlin." respuesta={false} explicacion="Un `if` usado como expresión tiene que devolver algo siempre, así que necesita `else`. En clase el IDE lo marcó como error." />
+  <Pregunta enunciado="¿Qué formas valen para `onClick` si quieres llamar a `calculateSplit()` del ViewModel?" explicacion="La referencia a función `viewModel::calculateSplit` y la lambda `{ viewModel.calculateSplit() }` hacen lo mismo. Sin `::` ni paréntesis no compila.">
+    <Opcion correcta>`onClick = viewModel::calculateSplit`</Opcion>
+    <Opcion correcta>`onClick = { viewModel.calculateSplit() }`</Opcion>
+    <Opcion>`onClick = viewModel.calculateSplit`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué diferencia hay entre `collectAsState()` y `collectAsStateWithLifecycle()`?" explicacion="`collectAsStateWithLifecycle()` deja de recoger cuando el ciclo de vida baja de `STARTED` (por defecto), por ejemplo con la app en segundo plano.">
+    <Opcion>Ninguna, son alias</Opcion>
+    <Opcion correcta>La segunda deja de recoger cuando el ciclo de vida baja de `STARTED`</Opcion>
+    <Opcion>La primera solo funciona con `MutableState`</Opcion>
+    <Opcion>La segunda solo se puede usar en una Activity</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Con `private val _state = MutableStateFlow(...)` y `val state get() = _state.asStateFlow()`, ¿quién puede cambiar el estado?" explicacion="`_state` es privado: solo el ViewModel lo cambia. Fuera solo se ve `state`, un `StateFlow` de solo lectura.">
+    <Opcion correcta>Solo el ViewModel</Opcion>
+    <Opcion>El ViewModel y la pantalla</Opcion>
+    <Opcion>Cualquiera que tenga el ViewModel</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿Qué función convierte un `MutableStateFlow` en un `StateFlow` de solo lectura?" respuesta={["asStateFlow", "asStateFlow()", "`asStateFlow()`"]} explicacion="`asStateFlow()`. Se usa en el getter de la propiedad pública." />
+  <Pregunta enunciado="El repositorio hace `_taskList.add(tarea)` y después `_taskFlow.value = _taskList` (la misma lista). ¿Qué pasa?" explicacion="`StateFlow` compara el valor nuevo con el anterior con `equals`. Es el mismo objeto, así que no emite y quien lo observa no se entera. Hay que publicar una copia: `_taskList.toList()`.">
+    <Opcion>Emite, porque la lista tiene un elemento más</Opcion>
+    <Opcion correcta>No emite, porque el valor nuevo es igual al anterior (es el mismo objeto)</Opcion>
+    <Opcion>La app se cae con `ConcurrentModificationException`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Estás en una Activity con `@AndroidEntryPoint`. ¿Cómo obtienes el ViewModel, como en la clase del 13/11?" explicacion="En una Activity se usa el delegado `by viewModels()` con el tipo escrito. `hiltViewModel()` es para composables.">
+    <Opcion correcta>`val viewModel: MainViewModel by viewModels()`</Opcion>
+    <Opcion>`val viewModel = viewModels()`</Opcion>
+    <Opcion>`val viewModel = MainViewModel()`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: ViewModel y StateFlow">
+  <Tarjeta frente="¿Para qué sirve un ViewModel?">Guarda el estado de una pantalla, tiene una función por evento y sobrevive al giro del móvil.</Tarjeta>
+  <Tarjeta frente="`copy()` de una data class">Crea un objeto nuevo copiando todos los campos y cambiando solo los que nombras: `estado.copy(tip = true)`.</Tarjeta>
+  <Tarjeta frente="Backing property">`private val _state = MutableStateFlow(...)` (lo cambia el ViewModel) y `val state: StateFlow<...> get() = _state.asStateFlow()` (lo lee la pantalla).</Tarjeta>
+  <Tarjeta frente="¿Cómo lee la pantalla un StateFlow?">`val state by viewModel.state.collectAsStateWithLifecycle()`. Cada valor nuevo provoca una recomposición.</Tarjeta>
+  <Tarjeta frente="¿Cuándo emite un StateFlow?">Solo si el valor nuevo es distinto del anterior según `equals`. Asignar la misma lista modificada no emite.</Tarjeta>
+  <Tarjeta frente="`viewModel::onCreate`">Referencia a función: pasa la función sin llamarla. Equivale a `{ viewModel.onCreate() }`.</Tarjeta>
+  <Tarjeta frente="`TextFieldState` en el ViewModel">El estado de un campo de texto. La pantalla lo enlaza con `OutlinedTextField(state = ...)` y se lee con `.text.toString()`.</Tarjeta>
+  <Tarjeta frente="`stateIn`">Convierte un `Flow` en `StateFlow` con un ámbito (`viewModelScope`), una política (`WhileSubscribed(5_000L)`) y un valor inicial.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Un contador con StateFlow" dificultad="facil">
+  Escribe un `CounterViewModel` con Hilt que guarde un contador en un `StateFlow<Int>` (con backing property) y tenga una función `increment()`. Después, una `CounterScreen` que muestre "Has pulsado N veces" y un botón "Sumar". La pantalla tiene que volver a pintarse cada vez que se pulse.
+
+  <Pista>El ViewModel sigue el mismo patrón que `TaskListViewModel`: `_count` privado y `count` público con `asStateFlow()`.</Pista>
+  <Pista>En la pantalla: `val count by viewModel.count.collectAsStateWithLifecycle()` y el botón con una referencia a función.</Pista>
+
+  <Solucion>
+
+```kotlin title="CounterViewModel.kt"
+@HiltViewModel
+class CounterViewModel @Inject constructor() : ViewModel() {
+    private val _count = MutableStateFlow(0)
+    val count: StateFlow<Int>
+        get() = _count.asStateFlow()
+
+    fun increment() {
+        _count.value = _count.value + 1
+    }
+}
+```
+
+```kotlin title="CounterScreen.kt"
+@Composable
+fun CounterScreen(
+    modifier: Modifier = Modifier,
+    viewModel: CounterViewModel = hiltViewModel(),
+) {
+    val count by viewModel.count.collectAsStateWithLifecycle()
+    Column(modifier = modifier) {
+        Text("Has pulsado $count veces")
+        Button(onClick = viewModel::increment) {
+            Text("Sumar")
+        }
+    }
+}
+```
+
+`@Inject constructor()` va aunque el ViewModel no reciba nada: sin él, `@HiltViewModel` no compila (salió en clase el 13/11). Aquí cada `increment()` publica un `Int` distinto, así que el `StateFlow` emite siempre.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Arreglar el TipCalculator" dificultad="media">
+  Reescribe el `TipCalculatorViewModel` del 07/10 para que la pantalla sí se entere de los cambios: estado en un `StateFlow<TipCalculatorScreenState>` con backing property, `changeTip(isEnabled)` como en clase y una función nueva `changeTipAmount(amount: Float)` para el `Slider`. Escribe también cómo quedan el `Switch` y el `Slider` en la pantalla. Usa Hilt para obtener el ViewModel.
+
+  <Pista>El estado nuevo se calcula a partir del actual: `_state.value.copy(...)`.</Pista>
+  <Pista>En la pantalla, recoge el estado una vez con `collectAsStateWithLifecycle()` y usa `state.tip` y `state.tipAmount`.</Pista>
+
+  <Solucion>
+
+```kotlin title="TipCalculatorViewModel.kt"
+@HiltViewModel
+class TipCalculatorViewModel @Inject constructor() : ViewModel() {
+    private val _state = MutableStateFlow(TipCalculatorScreenState())
+    val state: StateFlow<TipCalculatorScreenState>
+        get() = _state.asStateFlow()
+
+    fun changeTip(isEnabled: Boolean) {
+        _state.value = _state.value.copy(
+            tip = isEnabled,
+            tipAmount = if (!isEnabled) 0.0f else _state.value.tipAmount
+        )
+    }
+
+    fun changeTipAmount(amount: Float) {
+        _state.value = _state.value.copy(tipAmount = amount)
+    }
+}
+```
+
+```kotlin title="TipCalculatorScreen.kt (fragmento)"
+@Composable
+fun TipCalculatorScreen(
+    viewModel: TipCalculatorViewModel = hiltViewModel()
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    // ...
+    Switch(
+        checked = state.tip,
+        onCheckedChange = viewModel::changeTip
+    )
+    Slider(
+        enabled = state.tip,
+        value = state.tipAmount,
+        onValueChange = viewModel::changeTipAmount,
+        steps = 3,
+        valueRange = 0f..4f
+    )
+}
+```
+
+Como `copy()` crea un objeto nuevo con un campo distinto, `equals` da `false` y el `StateFlow` emite. Para usar `hiltViewModel()` la app necesita además la `Application` con `@HiltAndroidApp` y la Activity con `@AndroidEntryPoint` (ver [Inyección con Hilt](/docs/2-dam/kotlin/arquitectura/hilt)).
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="ViewModel">Clase de `androidx.lifecycle` que guarda el estado de una pantalla y sus eventos. Sobrevive al giro.</Termino>
+  <Termino nombre="Estado inmutable">Una `data class` con campos `val`. Para cambiarlo se crea otro con `copy()`.</Termino>
+  <Termino nombre="MutableStateFlow">Flujo con un valor actual que se puede cambiar (`value = ...`). Va privado en el ViewModel.</Termino>
+  <Termino nombre="StateFlow">La versión de solo lectura, que expone el ViewModel con `asStateFlow()`.</Termino>
+  <Termino nombre="collectAsStateWithLifecycle()">Convierte un `StateFlow` en estado de Compose y deja de recoger por debajo de `STARTED`.</Termino>
+  <Termino nombre="TextFieldState">Estado de un campo de texto que vive en el ViewModel.</Termino>
+</Glosario>
+
+<MarcarCompletado />

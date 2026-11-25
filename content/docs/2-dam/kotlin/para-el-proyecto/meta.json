@@ -1,0 +1,18 @@
+{
+  "title": "Android para el proyecto",
+  "icon": "Smartphone",
+  "pages": [
+    "index",
+    "requisitos",
+    "intent-y-localizacion",
+    "room-relaciones",
+    "offline-first",
+    "datastore",
+    "conectar-con-tu-api",
+    "crud-con-retrofit",
+    "navegacion-del-proyecto",
+    "practicas-raras",
+    "dependencias-gradle",
+    "errores-tipicos"
+  ]
+}

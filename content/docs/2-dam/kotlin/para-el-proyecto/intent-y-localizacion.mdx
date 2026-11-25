@@ -1,0 +1,337 @@
+---
+title: Intent implícito y localización
+description: Abrir el marcador, el mapa, el correo o el menú de compartir con un intent implícito, y tener la app en inglés y español con strings.xml.
+icon: Share2
+---
+
+import { ResolverIdioma } from '@/components/temas/para-el-proyecto-android/resolver-idioma';
+
+Dos requisitos cortos que no se dieron en clase: **un intent implícito** (que tu app abra otra, como el marcador o Maps) y **la localización en inglés y español**. Los dos se hacen en una tarde y son de las primeras cosas que te piden enseñar en la defensa.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué diferencia hay entre un intent explícito y uno implícito.
+  - Las cuatro acciones típicas: llamar, mapa, correo y compartir.
+  - Por qué hace falta el `try/catch` de `ActivityNotFoundException`.
+  - Cómo elige Android el `strings.xml` según el idioma del móvil.
+</Callout>
+
+## Intent implícito <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Los intents implícitos no salieron en ninguna clase de Android. Es la forma estándar de hacerlo; si te preguntan, di que lo has buscado tú.
+</NoDadoEnClase>
+
+Un **intent** es un mensaje que le mandas a Android para que abra algo. Hay dos tipos:
+
+- **Explícito**: dice la clase exacta que se abre (una Activity de tu app). Con Compose y Navigation casi no los usas, porque toda la app vive en una sola Activity.
+- **Implícito**: solo dice **la acción** ("marcar un teléfono", "ver esto") y **los datos** (`tel:954000000`). Android busca qué apps aceptan esa acción y abre una: el marcador para un teléfono, Maps para una dirección, Gmail para un correo.
+
+<Mermaid
+  titulo="Qué hace Android con un intent implícito"
+  chart={`flowchart TD
+    A["Tu app: startActivity(intent)"] --> B{"¿Qué apps aceptan esa acción y esos datos?"}
+    B -- "Ninguna" --> C["ActivityNotFoundException: sin try/catch la app se cierra"]
+    B -- "Una o una por defecto" --> D["Se abre esa app"]
+    B -- "Varias" --> E["El usuario elige"]`}
+/>
+
+### Las cuatro acciones típicas
+
+| Acción | Para qué | Datos |
+| --- | --- | --- |
+| `Intent.ACTION_DIAL` | Abrir el marcador con el número puesto. No llama solo, así que **no necesita permiso**. | `tel:954000000` |
+| `Intent.ACTION_VIEW` | Abrir un mapa | `geo:0,0?q=Calle Mayor 1, Sevilla` |
+| `Intent.ACTION_SENDTO` | Escribir un correo | `mailto:alguien@ejemplo.com` |
+| `Intent.ACTION_SEND` | Compartir texto con cualquier app | `type = "text/plain"` y `EXTRA_TEXT` |
+
+### Los botones de contacto
+
+Este composable tiene un botón por acción. Recórrelo paso a paso:
+
+<Recorrido
+  titulo="BotonesContacto.kt"
+  lenguaje="kotlin"
+  codigo={`fun abrirIntent(context: Context, intent: Intent) {
+    try {
+        context.startActivity(intent)
+    } catch (e: ActivityNotFoundException) {
+        Toast.makeText(context, "No hay ninguna app para abrir esto", Toast.LENGTH_SHORT).show()
+    }
+}
+
+@Composable
+fun BotonesContacto(
+    telefono: String,
+    direccion: String,
+    correo: String,
+    textoCompartir: String,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    Column(modifier = modifier) {
+        Button(onClick = {
+            abrirIntent(context, Intent(Intent.ACTION_DIAL, Uri.parse("tel:$telefono")))
+        }) { Text("Llamar") }
+
+        Button(onClick = {
+            val uri = Uri.parse("geo:0,0?q=" + Uri.encode(direccion))
+            abrirIntent(context, Intent(Intent.ACTION_VIEW, uri))
+        }) { Text("Cómo llegar") }
+
+        Button(onClick = {
+            abrirIntent(context, Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$correo")))
+        }) { Text("Enviar correo") }
+
+        Button(onClick = {
+            val enviar = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, textoCompartir)
+            }
+            abrirIntent(context, Intent.createChooser(enviar, "Compartir con"))
+        }) { Text("Compartir") }
+    }
+}`}
+>
+  <Paso lineas="1-7" titulo="Abrir sin que se caiga">
+    `startActivity` lanza `ActivityNotFoundException` si no hay ninguna app que lo abra (pasa en emuladores sin Maps o sin correo). Sin el `try/catch`, la app se cierra. Con él, sale un `Toast`.
+  </Paso>
+  <Paso lineas="17" titulo="El Context dentro de Compose">
+    `LocalContext.current` te da el `Context` dentro de un composable. Hace falta para `startActivity`.
+  </Paso>
+  <Paso lineas="19-21" titulo="Llamar">
+    `ACTION_DIAL` con una URI `tel:`. Abre el marcador con el número escrito; el usuario pulsa llamar. Por eso no necesita el permiso `CALL_PHONE`.
+  </Paso>
+  <Paso lineas="23-26" titulo="Cómo llegar">
+    `ACTION_VIEW` con una URI `geo:`. `Uri.encode(direccion)` cambia los espacios y las comas para que la dirección vaya bien dentro de la URI.
+  </Paso>
+  <Paso lineas="28-30" titulo="Enviar correo">
+    `ACTION_SENDTO` con `mailto:` solo lo aceptan las apps de correo.
+  </Paso>
+  <Paso lineas="32-38" titulo="Compartir">
+    `ACTION_SEND` no lleva URI: lleva el tipo (`text/plain`) y el texto en `EXTRA_TEXT`. `Intent.createChooser` saca el menú "Compartir con…" aunque haya una app marcada por defecto.
+  </Paso>
+</Recorrido>
+
+- `apply { }` es una función de Kotlin: dentro del bloque, `this` es el intent recién creado, así que escribes `type = ...` en vez de `enviar.type = ...`. Es como encadenar *setters* en Java.
+- Android Studio puede proponerte `"tel:$telefono".toUri()` en vez de `Uri.parse(...)`. Es lo mismo, pero más corto (viene de `core-ktx`).
+- En tu app, `BotonesContacto` iría en la pantalla de detalle, con los datos del producto, la tienda o el usuario.
+
+<Callout type="warn" title="Prueba en un emulador con Google Play">
+  Los emuladores sin Google Play no traen Maps ni Gmail. Si el botón solo saca el `Toast`, prueba con una imagen de emulador "Google Play" o con tu móvil.
+</Callout>
+
+## Localización en inglés y español
+
+### Lo que se vio en clase
+
+<DeClase fecha="07/10" proyecto="TipCalculator" />
+
+En el TipCalculator ya había `values/strings.xml` y `values-es/strings.xml` desde el principio, y los textos se leían con `stringResource`, también con un argumento de formato:
+
+```kotlin title="TipCalculatorScreen.kt (07/10)"
+Text(stringResource(id = R.string.tipLabel))
+Text(stringResource(id = R.string.splitLabel, splitResult))
+```
+
+Solo se nombró: no se explicó cómo se crean las carpetas ni cómo se prueba.
+
+- El 18/11 se leyó en una captura <Dudoso nota="Así no compila: `stringResource` recibe un id `R.string.x`. Seguramente era `stringResource(R.string.create_task)` o una pista del IDE.">`stringResource("Create task")`</Dudoso>.
+
+### Cómo funciona <NoDadoEnClase inline />
+
+<NoDadoEnClase />
+
+Cada texto de la app va en un archivo de recursos con un nombre (`R.string.productos`). Android elige la carpeta según el idioma del móvil:
+
+- `values-es` si el móvil está en español (de cualquier país);
+- `values`, la carpeta **por defecto**, en cualquier otro idioma.
+
+<Files>
+  <Folder name="app/src/main/res" defaultOpen>
+    <Folder name="values" defaultOpen>
+      <File name="strings.xml (inglés, por defecto)" />
+    </Folder>
+    <Folder name="values-es" defaultOpen>
+      <File name="strings.xml (español)" />
+    </Folder>
+  </Folder>
+</Files>
+
+<Tabs items={['values/strings.xml', 'values-es/strings.xml']}>
+  <Tab value="values/strings.xml">
+
+```xml title="app/src/main/res/values/strings.xml"
+<resources>
+    <string name="app_name">Shop</string>
+    <string name="productos">Products</string>
+    <string name="pedidos">Orders</string>
+    <string name="ajustes">Settings</string>
+    <string name="saludo">Hi, %1$s</string>
+</resources>
+```
+
+  </Tab>
+  <Tab value="values-es/strings.xml">
+
+```xml title="app/src/main/res/values-es/strings.xml"
+<resources>
+    <string name="app_name">Tienda</string>
+    <string name="productos">Productos</string>
+    <string name="pedidos">Pedidos</string>
+    <string name="ajustes">Ajustes</string>
+    <string name="saludo">Hola, %1$s</string>
+</resources>
+```
+
+  </Tab>
+</Tabs>
+
+En la pantalla:
+
+```kotlin title="ProductosScreen.kt"
+Text(stringResource(R.string.productos))
+Text(stringResource(R.string.saludo, nombreUsuario))
+```
+
+`%1$s` es un hueco para un texto: el `1` es el primer argumento y la `s` dice que es un `String`. Para números, `%1$d`. Es lo mismo que en el `String.format` de Java.
+
+Cambia el idioma del móvil en esta demo y fíjate en qué carpeta se usa para cada texto. Si te olvidas de traducir uno en `values-es`, Android coge **ese texto** de `values` (sale en inglés en mitad de una pantalla en español), pero el resto sigue en español:
+
+<ResolverIdioma />
+
+### Trucos de Android Studio <NoDadoEnClase inline />
+
+<Steps>
+  <Step>
+
+#### Crea la carpeta values-es
+
+  Clic derecho en `res` → New → Android Resource File. Pon `strings.xml` como nombre, elige **Locale** en la lista de la izquierda y después **es**. Así el archivo sale ya en `values-es`.
+
+  </Step>
+  <Step>
+
+#### Revisa lo que falta
+
+  Clic derecho en `strings.xml` → Open Translations Editor. Te enseña todos los textos en una tabla y marca en rojo los que faltan por traducir.
+
+  </Step>
+  <Step>
+
+#### Pruébalo en el emulador
+
+  Ajustes → Sistema → Idiomas, y pon el inglés el primero. Al volver a tu app, sale en inglés (si no, ciérrala y ábrela otra vez).
+
+  </Step>
+</Steps>
+
+<Callout type="error" title="No escribas textos a mano en los composables">
+  `Text("Productos")` no se traduce nunca. Es lo primero que se ve si en la defensa te piden cambiar el idioma. Todos los textos visibles, también los `contentDescription` de los iconos, van en `strings.xml`.
+</Callout>
+
+**Cambiar el idioma desde dentro de la app** no lo piden y es más lío (`AppCompatDelegate.setApplicationLocales`, que pide `AppCompatActivity`). Para el requisito de DataStore basta con el modo oscuro, como en clase.
+
+## Practica
+
+<CompletarCodigo
+  titulo="Compartir un texto"
+  enunciado="Completa el intent para compartir el nombre de un producto con cualquier app."
+  lenguaje="kotlin"
+  codigo={`val enviar = Intent(Intent.[[ACTION_SEND]]).apply {
+    type = "[[text/plain]]"
+    putExtra(Intent.[[EXTRA_TEXT]], producto.nombre)
+}
+abrirIntent(context, Intent.[[createChooser]](enviar, "Compartir con"))`}
+/>
+
+<Quiz titulo="Test: intents y localización">
+  <Pregunta enunciado="¿Qué diferencia a un intent implícito de uno explícito?" explicacion="El explícito nombra la clase que se abre; el implícito solo da la acción y los datos, y Android busca la app.">
+    <Opcion>El implícito solo sirve dentro de tu app</Opcion>
+    <Opcion correcta>El implícito dice la acción y los datos, no la clase que se abre</Opcion>
+    <Opcion>El implícito necesita siempre un permiso</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Para abrir el marcador con `ACTION_DIAL` hace falta pedir el permiso de llamar." respuesta={false} explicacion="`ACTION_DIAL` solo abre el marcador con el número escrito; el usuario es quien llama. El permiso hace falta para `ACTION_CALL`, que llama directamente." />
+  <Pregunta enunciado="Pulsas «Cómo llegar» en un emulador sin Maps y no tienes `try/catch`. ¿Qué pasa?" explicacion="`startActivity` lanza `ActivityNotFoundException` y, sin capturarla, la app se cierra.">
+    <Opcion>No pasa nada</Opcion>
+    <Opcion>Se abre el navegador</Opcion>
+    <Opcion correcta>La app se cierra con `ActivityNotFoundException`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Para qué sirve `Intent.createChooser`?" explicacion="Saca el menú «Compartir con…» aunque el usuario tenga una app por defecto.">
+    <Opcion correcta>Para sacar siempre el menú de elegir app</Opcion>
+    <Opcion>Para comprobar si hay alguna app instalada</Opcion>
+    <Opcion>Para mandar el intent a todas las apps a la vez</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="El móvil está en francés y tu app tiene `values` (inglés) y `values-es`. ¿Qué textos salen?" explicacion="No hay carpeta para el francés, así que Android usa la de por defecto, `values`.">
+    <Opcion>Los de `values-es`</Opcion>
+    <Opcion correcta>Los de `values`</Opcion>
+    <Opcion>La app se cae</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿Qué escribes en strings.xml para un hueco que es el primer argumento y es un número entero?" respuesta={["%1$d"]} explicacion="`%1$d`: `1` es el primer argumento y `d` un entero. Para texto sería `%1$s`." />
+  <Pregunta enunciado="Se te olvida traducir `pedidos` en `values-es`. Con el móvil en español, ¿qué sale?" explicacion="Android busca cada texto por separado: el que falta lo coge de `values`, así que sale «Orders» y el resto en español.">
+    <Opcion>Toda la app en inglés</Opcion>
+    <Opcion correcta>«Orders» en inglés y el resto en español</Opcion>
+    <Opcion>Un hueco vacío</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: intents y localización">
+  <Tarjeta frente="`ACTION_DIAL`">Abre el marcador con el número puesto (`tel:...`). No llama solo y no necesita permiso.</Tarjeta>
+  <Tarjeta frente="`ACTION_VIEW` con `geo:`">Abre un mapa. La dirección va con `Uri.encode()` para que los espacios y las comas no rompan la URI.</Tarjeta>
+  <Tarjeta frente="`ACTION_SENDTO` frente a `ACTION_SEND`">`SENDTO` con `mailto:` abre el correo. `SEND` con `type` y `EXTRA_TEXT` comparte con cualquier app.</Tarjeta>
+  <Tarjeta frente="`LocalContext.current`">Te da el `Context` dentro de un composable, por ejemplo para `startActivity`.</Tarjeta>
+  <Tarjeta frente="`values` frente a `values-es`">`values` es la carpeta por defecto (en cualquier idioma sin carpeta propia). `values-es` se usa con el móvil en cualquier español.</Tarjeta>
+  <Tarjeta frente="Translations Editor">Clic derecho en `strings.xml`: enseña todos los textos en tabla y en rojo los que faltan por traducir.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Botón de compartir en el detalle" dificultad="facil">
+  En la pantalla de detalle de tu app, añade un botón que comparta un texto como "Mira esto: Teclado mecánico, 59.9 €". El texto tiene que salir de `strings.xml` y estar traducido.
+
+  <Pista>Crea un texto con dos huecos: `%1$s` para el nombre y `%2$s` para el precio.</Pista>
+  <Pista>`stringResource` solo se puede llamar dentro de un composable: léelo fuera del `onClick` y guárdalo en una variable.</Pista>
+
+  <Solucion>
+
+```xml title="values/strings.xml"
+<string name="compartir_producto">Check this out: %1$s, %2$s €</string>
+<string name="compartir">Share</string>
+```
+
+```xml title="values-es/strings.xml"
+<string name="compartir_producto">Mira esto: %1$s, %2$s €</string>
+<string name="compartir">Compartir</string>
+```
+
+```kotlin title="DetalleScreen.kt"
+val context = LocalContext.current
+val texto = stringResource(R.string.compartir_producto, producto.nombre, producto.precio.toString())
+val tituloMenu = stringResource(R.string.compartir)
+
+Button(onClick = {
+    val enviar = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, texto)
+    }
+    abrirIntent(context, Intent.createChooser(enviar, tituloMenu))
+}) { Text(tituloMenu) }
+```
+
+  `stringResource` es un composable, así que no se puede llamar dentro del `onClick` (que es una lambda normal). Por eso se lee antes.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Revisa tu app entera" dificultad="media">
+  Busca en tu proyecto todos los `Text("` con un texto escrito a mano y pásalos a `strings.xml` con su traducción. Después cambia el emulador a inglés y recorre todas las pantallas.
+
+  <Pista>En Android Studio, Edit → Find → Find in Files con `Text("` encuentra todos los sitios. Alt+Intro sobre un texto escrito a mano ofrece "Extract string resource".</Pista>
+
+  <Solucion>
+
+  Por cada texto: Alt+Intro → **Extract string resource**, ponle un nombre en minúsculas con guiones bajos (`crear_producto`) y Android Studio lo mueve a `values/strings.xml`. Comprueba que el código queda como `stringResource(R.string.crear_producto)` y, si no, cámbialo tú. Después abre el **Translations Editor** y rellena la columna del español. Al terminar, no debería quedar ninguna celda en rojo ni ningún `Text("...")` con texto escrito a mano (salvo datos que vienen de la API, que no se traducen).
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

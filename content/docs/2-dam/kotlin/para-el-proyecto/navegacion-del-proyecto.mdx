@@ -1,0 +1,473 @@
+---
+title: Navegación del proyecto
+description: Barra de navegación inferior con popUpTo y launchSingleTop, un login al que no se vuelve con el botón atrás, y volver atrás cuando termina de guardar con LaunchedEffect.
+icon: Navigation
+---
+
+import { PilaNavegacion } from '@/components/temas/para-el-proyecto-android/pila-navegacion';
+
+La navegación con Compose **se dio entera** en clase. Pero casi todas las apps del proyecto necesitan tres cosas que no salieron: una **barra inferior** con pestañas, un **login** al que no se vuelve con el botón atrás y **volver atrás después de guardar**. Las tres dependen de entender la **pila de navegación**.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué es la pila de navegación y qué hacen `popUpTo`, `inclusive` y `launchSingleTop`.
+  - Una barra inferior de Material 3 que solo sale en las pantallas de las pestañas.
+  - Por qué el `popUpTo` de casi todos los tutoriales no te vale si empiezas en el login.
+  - Volver atrás cuando la corrutina de guardar termina, con `LaunchedEffect`.
+</Callout>
+
+## Lo que se vio en clase
+
+<DeClase fecha="09/10, 18/11" proyecto="ToDoApp y ToDoOfflineFirst" />
+
+- **Rutas tipadas**: una `sealed class` con `@Serializable`, con `object` para las pantallas sin datos y `class X(val id: Int)` para las que llevan datos. Necesitan el plugin de serialización.
+- `val controller = rememberNavController()`, con `=` y no con `by`: `NavHostController` no tiene `getValue`, así que no sirve como delegado (en clase se enseñó provocando el error).
+- `NavHost(navController, startDestination) { composable<Route.X> { ... } }`, un `composable` por pantalla.
+- Las pantallas **no conocen el `navController`**: reciben *callbacks* (`toCreate: () -> Unit`, `toDetail: (Int) -> Unit`) y el `navigate` se hace en el `NavHost`.
+- El argumento se lee con `backStackEntry.toRoute()` o, en el ViewModel, con `savedStateHandle.toRoute<T>()` (09/11).
+- El 18/11: **grafos anidados** con `navigation<Grafo>(startDestination = ...)`, y se navega al grafo, no a la pantalla. Y `popBackStack()` en el `onBack` de `TaskCreateScreen`.
+
+```kotlin title="MainNavigation.kt (18/11)"
+@Composable
+fun MainNavigation(modifier: Modifier = Modifier) {
+    val navController = rememberNavController()
+    NavHost(modifier = modifier, startDestination = Routes.TaskFeature, navController = navController) {
+        navigation<Routes.TaskFeature>(startDestination = Routes.TaskList) {
+            composable<Routes.TaskList> {
+                TaskListScreen(
+                    modifier = Modifier.fillMaxSize(),
+                    toTaskCreate = { navController.navigate(Routes.TaskCreate) },
+                    onSettings = { navController.navigate(Routes.SettingsFeature) }
+                )
+            }
+            composable<Routes.TaskDetail> { TaskDetailScreen() }
+            composable<Routes.TaskCreate> { TaskCreateScreen(onBack = { navController.popBackStack() }) }
+        }
+        navigation<Routes.SettingsFeature>(startDestination = Routes.Settings) {
+            composable<Routes.Settings> { SettingsScreen() }
+        }
+    }
+}
+```
+
+- El 18/11, `Routes` es una `abstract class` con `route: String`, no una `sealed class` como en la ToDoApp del 09/10. Con rutas tipadas, ese `route: String` no hace falta.
+- La ruta del detalle se leyó como <Dudoso nota="Probablemente era `task_detail/$id`, como en la ToDoApp.">`"task_detail[$id]"`</Dudoso>.
+- No se ve dónde llama `TaskCreateScreen` a ese `onBack`. El componente `ApplicationTopBar` de esa clase tiene un parámetro `onBack` para la flecha de atrás de la barra superior.
+
+Lo de clase lo tienes entero en [Navegación con rutas tipadas](/docs/2-dam/kotlin/arquitectura/navegacion).
+
+<NoSeVio titulo="Volver atrás después de Save">
+  No se ve cómo se vuelve a la lista después de crear una tarea con "Save": `popBackStack()` solo aparece el 18/11, en el `onBack` de `TaskCreateScreen`.
+</NoSeVio>
+
+## La pila de navegación <NoDadoEnClase inline />
+
+<NoDadoEnClase />
+
+Navigation guarda las pantallas abiertas en una **pila** (*back stack*). `navigate()` **apila** una pantalla encima. El botón atrás (o `popBackStack()`) **quita** la de arriba. Cuando la pila se queda vacía, la app se cierra.
+
+Con eso, las opciones de `navigate` se entienden solas:
+
+| Opción | Qué hace |
+| --- | --- |
+| `popUpTo<Ruta.X>` | Antes de apilar la nueva, quita todo lo que haya **encima** de `X` |
+| `inclusive = true` (dentro de `popUpTo`) | Quita también la propia `X` |
+| `launchSingleTop = true` | Si la pantalla ya está arriba del todo, no la apila otra vez |
+| `saveState` / `restoreState` | Guarda y recupera lo que había dentro de cada pestaña al cambiar entre ellas |
+
+Pruébalo antes de leer el código. Entra, cambia de pestaña varias veces, añade un producto, guarda y pulsa atrás. Luego cambia las opciones de arriba y repite:
+
+<PilaNavegacion />
+
+Lo que tienes que ver en la demo:
+
+- **Sin `popUpTo<Ruta.Login> { inclusive = true }`**, el login se queda debajo y el botón atrás desde Productos vuelve al login.
+- **Sin opciones en la barra**, cada toque apila una pantalla más y el botón atrás recorre todo el historial de pestañas.
+- **Con `popUpTo(findStartDestination().id)`** y el login quitado, el destino inicial (el login) ya no está en la pila, así que no se quita nada.
+- **Con `popUpTo<Ruta.Productos>`** (y el login quitado), la pila nunca pasa de dos pantallas al moverte entre pestañas.
+
+## Barra inferior y login que no vuelve atrás <NoDadoEnClase inline />
+
+**Las rutas** son como las de clase, con `@Serializable`:
+
+```kotlin title="Ruta.kt"
+@Serializable
+sealed class Ruta {
+    @Serializable
+    object Login : Ruta()
+
+    @Serializable
+    object Productos : Ruta()
+
+    @Serializable
+    object Pedidos : Ruta()
+
+    @Serializable
+    object Ajustes : Ruta()
+
+    @Serializable
+    object CrearProducto : Ruta()
+}
+```
+
+### La barra
+
+<Recorrido
+  titulo="BarraInferior.kt"
+  lenguaje="kotlin"
+  codigo={`data class ItemBarra(
+    val ruta: Ruta,
+    @StringRes val texto: Int,
+    val icono: ImageVector
+)
+
+val itemsBarra = listOf(
+    ItemBarra(Ruta.Productos, R.string.productos, Icons.Default.Home),
+    ItemBarra(Ruta.Pedidos, R.string.pedidos, Icons.Default.ShoppingCart),
+    ItemBarra(Ruta.Ajustes, R.string.ajustes, Icons.Default.Settings),
+)
+
+@Composable
+fun BarraInferior(navController: NavHostController, destino: NavDestination?) {
+    NavigationBar {
+        itemsBarra.forEach { item ->
+            NavigationBarItem(
+                selected = destino?.hierarchy?.any { it.hasRoute(item.ruta::class) } == true,
+                onClick = {
+                    navController.navigate(item.ruta) {
+                        popUpTo<Ruta.Productos> { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
+                icon = { Icon(item.icono, contentDescription = null) },
+                label = { Text(stringResource(item.texto)) }
+            )
+        }
+    }
+}`}
+>
+  <Paso lineas="1-11" titulo="Las pestañas en una lista">
+    Cada pestaña tiene su ruta, su texto (un id de `strings.xml`, por eso `@StringRes`) y su icono. Así la barra se pinta con un bucle y no repites código.
+  </Paso>
+  <Paso lineas="15-17" titulo="NavigationBar de Material 3">
+    `NavigationBar` es la barra y cada `NavigationBarItem`, una pestaña.
+  </Paso>
+  <Paso lineas="18" titulo="¿Qué pestaña está marcada?">
+    `hasRoute(item.ruta::class)` comprueba si la pantalla actual es la de esa pestaña. `hierarchy` sirve para que siga marcada si estás dentro de un grafo anidado de esa pestaña. `== true` porque `destino` puede ser `null`.
+  </Paso>
+  <Paso lineas="21" titulo="popUpTo de la primera pestaña">
+    Antes de ir a la pestaña, quita de la pila todo lo que haya encima de Productos. Sin esto, cada toque apila una pantalla más.
+  </Paso>
+  <Paso lineas="21-23" titulo="Guardar y no repetir">
+    `saveState` y `restoreState`: si estabas en el detalle de un producto y cambias de pestaña, al volver sigues en el detalle. `launchSingleTop`: tocar dos veces la misma pestaña no la abre dos veces.
+  </Paso>
+  <Paso lineas="26-27" titulo="Icono y texto">
+    `contentDescription = null` porque el texto de la pestaña ya dice lo que es. El texto sale traducido con `stringResource`.
+  </Paso>
+</Recorrido>
+
+<Callout type="warn" title="Si tu primera pantalla es el login, no copies el popUpTo de internet">
+  Muchos ejemplos ponen `popUpTo(navController.graph.findStartDestination().id)`. Si tu destino inicial es el login, eso no funciona: el login ya no está en la pila después de entrar, y entonces no se quita nada. Usa la primera pestaña: `popUpTo<Ruta.Productos>`.
+</Callout>
+
+### El NavHost con la barra
+
+La barra solo tiene que salir en las pantallas de las pestañas (no en el login ni en crear producto):
+
+<Recorrido
+  titulo="AppNavHost.kt"
+  lenguaje="kotlin"
+  codigo={`@Composable
+fun AppNavHost(modifier: Modifier = Modifier) {
+    val navController = rememberNavController()
+    val entrada by navController.currentBackStackEntryAsState()
+    val destino = entrada?.destination
+    val mostrarBarra = itemsBarra.any { item -> destino?.hasRoute(item.ruta::class) == true }
+
+    Scaffold(
+        modifier = modifier,
+        bottomBar = {
+            if (mostrarBarra) BarraInferior(navController, destino)
+        }
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = Ruta.Login,
+            modifier = Modifier.padding(innerPadding)
+        ) {
+            composable<Ruta.Login> {
+                LoginScreen(onEntrar = {
+                    navController.navigate(Ruta.Productos) {
+                        popUpTo<Ruta.Login> { inclusive = true }
+                    }
+                })
+            }
+            composable<Ruta.Productos> {
+                ProductosScreen(onAnadir = { navController.navigate(Ruta.CrearProducto) })
+            }
+            composable<Ruta.CrearProducto> {
+                CrearProductoScreen(onCreado = { navController.popBackStack() })
+            }
+            composable<Ruta.Pedidos> { PedidosScreen() }
+            composable<Ruta.Ajustes> { AjustesScreen() }
+        }
+    }
+}`}
+>
+  <Paso lineas="4-5" titulo="La pantalla actual, como estado">
+    `currentBackStackEntryAsState()` es la entrada de arriba de la pila, como estado: cada vez que navegas, este composable se recompone.
+  </Paso>
+  <Paso lineas="6" titulo="¿Se enseña la barra?">
+    Solo si la pantalla actual es una de las de `itemsBarra`.
+  </Paso>
+  <Paso lineas="8-13" titulo="Un Scaffold por fuera">
+    El `Scaffold` lleva la barra en `bottomBar` y el `NavHost` va dentro, con el `innerPadding` para no quedar debajo de la barra.
+  </Paso>
+  <Paso lineas="19-25" titulo="El login que no vuelve">
+    `popUpTo<Ruta.Login> { inclusive = true }`: al entrar, quita el login de la pila (con `inclusive` se quita también él). Así, el botón atrás desde Productos cierra la app en vez de volver al login.
+  </Paso>
+  <Paso lineas="26-31" titulo="Callbacks, como en clase">
+    Las pantallas siguen sin conocer el `navController`: reciben `onAnadir` y `onCreado`, y el `navigate` o el `popBackStack` se hacen aquí.
+  </Paso>
+</Recorrido>
+
+- `Icons.Default.*` está en `material-icons-core`. Si Android Studio no encuentra `Icons`, mira [Dependencias de Gradle](/docs/2-dam/kotlin/para-el-proyecto/dependencias-gradle).
+- Si las pantallas de dentro tienen su propio `Scaffold`, puede salir un **hueco doble** arriba o abajo. Se arregla pasando `Modifier.consumeWindowInsets(innerPadding)` junto al `padding`, como se hizo en clase con el `Scaffold` de las pantallas.
+
+## Volver atrás después de guardar <NoDadoEnClase inline />
+
+El problema: guardar tarda (es una corrutina que llama a la API) y hay que volver **cuando termine**, no al pulsar el botón. Si vuelves al pulsar, la pantalla se cierra aunque luego falle, y el usuario no se entera.
+
+La solución es **mirar el estado**: el ViewModel pasa por `Creating` y luego a `Created` (o `Error`), como el `TaskCreateScreenState` del 23/10. La pantalla vuelve cuando ve `Created`.
+
+<Recorrido
+  titulo="CrearProductoScreen.kt"
+  lenguaje="kotlin"
+  codigo={`sealed interface CrearProductoState {
+    data object Initial : CrearProductoState
+    data object Creating : CrearProductoState
+    data object Created : CrearProductoState
+    data class Error(val mensaje: String) : CrearProductoState
+}
+
+@Composable
+fun CrearProductoScreen(
+    onCreado: () -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: CrearProductoViewModel = hiltViewModel()
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(state) {
+        if (state is CrearProductoState.Created) {
+            onCreado()
+        }
+    }
+
+    CrearProductoContent(state = state, onGuardar = viewModel::onGuardar, modifier = modifier)
+}`}
+>
+  <Paso lineas="1-6" titulo="Los estados de guardar">
+    Como el `TaskCreateScreenState` de clase, pero `Error` lleva el mensaje.
+  </Paso>
+  <Paso lineas="10" titulo="La pantalla no conoce el navController">
+    Recibe `onCreado`, y en el `NavHost` se le pasa `{ navController.popBackStack() }`.
+  </Paso>
+  <Paso lineas="16-20" titulo="LaunchedEffect(state)">
+    Ejecuta el bloque **una vez cada vez que cambia `state`**, no en cada recomposición. Cuando el estado pasa a `Created`, vuelve atrás.
+  </Paso>
+  <Paso lineas="22" titulo="La parte sin estado">
+    `CrearProductoContent` es tu formulario: recibe el estado (para deshabilitar el botón mientras `Creating` o enseñar el error) y el evento de guardar.
+  </Paso>
+</Recorrido>
+
+<Callout type="error" title="No llames a onCreado() directamente en el composable">
+  Si escribes `if (state is CrearProductoState.Created) onCreado()` suelto dentro de la función, se ejecuta **en cada recomposición** mientras el estado sea `Created`, y puede hacer `popBackStack()` varias veces (sacándote también de la pantalla anterior). Es el mismo problema que el `viewModel.load()` dentro del `when` de clase.
+</Callout>
+
+Un ViewModel que encaja con esa pantalla, con el formulario en `TextFieldState` como en clase (16/10) y el `crear()` del repositorio de [CRUD con Retrofit](/docs/2-dam/kotlin/para-el-proyecto/crud-con-retrofit):
+
+```kotlin title="CrearProductoViewModel.kt"
+@HiltViewModel
+class CrearProductoViewModel @Inject constructor(
+    private val repository: ProductoRepository
+) : ViewModel() {
+
+    private val _state = MutableStateFlow<CrearProductoState>(CrearProductoState.Initial)
+    val state: StateFlow<CrearProductoState> = _state.asStateFlow()
+
+    val nombre = TextFieldState()
+    val precio = TextFieldState()
+
+    fun onGuardar() {
+        val precioNumero = precio.text.toString().toDoubleOrNull()
+        if (nombre.text.isBlank() || precioNumero == null) {
+            _state.value = CrearProductoState.Error("Revisa el nombre y el precio")
+            return
+        }
+        _state.value = CrearProductoState.Creating
+        viewModelScope.launch {
+            try {
+                repository.crear(
+                    NuevoProductoDto(
+                        nombre = nombre.text.toString(),
+                        precio = precioNumero,
+                        stock = 0,
+                        categoriaId = 1
+                    )
+                )
+                _state.value = CrearProductoState.Created
+            } catch (e: IOException) {
+                _state.value = CrearProductoState.Error(e.message ?: "No se pudo guardar")
+            }
+        }
+    }
+}
+```
+
+- `toDoubleOrNull()` devuelve `null` si el texto no es un número, en vez de lanzar una excepción como `toDouble()`.
+- `categoriaId = 1` está fijo para que el ejemplo sea corto. En tu app saldrá de un desplegable con las categorías.
+- Lo mismo sirve para el **login**: cuando el estado pasa a `Success`, `LaunchedEffect` llama a `onEntrar()`.
+
+## Practica
+
+<CompletarCodigo
+  titulo="Entrar sin poder volver al login"
+  enunciado="Completa la navegación del login para que el botón atrás desde Productos cierre la app."
+  lenguaje="kotlin"
+  codigo={`LoginScreen(onEntrar = {
+    navController.navigate(Ruta.Productos) {
+        [[popUpTo]]<Ruta.[[Login]]> { [[inclusive]] = true }
+    }
+})`}
+/>
+
+<Quiz titulo="Test: navegación del proyecto">
+  <Pregunta enunciado="Entras con `navigate(Ruta.Productos)` sin opciones y pulsas atrás. ¿Qué pasa?" explicacion="El login se queda debajo en la pila, así que atrás vuelve a él. Hace falta `popUpTo<Ruta.Login> { inclusive = true }`.">
+    <Opcion>Se cierra la app</Opcion>
+    <Opcion correcta>Vuelves al login</Opcion>
+    <Opcion>No pasa nada</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué hace `inclusive = true` dentro de `popUpTo<Ruta.Login>`?" explicacion="`popUpTo` quita lo que hay encima de Login; con `inclusive`, quita también el propio Login.">
+    <Opcion correcta>Quita también la pantalla de login, no solo lo de encima</Opcion>
+    <Opcion>Incluye el login en la barra inferior</Opcion>
+    <Opcion>Guarda el estado del login</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Tu destino inicial es el login y en la barra pones `popUpTo(navController.graph.findStartDestination().id)`. ¿Qué pasa al cambiar de pestaña?" explicacion="El login ya se quitó de la pila al entrar, así que `popUpTo` no encuentra nada que quitar y las pantallas se acumulan.">
+    <Opcion>Vuelves al login</Opcion>
+    <Opcion correcta>No se quita nada y las pestañas se van apilando</Opcion>
+    <Opcion>La app se cae</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Para qué sirve `launchSingleTop = true` en la barra?" explicacion="Si la pestaña ya está arriba de la pila, no se apila otra vez.">
+    <Opcion>Para que la barra salga arriba</Opcion>
+    <Opcion correcta>Para que tocar dos veces la misma pestaña no la abra dos veces</Opcion>
+    <Opcion>Para abrir la pestaña en otra Activity</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`LaunchedEffect(state) { ... }` ejecuta su bloque en cada recomposición." respuesta={false} explicacion="Lo ejecuta al entrar y otra vez solo cuando cambia la clave (`state`). Por eso sirve para navegar una sola vez al llegar a `Created`." />
+  <Pregunta enunciado="¿Por qué no se vuelve atrás directamente en el `onClick` de Guardar?" explicacion="Guardar es una corrutina que tarda y puede fallar. Hay que volver cuando termina bien, mirando el estado.">
+    <Opcion>Porque `popBackStack()` no se puede llamar en un `onClick`</Opcion>
+    <Opcion correcta>Porque guardar tarda y puede fallar: hay que volver cuando termine bien</Opcion>
+    <Opcion>Porque el `onClick` no tiene acceso al estado</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué te da `navController.currentBackStackEntryAsState()`?" explicacion="La entrada de arriba de la pila como estado de Compose: al navegar, el composable que lo lee se recompone.">
+    <Opcion correcta>La pantalla actual como estado, para recomponer al navegar</Opcion>
+    <Opcion>La lista entera de pantallas abiertas</Opcion>
+    <Opcion>El `ViewModel` de la pantalla actual</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: navegación del proyecto">
+  <Tarjeta frente="Pila de navegación">Las pantallas abiertas, una encima de otra. `navigate` apila, atrás quita la de arriba y, si se vacía, la app se cierra.</Tarjeta>
+  <Tarjeta frente="`popUpTo<Ruta.X>`">Antes de apilar la nueva pantalla, quita todo lo que hay encima de `X`.</Tarjeta>
+  <Tarjeta frente="`popUpTo<Ruta.Login> { inclusive = true }`">Al entrar, quita también el login: el botón atrás desde la app ya no vuelve a él.</Tarjeta>
+  <Tarjeta frente="`saveState` y `restoreState`">Guardan y recuperan lo que había dentro de cada pestaña al cambiar entre ellas.</Tarjeta>
+  <Tarjeta frente="`hasRoute(item.ruta::class)`">Comprueba si un destino es el de esa ruta tipada. Con `hierarchy`, también si está dentro de su grafo.</Tarjeta>
+  <Tarjeta frente="`LaunchedEffect(state)`">Ejecuta un bloque al entrar y cada vez que cambia `state`. Sirve para navegar al llegar a `Created`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="El login con LaunchedEffect" dificultad="media">
+  Escribe `LoginScreen(onEntrar: () -> Unit, ...)` para que llame a `onEntrar()` cuando su ViewModel pase a `LoginState.Success`. Los estados son `Initial`, `Loading`, `Success` y `Error(mensaje)`.
+
+  <Pista>Es igual que `CrearProductoScreen`: `collectAsStateWithLifecycle()` y un `LaunchedEffect(state)`.</Pista>
+
+  <Solucion>
+
+```kotlin
+sealed interface LoginState {
+    data object Initial : LoginState
+    data object Loading : LoginState
+    data object Success : LoginState
+    data class Error(val mensaje: String) : LoginState
+}
+
+@Composable
+fun LoginScreen(
+    onEntrar: () -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: LoginViewModel = hiltViewModel()
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(state) {
+        if (state is LoginState.Success) {
+            onEntrar()
+        }
+    }
+
+    LoginContent(state = state, onLogin = viewModel::onLogin, modifier = modifier)
+}
+```
+
+  En el `NavHost`, `onEntrar` es el `navigate(Ruta.Productos) { popUpTo<Ruta.Login> { inclusive = true } }`. Antes de pasar a `Success`, el ViewModel guarda el token con `sesion.guardarToken(...)`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Saltar el login si ya hay sesión" dificultad="dificil">
+  Si el usuario ya entró otra vez (hay token en DataStore), la app tiene que abrir directamente en Productos. Piensa qué `startDestination` usar y cómo saberlo antes de pintar el `NavHost`.
+
+  <Pista>El token se lee de forma asíncrona. Mientras no lo sepas, no pintes el `NavHost`: enseña un indicador de carga (o mantén el *splash* del 13/11 con `setKeepOnScreenCondition`).</Pista>
+  <Pista>Un ViewModel con un `StateFlow<Ruta?>` que empieza en `null` y pasa a `Ruta.Login` o `Ruta.Productos`.</Pista>
+  <Pista>Decide el destino inicial **una sola vez**, al abrir la app: lee el token con `first()`.</Pista>
+
+  <Solucion>
+
+```kotlin title="InicioViewModel.kt"
+@HiltViewModel
+class InicioViewModel @Inject constructor(
+    private val sesion: SesionDataStore
+) : ViewModel() {
+    private val _inicio = MutableStateFlow<Ruta?>(null)
+    val inicio: StateFlow<Ruta?> = _inicio.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            val token = sesion.token.first()
+            _inicio.value = if (token.isNullOrEmpty()) Ruta.Login else Ruta.Productos
+        }
+    }
+}
+```
+
+```kotlin title="AppNavHost.kt"
+val inicioViewModel: InicioViewModel = hiltViewModel()
+val inicio by inicioViewModel.inicio.collectAsStateWithLifecycle()
+val destinoInicial = inicio
+
+if (destinoInicial == null) {
+    CircularProgressIndicator()
+} else {
+    NavHost(navController = navController, startDestination = destinoInicial, ...) {
+        // los mismos composable de antes
+    }
+}
+```
+
+  `destinoInicial` se copia en una variable local para que Kotlin haga el *smart cast* de `Ruta?` a `Ruta`. El token se lee con `first()` (una vez) y no observando el `Flow`: así el destino inicial no cambia cuando el usuario entra o cierra sesión, y el `NavHost` no se vuelve a montar a mitad de uso. Para cerrar sesión, borra el token y navega tú al login quitando de la pila la pantalla en la que estés.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

@@ -1,0 +1,470 @@
+---
+title: Prácticas raras del código de clase
+description: Lo que se escribió así en directo en clase y no conviene copiar en el proyecto, al lado de cómo se hace bien y por qué.
+icon: TriangleAlert
+---
+
+En clase se programa en directo: hay cosas que se dejan provisionales, se prueban y se cambian después, o se quedan a medias porque se acaba el tiempo. Copiadas tal cual en tu proyecto, algunas **hacen que la app se caiga o se congele**. Aquí tienes cada una, al lado de cómo se hace bien.
+
+<Callout type="idea" title="Cómo leer esta página">
+  Cada bloque tiene dos lados: **Así se hizo en clase** (con una X) y **Mejor así** (con un check). Cambia de lado con el conmutador o con las flechas del teclado. Si la forma buena no se dio en clase, lleva la marca "No dado en clase".
+</Callout>
+
+| En clase | Mejor así | Por qué |
+| --- | --- | --- |
+| Estado del ViewModel en un `var` normal (07/10) | `MutableStateFlow` y `collectAsStateWithLifecycle()` | Compose no se entera de los cambios de un `var` normal. |
+| `viewModel.load()` dentro del `when` de la pantalla (23/10) | Solo en el `init` del ViewModel | El composable se ejecuta muchas veces y cargaría una y otra vez. |
+| `runBlocking { refresh() }` en el `init` del repositorio (09/11) | `viewModelScope.launch { repository.refresh() }` en el `init` del ViewModel | `runBlocking` congela la app hasta que responde la red. |
+| `pokemons.add(pokemon!!)` y `body()!!` | Comprobar `isSuccessful` y que `body()` no sea `null` | Con `!!`, si la API falla, la app se cierra. |
+| `provideHttpClient()` devuelve la API (26/10) | Un `@Provides` por cosa | Cada función crea una cosa y se llama como lo que crea. |
+| `@Provides` de Room sin `@Singleton` (13/11) | Con `@Singleton` | Si no, se crea una base de datos nueva en cada inyección. |
+| `items = viewModel.readAll()` en la lista aunque ya se recogía `state` (16/10) | Pintar solo lo que llega en `state` | Si la pantalla lee por otro lado, no se entera de los cambios. |
+| Fechas como `String` (`"9999.31.12"`) | `LocalDate` en el modelo y texto ISO en el DTO y en Room | Con texto no se puede ordenar ni comparar bien. |
+
+## Estado que no se observa
+
+<DeClase fecha="07/10" proyecto="TipCalculator" />
+
+<Comparar titulo="El estado del ViewModel">
+  <Lado tipo="evitar">
+
+```kotlin
+class TipCalculatorViewModel(): ViewModel() {
+    private var _state = TipCalculatorScreenState()
+    val state: TipCalculatorScreenState
+        get() = _state
+
+    fun changeTip(isEnabled: Boolean) {
+        _state = _state.copy(
+            tip = isEnabled,
+            tipAmount = if (!isEnabled) 0.0f else _state.tipAmount
+        )
+    }
+}
+```
+
+`_state` es una variable normal: cuando cambia, **Compose no se entera** y no repinta. El propio profesor dejó un `TODO Corregir esto para que vaya perfecto`.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+class TipCalculatorViewModel : ViewModel() {
+    private val _state = MutableStateFlow(TipCalculatorScreenState())
+    val state: StateFlow<TipCalculatorScreenState> = _state.asStateFlow()
+
+    fun changeTip(isEnabled: Boolean) {
+        _state.value = _state.value.copy(
+            tip = isEnabled,
+            tipAmount = if (!isEnabled) 0.0f else _state.value.tipAmount
+        )
+    }
+}
+```
+
+En la pantalla: `val state by viewModel.state.collectAsStateWithLifecycle()`. Es lo que se hizo en clase **a partir del 16/10**.
+
+  </Lado>
+</Comparar>
+
+Relacionado: el 16/10, la lista de tareas **seguía leyendo de `viewModel.readAll()`** aunque ya se recogía el `state`. Si tienes un `StateFlow`, la pantalla lee solo de él.
+
+## Cargar desde la pantalla
+
+<DeClase fecha="23/10" proyecto="ToDoApp" />
+
+<Comparar titulo="¿Quién llama a load()?">
+  <Lado tipo="evitar">
+
+```kotlin
+when (state) {
+    is TaskListScreenState.Success -> { /* lista */ }
+    is TaskListScreenState.Error -> TODO()
+    TaskListScreenState.Loading -> { /* cargando */ }
+    TaskListScreenState.Initial -> {
+        viewModel.load()
+        TaskListScreen(modifier = modifier, toCreate = toCreate, toDetail = toDetail,
+            isLoading = true)
+    }
+}
+```
+
+(Recortado: las otras ramas pintan la lista o el indicador de carga.) Un composable se ejecuta cada vez que se recompone, así que `load()` se llamaría una y otra vez. Además, `_state` empieza en `Loading` y ya hay un `init { load() }`, así que esta rama nunca se ejecuta.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+@HiltViewModel
+class TaskListViewModel @Inject constructor(
+    private val _repository: TaskRepository
+) : ViewModel() {
+    init { load() }
+
+    fun load() { /* ... */ }
+}
+```
+
+La carga va solo en el `init` del ViewModel, que se ejecuta una vez. La pantalla solo pinta el estado. (El `init { load() }` ya estaba en el código de clase.)
+
+  </Lado>
+</Comparar>
+
+- En la rama `Initial`, una captura lee <Dudoso nota="Otra captura lee `isLoading = false`.">`isLoading = true`</Dudoso>.
+- Si alguna vez necesitas lanzar algo desde un composable, va dentro de un `LaunchedEffect`, como en [volver atrás después de guardar](/docs/2-dam/kotlin/para-el-proyecto/navegacion-del-proyecto).
+
+## runBlocking en el repositorio
+
+<DeClase fecha="09/11" proyecto="PokeApp2627" />
+
+<Comparar titulo="La carga inicial">
+  <Lado tipo="evitar">
+
+```kotlin
+class PokemonRepositoryImpl @Inject constructor(
+    private val _remoteDataSource: PokemonRemoteDataSource,
+    private val _localDataSource: PokemonLocalDataSource,
+) : PokemonRepository {
+    init {
+        runBlocking { refresh() }
+    }
+}
+```
+
+`runBlocking` **bloquea el hilo** hasta que termina. Como el repositorio se crea en el hilo principal, la app se congela hasta que responde la red (y, si tarda, Android ofrece cerrarla). En clase se usó como solución provisional y el 16/11 ya aparece comentado.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+@HiltViewModel
+class ProductosViewModel @Inject constructor(
+    private val repository: ProductoRepository
+) : ViewModel() {
+    init {
+        refresh()
+    }
+
+    fun refresh() {
+        viewModelScope.launch {
+            try {
+                repository.refresh()
+            } catch (e: IOException) {
+                // guardar el error en el estado
+            }
+        }
+    }
+}
+```
+
+<NoDadoEnClase inline /> La corrutina no bloquea nada y se cancela sola si se cierra la pantalla. El código completo está en [Room como fuente de verdad](/docs/2-dam/kotlin/para-el-proyecto/offline-first).
+
+  </Lado>
+</Comparar>
+
+## Los !! con la API
+
+<DeClase fecha="26/10" proyecto="PokeApp2627" nota="versión del 09/11" />
+
+<Comparar titulo="Leer la respuesta de Retrofit">
+  <Lado tipo="evitar">
+
+```kotlin
+override suspend fun readAllPokemon(): List<Pokemon> {
+    val response = _api.readAllPokemon()
+    val pokemons = mutableListOf<Pokemon>()
+    if (response.isSuccessful) {
+        val body = response.body()!!
+        for (item in body.results) {
+            val pokemon = readPokemonByName(item.name)
+            pokemons.add(pokemon!!)
+        }
+    }
+    return pokemons
+}
+
+override suspend fun readPokemonByName(name: String): Pokemon? {
+    val response = _api.readPokemonByName(name)
+    if (response.isSuccessful) {
+        return response.body()!!.toModel()
+    } else {
+        return null
+    }
+}
+```
+
+`!!` lanza `NullPointerException` si el valor es `null`. Basta con que falle **uno** de los pokémon para que la app se cierre. Y si falla el listado, devuelve una lista vacía sin decir nada.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+override suspend fun readAllPokemon(): List<Pokemon> {
+    val response = _api.readAllPokemon()
+    val body = response.body()
+    if (!response.isSuccessful || body == null) {
+        throw IOException("La API respondió ${response.code()}")
+    }
+    return body.results.mapNotNull { item -> readPokemonByName(item.name) }
+}
+
+override suspend fun readPokemonByName(name: String): Pokemon? {
+    val response = _api.readPokemonByName(name)
+    return if (response.isSuccessful) response.body()?.toModel() else null
+}
+```
+
+<NoDadoEnClase inline /> Si el listado falla, se lanza una excepción que recoge el ViewModel. `mapNotNull` se salta los pokémon que no se pudieron leer, y `?.` solo llama a `toModel()` si hay cuerpo.
+
+  </Lado>
+</Comparar>
+
+## Un @Provides que lo hace todo
+
+<DeClase fecha="26/10" proyecto="PokeApp2627" />
+
+<Comparar titulo="Crear Retrofit con Hilt">
+  <Lado tipo="evitar">
+
+```kotlin
+@Module
+@InstallIn(SingletonComponent::class)
+class NetworkModule {
+    @Provides
+    @Singleton
+    fun provideHttpClient(): PokeApi {
+        val retrofit: Retrofit = Retrofit.Builder()
+            .baseUrl("https://pokeapi.co/api/v2/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+        return retrofit.create(PokeApi::class.java)
+    }
+}
+```
+
+Se llama `provideHttpClient` pero devuelve la API, no un cliente HTTP. Y como todo va dentro, no puedes reutilizar el `Retrofit` para una segunda interfaz ni meter OkHttp en medio.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+@Module
+@InstallIn(SingletonComponent::class)
+object NetworkModule {
+    @Provides
+    @Singleton
+    fun provideRetrofit(): Retrofit =
+        Retrofit.Builder()
+            .baseUrl("https://pokeapi.co/api/v2/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+
+    @Provides
+    @Singleton
+    fun providePokeApi(retrofit: Retrofit): PokeApi =
+        retrofit.create(PokeApi::class.java)
+}
+```
+
+<NoDadoEnClase inline /> Cada función crea una cosa y se llama como lo que devuelve. Con el interceptor del token se añade un tercer `@Provides` para el `OkHttpClient`: está en [Conectar con tu API](/docs/2-dam/kotlin/para-el-proyecto/conectar-con-tu-api).
+
+  </Lado>
+</Comparar>
+
+## La base de datos sin @Singleton
+
+<DeClase fecha="13/11" proyecto="Room" />
+
+<Comparar titulo="Proveer la base de datos" columnas>
+  <Lado tipo="evitar">
+
+```kotlin
+@Provides
+fun providesDatabase(
+    @ApplicationContext context: Context
+): PokemonDatabase {
+    val db = Room.databaseBuilder<PokemonDatabase>(
+        context = context,
+        name = "pokemon_db"
+    ).build()
+    return db
+}
+```
+
+Hilt llama a la función en cada inyección: una base nueva cada vez.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+@Provides
+@Singleton
+fun providesDatabase(
+    @ApplicationContext context: Context
+): PokemonDatabase {
+    val db = Room.databaseBuilder<PokemonDatabase>(
+        context = context,
+        name = "pokemon_db"
+    ).build()
+    return db
+}
+```
+
+<NoDadoEnClase inline /> Una sola base para toda la app.
+
+  </Lado>
+</Comparar>
+
+## Fechas como texto
+
+<DeClase fecha="16/10, 23/10" proyecto="ToDoApp" />
+
+<Comparar titulo="La fecha límite de una tarea">
+  <Lado tipo="evitar">
+
+```kotlin
+_repository.create(
+    title = titleState.text.toString(),
+    description = descriptionState.text.toString(),
+    limitDate = "9999.31.12"
+)
+
+val newTask = Task(id = nextId, title = title, description = description,
+    createdAt = "", limitDate = limitDate)
+```
+
+Con texto no puedes ordenar por fecha, ni comparar, ni saber si ya pasó. Además, `"9999.31.12"` ni siquiera sigue el orden año-mes-día. El profesor lo marcó con `TODO Deuda técnica` y `TODO Buscar un tipo correcto para fecha`.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+data class Task(
+    val id: Int,
+    val title: String,
+    val limitDate: LocalDate
+)
+
+data class TaskDto(
+    val id: Int,
+    val title: String,
+    val limitDate: String
+)
+
+fun TaskDto.toModel() = Task(
+    id = id,
+    title = title,
+    limitDate = LocalDate.parse(limitDate)
+)
+```
+
+<NoDadoEnClase inline /> `LocalDate` (de `java.time`, como en Java) en el modelo. En el DTO y en Room, texto en formato ISO (`"2026-12-31"`): `LocalDate.parse` lo lee y `toString()` lo escribe.
+
+  </Lado>
+</Comparar>
+
+## Un StateFlow que no avisa
+
+<DeClase fecha="23/10" proyecto="ToDoApp" />
+
+Esta no está en la lista de prácticas raras, pero es una observación sobre el código de clase que conviene saber:
+
+```kotlin title="TaskRepositoryInMemory.kt (23/10)"
+private val _taskList = mutableListOf<Task>()
+private val _taskFlow = MutableStateFlow(_taskList)
+
+// al crear una tarea
+if (_taskList.add(newTask)) {
+    nextId++
+    _taskFlow.value = _taskList
+}
+```
+
+- <Dudoso nota="Es una observación de quien hizo los apuntes, no algo que se dijera en clase.">`_taskFlow.value = _taskList` asigna **la misma lista**</Dudoso>. Un `StateFlow` no emite si el valor nuevo es igual al anterior, así que `tasks` no avisaría de las tareas nuevas. Coincide con lo que se vio el 16/10: "la lista no se actualiza".
+- No se ve dónde se declara <Dudoso>`nextId`</Dudoso>.
+- Lo normal es que el `StateFlow` guarde una lista que no cambia y asignar una nueva cada vez: `MutableStateFlow<List<Task>>(emptyList())` y `_taskFlow.value = _taskList.toList()`.
+
+## Practica
+
+<Quiz titulo="Test: prácticas raras">
+  <Pregunta enunciado="¿Por qué no conviene `runBlocking { refresh() }` en el `init` del repositorio?" explicacion="`runBlocking` bloquea el hilo en el que se ejecuta, que aquí es el principal: la app se congela hasta que responde la red.">
+    <Opcion>Porque no compila</Opcion>
+    <Opcion correcta>Porque congela la app hasta que responde la red</Opcion>
+    <Opcion>Porque no se puede llamar a una función `suspend`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="La API devuelve un error 500 y tu código hace `response.body()!!`. ¿Qué pasa?" explicacion="Con un error, `body()` es `null` y `!!` lanza `NullPointerException`: la app se cierra.">
+    <Opcion>Se devuelve una lista vacía</Opcion>
+    <Opcion correcta>La app se cierra con `NullPointerException`</Opcion>
+    <Opcion>Retrofit reintenta la petición</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Llamar a `viewModel.load()` dentro del cuerpo de un composable hace que se cargue una sola vez." respuesta={false} explicacion="El cuerpo de un composable se ejecuta en cada recomposición. La carga va en el `init` del ViewModel (o, si hace falta desde la pantalla, en un `LaunchedEffect`)." />
+  <Pregunta enunciado="¿Qué tiene de malo `provideHttpClient()` en el `NetworkModule` de clase?" explicacion="Devuelve la API, no un cliente HTTP, y lo crea todo en una función: no se puede reutilizar Retrofit ni meter OkHttp.">
+    <Opcion>Que le falta `@Singleton`</Opcion>
+    <Opcion correcta>Que se llama como un cliente HTTP pero devuelve la API, y lo hace todo en una función</Opcion>
+    <Opcion>Que no usa Gson</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué tipo usas en el modelo para una fecha límite?" explicacion="`LocalDate` de `java.time`. El texto ISO (`2026-12-31`) se queda en el DTO y en Room.">
+    <Opcion>`String` con formato `"9999.31.12"`</Opcion>
+    <Opcion correcta>`LocalDate`</Opcion>
+    <Opcion>`Long` con los milisegundos siempre</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En el TipCalculator del 07/10, ¿por qué no se repintaba la pantalla al cambiar `_state`?" explicacion="Era un `var` normal, no observable. Compose solo se entera de cambios en estados observables como `mutableStateOf` o un `StateFlow` recogido.">
+    <Opcion>Porque faltaba `@HiltViewModel`</Opcion>
+    <Opcion correcta>Porque `_state` era una variable normal, no observable</Opcion>
+    <Opcion>Porque `copy()` no crea un objeto nuevo</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: prácticas raras">
+  <Tarjeta frente="`runBlocking` en un `init`">Congela el hilo principal hasta que termina. Usa `viewModelScope.launch` en el `init` del ViewModel.</Tarjeta>
+  <Tarjeta frente="`body()!!`">Si la API falla, `body()` es `null` y la app se cae. Comprueba `isSuccessful` y que no sea `null`.</Tarjeta>
+  <Tarjeta frente="`load()` dentro del composable">Se ejecuta en cada recomposición. La carga va en el `init` del ViewModel.</Tarjeta>
+  <Tarjeta frente="`@Provides` sin `@Singleton`">Hilt crea un objeto nuevo en cada inyección. Para Room y Retrofit, pon `@Singleton`.</Tarjeta>
+  <Tarjeta frente="`mapNotNull`">Como `map`, pero se salta los resultados `null`.</Tarjeta>
+  <Tarjeta frente="Fechas">`LocalDate` en el modelo; texto ISO (`"2026-12-31"`) en el DTO y en Room.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Revisa este código" dificultad="media">
+  Encuentra los tres problemas de este fragmento y escribe cómo quedaría bien:
+
+```kotlin
+class PedidoRepositoryImpl @Inject constructor(
+    private val api: TiendaApi,
+    private val dao: TiendaDao
+) : PedidoRepository {
+    init {
+        runBlocking { refresh() }
+    }
+
+    override suspend fun refresh() {
+        val pedidos = api.getPedidos().body()!!
+        dao.upsertPedidos(pedidos.map { it.toEntity(fecha = "2026.31.12") })
+    }
+}
+```
+
+  <Pista>Busca lo mismo que en esta página: cómo se carga, cómo se lee la respuesta y qué tipo tiene la fecha.</Pista>
+
+  <Solucion>
+
+  1. **`runBlocking` en el `init` del repositorio**: quítalo y llama a `refresh()` desde el `init` del ViewModel, dentro de `viewModelScope.launch` y con `try/catch (e: IOException)`.
+  2. **`body()!!`**: si la API falla, la app se cae. Comprueba la respuesta.
+  3. **La fecha como texto inventado** (y sin el orden año-mes-día): la fecha sale del DTO, en formato ISO, y en el modelo es `LocalDate`.
+
+```kotlin
+override suspend fun refresh() {
+    val respuesta = api.getPedidos()
+    val pedidos = respuesta.body()
+    if (!respuesta.isSuccessful || pedidos == null) {
+        throw IOException("La API respondió ${respuesta.code()}")
+    }
+    dao.upsertPedidos(pedidos.map { it.toEntity() })
+}
+```
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

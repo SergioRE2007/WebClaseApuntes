@@ -1,0 +1,474 @@
+---
+title: "Autenticación: registro y login con bcrypt y JWT"
+description: "El módulo auth de la referencia (v0.5.0): guardar la contraseña con bcrypt, firmar un JWT con sub, email y caducidad, el mismo mensaje para los dos fallos del login y lo que se sabe de las versiones v0.6.0 y v0.7.0."
+icon: KeyRound
+---
+
+En la v0.5.0 la referencia añade el **módulo `auth`**: registrarse y entrar. Al registrarse, la contraseña se guarda como un *hash* de **bcrypt**; al entrar, se compara y, si es correcta, la API devuelve un **JWT**, un token firmado que el cliente mandará en las siguientes peticiones.
+
+<DeClase fecha="27/10" proyecto="node-server-26-27" nota="v0.5.0; el 03/11 se ven los tests y el README de la v0.7.0" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Por qué la contraseña se guarda como hash y cómo se usan `bcrypt.hash` y `bcrypt.compare`.
+  - Qué es un JWT y qué lleva el que firma la API (`sub`, `email`, caducidad de 7 días).
+  - Cómo se reparten el trabajo `auth.routes`, `auth.controller` y `auth.service`.
+  - Por qué los dos fallos del login dan el mismo mensaje.
+  - Qué se sabe (y qué no) del middleware de autenticación de la v0.6.0.
+</Callout>
+
+## La contraseña: hash, no cifrado
+
+En la tabla `User` no hay columna `password`: hay **`passwordHash`**. Un <Concepto termino="Hash" definicion="Resultado de pasar un texto por una función de un solo sentido: de la contraseña se saca el hash, pero del hash no se puede sacar la contraseña.">hash</Concepto> se calcula a partir de la contraseña, pero no se puede deshacer. Si alguien roba la base de datos, no tiene las contraseñas.
+
+- **`bcrypt.hash(password, rondas)`** calcula el hash al registrarse. Las rondas dicen cuánto trabajo cuesta calcularlo (más rondas, más lento y más difícil de atacar a fuerza bruta). Salen de `env.BCRYPT_SALT_ROUNDS`, que por defecto es **10**.
+- **`bcrypt.compare(password, hash)`** comprueba al entrar si la contraseña que llega corresponde a ese hash. Devuelve `true` o `false`.
+
+Nunca se compara a mano ni se "descifra" nada: siempre `bcrypt.compare`.
+
+## El token: JWT
+
+Un <Concepto termino="JWT" definicion="JSON Web Token: un token firmado que el servidor da al iniciar sesión. El cliente lo manda en cada petición (Authorization: Bearer ...) y el servidor comprueba la firma sin guardar nada.">JWT</Concepto> son tres trozos en Base64 separados por puntos: `cabecera.datos.firma`. Los datos (el *payload*) los puede leer cualquiera; lo que no se puede es **cambiarlos sin que la firma deje de valer**, porque la firma se calcula con un secreto que solo tiene el servidor.
+
+```ts title="Lo que firma la API"
+jwt.sign({ sub: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: '7d' });
+```
+
+| Parte | Qué es |
+| --- | --- |
+| `sub` | *Subject*: el id del usuario. Es el nombre estándar de ese dato en un JWT. |
+| `email` | El email, para no tener que buscarlo. |
+| `env.JWT_SECRET` | El secreto con el que se firma. Sale del `.env` y es obligatorio (`required()`). |
+| `expiresIn: '7d'` | El token caduca a los 7 días. |
+
+El tooltip del editor sobre `sub` enseñaba `String.sub()` (obsoleto). Es un falso positivo: en el JWT, `sub` es solo una clave del objeto.
+
+## Las rutas
+
+<Tabs items={['v0.5.0', 'v1.0.0']}>
+  <Tab value="v0.5.0">
+
+```ts title="src/modules/auth/auth.routes.ts"
+import { Router } from 'express';
+import { registerCtrl, loginCtrl } from './auth.controller.js';
+
+const router = Router();
+
+router.post('/register', registerCtrl);
+router.post('/login', loginCtrl);
+
+export default router;
+```
+
+  </Tab>
+  <Tab value="v1.0.0">
+
+```ts title="src/modules/auth/auth.routes.ts"
+import { Router } from 'express';
+import { validate } from '../../middleware/validate.js';
+import { registerSchema, loginSchema } from '../users/users.schema.js';
+import { registerCtrl, loginCtrl } from './auth.controller.js';
+
+const router = Router();
+router.post('/register', validate(registerSchema), registerCtrl);
+router.post('/login', validate(loginSchema), loginCtrl);
+export default router;
+```
+
+En la v1.0.0 se añade `validate(schema)` delante de cada controlador.
+
+  </Tab>
+</Tabs>
+
+Y en `app.ts` se monta con el prefijo `/api/auth`, junto al de usuarios:
+
+```ts title="src/app.ts (v0.5.0)"
+app.use('/api/auth', authRoutes);
+app.use('/api/users', usersRoutes);
+```
+
+Así las rutas son `POST /api/auth/register` y `POST /api/auth/login`. En la v0.8.0, la de auth lleva además un limitador de intentos ([Logs, rate limiting y tests](/docs/2-dam/apis/backend/logs-rate-limiting-tests)).
+
+## El servicio
+
+<Recorrido
+  titulo="src/modules/auth/auth.service.ts"
+  lenguaje="ts"
+  codigo={`import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import { env } from '../../config/env.js';
+import { createUser, findUserByEmail } from '../users/users.service.js';
+
+export async function register(email: string, name: string, password: string) {
+  const existing = await findUserByEmail(email);
+  if (existing) {
+    throw new Error('Email ya registrado');
+  }
+  const hash = await bcrypt.hash(password, env.BCRYPT_SALT_ROUNDS);
+  const user = await createUser(email, name, hash);
+  const token = jwt.sign({ sub: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: '7d' });
+  return { user, token };
+}
+
+export async function login(email: string, password: string) {
+  const user = await findUserByEmail(email);
+  if (!user) {
+    throw new Error('Credenciales inválidas');
+  }
+  const ok = await bcrypt.compare(password, user.passwordHash);
+  if (!ok) {
+    throw new Error('Credenciales inválidas');
+  }
+  const token = jwt.sign({ sub: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: '7d' });
+  return {
+    user: { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt },
+    token
+  };
+}`}
+>
+  <Paso lineas="1-4" titulo="Reutiliza el servicio de usuarios">
+    El módulo `auth` no habla con Prisma directamente: usa `createUser` y `findUserByEmail` del servicio de `users`.
+  </Paso>
+  <Paso lineas="7-10" titulo="¿Ya existe?">
+    Si hay un usuario con ese email, **lanza** un `Error` con un mensaje concreto. El servicio no sabe de códigos HTTP: eso lo decide el controlador.
+  </Paso>
+  <Paso lineas="11" titulo="bcrypt.hash">
+    Calcula el hash con las rondas de `env` (10 por defecto). `await`, porque bcrypt es lento a propósito.
+  </Paso>
+  <Paso lineas="12" titulo="Guardar">
+    `createUser` inserta con `passwordHash` y devuelve el usuario **sin** él (lleva `select`).
+  </Paso>
+  <Paso lineas="13-14" titulo="Firmar el token">
+    `jwt.sign` con `sub` y `email`, el secreto y 7 días de caducidad. El registro ya deja la sesión iniciada: devuelve `{ user, token }`.
+  </Paso>
+  <Paso lineas="18-21" titulo="Login: buscar por email">
+    `findUserByEmail` devuelve el usuario entero, con `passwordHash`, o `null`.
+  </Paso>
+  <Paso lineas="22-25" titulo="Comparar la contraseña">
+    `bcrypt.compare` con lo que llega y el hash guardado. Si no coincide, el **mismo** error que si el email no existiera.
+  </Paso>
+  <Paso lineas="26-30" titulo="Responder sin passwordHash">
+    Aquí el usuario sí trae `passwordHash` (no tenía `select`), así que se monta el objeto a mano con solo los campos públicos.
+  </Paso>
+</Recorrido>
+
+El tooltip de `register` enseña el tipo que devuelve: `Promise<{ user: { id: number; email: string; name: string; createdAt: Date }; token: string }>`.
+
+## El controlador
+
+<Recorrido
+  titulo="src/modules/auth/auth.controller.ts (v0.5.0)"
+  lenguaje="ts"
+  codigo={`import type { Request, Response } from 'express';
+import { register, login } from './auth.service.js';
+import { registerSchema, loginSchema } from '../users/users.schema.js';
+
+export async function registerCtrl(req: Request, res: Response) {
+  try {
+    const { email, name, password } = registerSchema.parse(req.body);
+    const data = await register(email, name, password);
+    res.status(201).json(data);
+  } catch (e: any) {
+    if (e.message === 'Email ya registrado') {
+      return res.status(409).json({ message: e.message });
+    }
+    res.status(400).json({ message: e.message });
+  }
+}
+
+export async function loginCtrl(req: Request, res: Response) {
+  try {
+    const { email, password } = loginSchema.parse(req.body);
+    const data = await login(email, password);
+    res.json(data);
+  } catch (e: any) {
+    if (e.message === 'Credenciales inválidas') {
+      return res.status(401).json({ message: e.message });
+    }
+    res.status(400).json({ message: e.message });
+  }
+}`}
+>
+  <Paso lineas="7" titulo="Validar con parse">
+    En la v0.5.0 la ruta no lleva `validate`: el controlador valida con `parse`, que **lanza** si los datos no valen, y el error cae en el `catch`.
+  </Paso>
+  <Paso lineas="8-9" titulo="201 Created">
+    El registro crea un recurso, así que responde **201** con `{ user, token }`.
+  </Paso>
+  <Paso lineas="11-13" titulo="Del mensaje al código">
+    El servicio lanzó `new Error('Email ya registrado')`: el controlador lo reconoce por el mensaje y responde **409**.
+  </Paso>
+  <Paso lineas="14" titulo="Lo demás: 400">
+    Cualquier otro error (sobre todo el de Zod) responde 400 con `e.message`. Con un `ZodError`, ese mensaje es la lista de errores convertida en texto.
+  </Paso>
+  <Paso lineas="20-22" titulo="Login correcto: 200">
+    `res.json(data)` con `{ user, token }`.
+  </Paso>
+  <Paso lineas="24-26" titulo="Credenciales inválidas: 401">
+    401 *Unauthorized*: no te has identificado bien.
+  </Paso>
+</Recorrido>
+
+El reparto es siempre el mismo: **el servicio lanza `throw new Error('...')` y el controlador traduce el mensaje a un código HTTP**.
+
+| Petición | Cuándo | Respuesta |
+| --- | --- | --- |
+| `POST /api/auth/register` | Todo bien | **201** `{ user, token }` |
+| | Email ya registrado | **409** `{ message: 'Email ya registrado' }` |
+| | Datos que no pasan Zod | **400** `{ message }` (v0.5.0) |
+| `POST /api/auth/login` | Todo bien | **200** `{ user, token }` |
+| | Email que no existe o contraseña mal | **401** `{ message: 'Credenciales inválidas' }` |
+| | Datos que no pasan Zod | **400** `{ message }` (v0.5.0) |
+
+<Callout type="info" title="En la v1.0.0">
+  Con `validate(schema)` en las rutas, los datos mal formados se cortan antes y el 400 sale de `validate` (con `{ errors }`). <Dudoso nota="No se ve el controlador de auth de la v1.0.0.">No se sabe si el `parse` del controlador se quitó</Dudoso>.
+</Callout>
+
+## El login, paso a paso
+
+<Flujo
+  titulo="POST /api/auth/login"
+  nodos={["Cliente", "auth.routes", "loginCtrl", "auth.service", "Prisma", "bcrypt y jwt"]}
+>
+  <Mensaje de="Cliente" a="auth.routes" titulo="POST /api/auth/login">
+    Con `{ "email": "...", "password": "..." }` en el body.
+  </Mensaje>
+  <Mensaje de="auth.routes" a="loginCtrl" titulo="router.post('/login', ...)">
+    El router de auth lo manda a `loginCtrl` (en la v1.0.0, pasando antes por `validate(loginSchema)`).
+  </Mensaje>
+  <Mensaje de="loginCtrl" a="loginCtrl" titulo="loginSchema.parse(req.body)">
+    Si el email no tiene formato o la contraseña tiene menos de 8 caracteres, lanza y el `catch` responde 400.
+  </Mensaje>
+  <Mensaje de="loginCtrl" a="auth.service" titulo="login(email, password)">
+    El controlador le pasa los datos limpios al servicio.
+  </Mensaje>
+  <Mensaje de="auth.service" a="Prisma" titulo="findUserByEmail(email)">
+    `findUnique` por `email`, sin `select`: hace falta `passwordHash`.
+  </Mensaje>
+  <Mensaje de="Prisma" a="auth.service" tipo="respuesta" titulo="El usuario o null">
+    Si es `null`, el servicio lanza `Credenciales inválidas`.
+  </Mensaje>
+  <Mensaje de="auth.service" a="bcrypt y jwt" titulo="bcrypt.compare(...)">
+    Compara la contraseña que llega con `user.passwordHash`.
+  </Mensaje>
+  <Mensaje de="bcrypt y jwt" a="auth.service" tipo="respuesta" titulo="true o false">
+    Si es `false`, el mismo error: `Credenciales inválidas`.
+  </Mensaje>
+  <Mensaje de="auth.service" a="bcrypt y jwt" titulo="jwt.sign(...)">
+    Firma `{ sub, email }` con `JWT_SECRET` y caducidad de 7 días.
+  </Mensaje>
+  <Mensaje de="auth.service" a="loginCtrl" tipo="respuesta" titulo="{ user, token }">
+    El usuario montado a mano, sin `passwordHash`, y el token.
+  </Mensaje>
+  <Mensaje de="loginCtrl" a="Cliente" tipo="respuesta" titulo="200 o 401">
+    200 con `{ user, token }`, o 401 si el servicio lanzó `Credenciales inválidas`.
+  </Mensaje>
+</Flujo>
+
+Puedes probar el registro y el login (y el 409 y el 401) en el simulador de [CRUD de usuarios](/docs/2-dam/apis/backend/crud-usuarios#pruébalo).
+
+## Seguridad
+
+- **El mismo mensaje en los dos fallos.** Si el login dijera "ese email no existe" o "contraseña incorrecta", un atacante podría averiguar qué emails están registrados. Con "Credenciales inválidas" para los dos casos, no da pistas.
+- **Nunca se devuelve `passwordHash`**: `createUser` lleva `select` y `login` monta el usuario a mano. Los tests lo comprueban (`not.toHaveProperty('passwordHash')`).
+- **El ejemplo de lo que no hay que hacer**: el 28/10, la Fake Store API devolvía el campo `password` de cada usuario en `GET /users` ([Probar APIs](/docs/2-dam/apis/backend/probar-apis)).
+- **`JWT_SECRET` fuera del código**: sale del `.env` y, en producción, se pasa desde el entorno, sin escribirlo en el `docker-compose` ([Docker y Swagger](/docs/2-dam/apis/backend/docker-swagger)).
+
+## Lo que vino después: v0.6.0 y v0.7.0
+
+Según los tags, la **v0.6.0** añade el middleware de autenticación (JWT, rutas protegidas y `/me`) y la **v0.7.0**, actualizar el perfil y cambiar la contraseña.
+
+<NoSeVio titulo="Middleware auth, /me y /me/password">
+  El código del middleware `auth` (v0.6.0), de las rutas `/me` y `/me/password` y del servicio de cambiar la contraseña no se llegó a ver. Solo se conocen por los tests de la v0.9.0, el README de la v0.7.0 y los mensajes de error.
+</NoSeVio>
+
+Lo que sí se sabe por los tests y el README:
+
+| Petición | Qué se espera |
+| --- | --- |
+| `GET /api/users` sin cabecera `Authorization` | **401** `No autorizado` |
+| `GET /api/users` con `Bearer invalid_token` | **401** `Token inválido` |
+| `GET /api/users/me` con token | **200** con el usuario, sin `passwordHash` |
+| `PATCH /api/users/me` con `{ name }` | **200** con el nombre cambiado |
+| `PATCH /api/users/me` con un email mal escrito | **400** |
+| `PATCH /api/users/me/password` con `{ currentPassword, newPassword }` | **200** `Contraseña actualizada correctamente`, y después el login funciona con la nueva |
+| Lo mismo con la contraseña actual mal | **400** `Contraseña actual incorrecta` |
+
+El README de la v0.7.0 describe así el cambio de contraseña:
+
+<Steps>
+  <Step>
+
+#### El middleware `auth` valida el JWT
+
+Lee la cabecera `Authorization: Bearer <token>` y comprueba la firma.
+
+  </Step>
+  <Step>
+
+#### El middleware `validate` valida el body
+
+Con el schema de la contraseña.
+
+  </Step>
+  <Step>
+
+#### El controlador saca el id del token
+
+De `req.user.sub`, no del body ni de la URL.
+
+  </Step>
+  <Step>
+
+#### El servicio comprueba la contraseña actual
+
+Con `bcrypt.compare`.
+
+  </Step>
+  <Step>
+
+#### Se guarda la nueva
+
+Hasheada con bcrypt.
+
+  </Step>
+</Steps>
+
+Como el id sale del token, **cada usuario solo puede modificar su propio perfil**: aunque cambie la URL o el body, el token dice quién es.
+
+<NoDadoEnClase titulo="Cómo se protege una ruta con el token">
+  Un middleware estándar que hace lo de la v0.6.0 (leer `Authorization: Bearer`, `jwt.verify` y pasar el id al controlador) está en [Backend para el proyecto](/docs/2-dam/apis/backend-proyecto), con lo que no se ha dado en clase.
+</NoDadoEnClase>
+
+## Practica
+
+<Quiz titulo="Test: autenticación" descripcion="8 preguntas">
+  <Pregunta enunciado="¿Qué se guarda en la base cuando alguien se registra?" explicacion="Solo el hash de bcrypt, en `passwordHash`. La contraseña en claro no se guarda nunca.">
+    <Opcion>La contraseña cifrada con `JWT_SECRET`</Opcion>
+    <Opcion correcta>El hash de la contraseña, calculado con `bcrypt.hash`</Opcion>
+    <Opcion>La contraseña tal cual, porque la base es privada</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cómo comprueba el login que la contraseña es correcta?" explicacion="`bcrypt.compare(password, user.passwordHash)` calcula y compara; el hash no se puede deshacer.">
+    <Opcion>Descifrando `passwordHash` y comparando los textos</Opcion>
+    <Opcion correcta>Con `bcrypt.compare(password, user.passwordHash)`</Opcion>
+    <Opcion>Volviendo a hacer `bcrypt.hash` y comparando con `===`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué lleva el payload del JWT que firma la API de clase?" explicacion="`{ sub: user.id, email: user.email }`, más la caducidad que añade `expiresIn: '7d'`.">
+    <Opcion>El usuario entero, con `passwordHash`</Opcion>
+    <Opcion correcta>`sub` (el id del usuario) y `email`, con caducidad de 7 días</Opcion>
+    <Opcion>Solo el `JWT_SECRET`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Te registras con un email que ya existe. ¿Qué responde la API?" explicacion="El servicio lanza `Email ya registrado` y el controlador lo traduce a 409 Conflict.">
+    <Opcion>400</Opcion>
+    <Opcion>401</Opcion>
+    <Opcion correcta>409</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué responde el login si el email no existe?" explicacion="El mismo 401 `Credenciales inválidas` que con la contraseña mal, para no revelar qué emails están registrados.">
+    <Opcion>404 `Usuario no encontrado`</Opcion>
+    <Opcion correcta>401 `Credenciales inválidas`</Opcion>
+    <Opcion>400 `Email inválido`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="En el módulo auth, el servicio responde directamente con `res.status(409)`." respuesta={false} explicacion="El servicio no sabe de `res`: lanza `throw new Error('...')` y el controlador traduce el mensaje a un código HTTP." />
+  <Pregunta tipo="vf" enunciado="El payload de un JWT no lo puede leer nadie sin `JWT_SECRET`." respuesta={false} explicacion="El payload va en Base64 y lo puede leer cualquiera. El secreto sirve para firmar: sin él no se puede cambiar el contenido sin que la firma deje de valer." />
+  <Pregunta enunciado="En la v0.7.0, ¿de dónde saca el controlador el id del usuario que cambia su contraseña?" explicacion="De `req.user.sub`, que pone el middleware auth al validar el token. Así cada uno solo cambia lo suyo.">
+    <Opcion>Del body de la petición</Opcion>
+    <Opcion>De `req.params.id`</Opcion>
+    <Opcion correcta>Del token: `req.user.sub`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: autenticación">
+  <Tarjeta frente="`bcrypt.hash` y `bcrypt.compare`">`hash(password, rondas)` al registrarse; `compare(password, hash)` al entrar. Las rondas salen de `BCRYPT_SALT_ROUNDS` (10).</Tarjeta>
+  <Tarjeta frente="Las tres partes de un JWT">Cabecera, datos (payload) y firma, en Base64 y separadas por puntos.</Tarjeta>
+  <Tarjeta frente="`jwt.sign` de clase">`jwt.sign({ sub: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: '7d' })`.</Tarjeta>
+  <Tarjeta frente="¿Qué es `sub`?">El *subject* del token: el id del usuario.</Tarjeta>
+  <Tarjeta frente="Servicio frente a controlador en auth">El servicio lanza `new Error('Email ya registrado')`; el controlador compara el mensaje y responde 409 (o 401 con `Credenciales inválidas`).</Tarjeta>
+  <Tarjeta frente="¿Por qué el mismo mensaje en los dos fallos del login?">Para no revelar si un email está registrado.</Tarjeta>
+  <Tarjeta frente="Códigos de auth">Registro: 201, 409, 400. Login: 200, 401, 400.</Tarjeta>
+  <Tarjeta frente="Cabecera para mandar el token">`Authorization: Bearer <token>`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Adivina las respuestas" dificultad="facil">
+  Con la API de la v0.5.0 y la base vacía, se hacen estas peticiones en orden. ¿Qué código devuelve cada una?
+
+  1. `POST /api/auth/register` con `{ "email": "eva@example.com", "name": "Eva", "password": "password123" }`
+  2. La misma petición otra vez.
+  3. `POST /api/auth/login` con `{ "email": "eva@example.com", "password": "password999" }`
+  4. `POST /api/auth/login` con `{ "email": "eva@example.com", "password": "123" }`
+  5. `POST /api/auth/login` con `{ "email": "eva@example.com", "password": "password123" }`
+
+  <Pista>Ten en cuenta que `loginSchema` pide al menos 8 caracteres en la contraseña.</Pista>
+  <Pista>Puedes comprobarlo en el simulador de la página de CRUD de usuarios.</Pista>
+
+  <Solucion>
+
+1. **201**: se crea Eva y se devuelve `{ user, token }`.
+2. **409** `Email ya registrado`.
+3. **401** `Credenciales inválidas`: el formato es válido, pero `bcrypt.compare` da `false`.
+4. **400**: `'123'` no pasa `loginSchema` (mínimo 8 caracteres) y el `catch` responde 400 con el mensaje de Zod. Ni se llega a buscar el usuario.
+5. **200** con `{ user, token }`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="¿Qué está mal en este login?" dificultad="media">
+  Este servicio de login funciona, pero tiene tres problemas de seguridad. Encuéntralos.
+
+```ts title="auth.service.ts"
+export async function login(email: string, password: string) {
+  const user = await findUserByEmail(email);
+  if (!user) {
+    throw new Error('Ese email no está registrado');
+  }
+  const ok = await bcrypt.compare(password, user.passwordHash);
+  if (!ok) {
+    throw new Error('Contraseña incorrecta');
+  }
+  const token = jwt.sign({ sub: user.id, email: user.email }, 'secreto123', { expiresIn: '7d' });
+  return { user, token };
+}
+```
+
+  <Pista>Compara los mensajes de error con los de clase.</Pista>
+  <Pista>¿Qué campos trae `user` si `findUserByEmail` no lleva `select`?</Pista>
+
+  <Solucion>
+
+1. **Dos mensajes distintos**: revelan si el email existe. Los dos tienen que ser `Credenciales inválidas`.
+2. **El secreto escrito en el código**: va en el `.env` y se lee con `env.JWT_SECRET`.
+3. **Devuelve `user` entero**, con `passwordHash`. Hay que montar el objeto con `id`, `email`, `name` y `createdAt`.
+
+```ts title="auth.service.ts (como en clase)"
+export async function login(email: string, password: string) {
+  const user = await findUserByEmail(email);
+  if (!user) {
+    throw new Error('Credenciales inválidas');
+  }
+  const ok = await bcrypt.compare(password, user.passwordHash);
+  if (!ok) {
+    throw new Error('Credenciales inválidas');
+  }
+  const token = jwt.sign({ sub: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: '7d' });
+  return {
+    user: { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt },
+    token
+  };
+}
+```
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="bcrypt">Librería que calcula el hash de la contraseña (`hash`) y lo comprueba (`compare`).</Termino>
+  <Termino nombre="passwordHash">La columna con el hash. Nunca sale en una respuesta.</Termino>
+  <Termino nombre="JWT">Token firmado con `JWT_SECRET`. El de clase lleva `sub` y `email` y caduca a los 7 días.</Termino>
+  <Termino nombre="401">Credenciales inválidas, o falta el token o no vale.</Termino>
+  <Termino nombre="409">El email ya está registrado.</Termino>
+  <Termino nombre="req.user.sub">El id del usuario sacado del token (v0.6.0 y v0.7.0, código no visto).</Termino>
+</Glosario>
+
+<MarcarCompletado />

@@ -1,0 +1,286 @@
+---
+title: De Java a C#
+description: Lo que cambia al pasar de Java a C# con lo visto en clase, lado a lado, y otras diferencias que te vas a encontrar.
+icon: ArrowRightLeft
+---
+
+C# se parece tanto a Java que casi todo lo que sabes te sirve: llaves, `;`, clases, `if`, `for`, `while`, `static`, `public`, `new`… Esta página reúne **lo que cambia**, con ejemplos de lo que se escribió en clase al lado de cómo lo harías en Java.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Cómo es un programa mínimo en C# frente a Java.
+  - Las equivalencias de lo que se usó en clase: consola, conversión de tipos, arrays, bucles y constantes.
+  - Qué son los delegados y los eventos visto desde Java, donde no existen.
+  - Otras diferencias que no salieron en clase pero te vas a encontrar.
+</Callout>
+
+## C# y .NET
+
+**C#** es el lenguaje y **.NET** es la plataforma que lo ejecuta, igual que Java tiene el lenguaje y la JVM con el JDK. En clase se usa **.NET 8** (`net8.0`), que trae C# 12. En Java compilas a *bytecode* (`.class`); en .NET compilas a un `.exe` (con su `.dll`) que queda en `bin\Debug\net8.0\`.
+
+<DeClase fecha="05/11, 09/11, 18/11, 19/11" proyecto="Clase1" nota=".NET 8, runtime 8.0.20" />
+
+## El programa mínimo
+
+En Java todo tiene que ir dentro de una clase con un `main`. La plantilla de consola de .NET 8 que se usa en clase no lo necesita: escribes las instrucciones directamente en `Program.cs`. Se llaman **instrucciones de nivel superior** (*top-level statements*).
+
+<Comparar columnas titulo="Hola mundo">
+  <Lado titulo="Java">
+
+```java
+public class Main {
+  public static void main(String[] a) {
+    System.out.println("Hola");
+  }
+}
+```
+
+  </Lado>
+  <Lado titulo="C# (plantilla de clase)">
+
+```csharp
+Console.WriteLine("Hola");
+```
+
+  </Lado>
+</Comparar>
+
+Los PDF de clase todavía usan la forma "clásica", con `class Program` y `static void Main()`, que es la misma idea que Java. Las dos compilan. Lo explicamos en [Visual Studio y el proyecto Clase1](/docs/2-dam/desarrollo-de-interfaces/csharp/visual-studio-y-proyecto).
+
+## Equivalencias de lo visto en clase
+
+| Java | C# | Dónde salió |
+| --- | --- | --- |
+| `System.out.println(x)` | `Console.WriteLine(x)` | 05/11 |
+| `System.out.print(x)` | `Console.Write(x)` (no salta de línea) | 05/11 |
+| `new Scanner(System.in).nextLine()` | `Console.ReadLine()` | 05/11 |
+| `Integer.parseInt(texto)` | `Convert.ToInt32(texto)` | 05/11 |
+| `String.format("%.2f", x)` | `"{0:F}"` dentro de `WriteLine` | 05/11 |
+| `"Hola " + nombre` | `"Hola " + nombre` o `$"Hola {nombre}"` | 05/11 |
+| `String` | `string` (alias de `System.String`) | 05/11 |
+| `int` (primitivo) | `int` (alias de `System.Int32`) | 05/11, 09/11 |
+| `BigDecimal` | `decimal`, con sufijo `m`: `1234.56m` | 05/11 |
+| `final int X = 15;` | `const int x = 15;` | 05/11 |
+| `for (int n : nums)` | `foreach (int n in nums)` | 05/11 |
+| `nums.length` | `nums.Length` | 05/11 |
+| `Arrays.sort(nums)` | `Array.Sort(nums)` | 05/11 |
+| `import java.util.*;` | `using System.Globalization;` | 05/11 |
+| Métodos en `camelCase`: `sumar()` | Métodos en `PascalCase`: `Sumar()` | todas |
+| Interfaz funcional + lambda | **Delegado** + lambda | 09/11, 18/11 |
+| `->` en las lambdas | `=>` en las lambdas | 18/11 |
+| `Calculadora::sumar` | `Calculadora.Sumar` (sin paréntesis) | 09/11 |
+| `Function`, `Consumer`, `Predicate` | `Func`, `Action`, `Predicate` | 18/11 |
+| *Listeners* (`addActionListener`) | **Eventos** con `+=` y `-=` | 19/11 |
+
+## Leer y escribir por consola
+
+<Comparar titulo="Leer dos números y sumarlos">
+  <Lado titulo="Java">
+
+```java
+Scanner sc = new Scanner(System.in);
+System.out.print("Introduce el primer número: ");
+int a = Integer.parseInt(sc.nextLine());
+System.out.print("Introduce el segundo número: ");
+int b = Integer.parseInt(sc.nextLine());
+System.out.println("La suma es: " + (a + b));
+```
+
+  </Lado>
+  <Lado titulo="C# (como en clase)">
+
+```csharp
+Console.Write("Introduce el primer número: ");
+int a = Convert.ToInt32(Console.ReadLine());
+Console.Write("Introduce el segundo número: ");
+int b = Convert.ToInt32(Console.ReadLine());
+Console.WriteLine("La suma es: " + (a + b));
+```
+
+  </Lado>
+</Comparar>
+
+En C# no hace falta crear un objeto para leer: `Console` es una clase estática. Y `int` no es un primitivo "pobre" como en Java: es un alias de la estructura `System.Int32`, que tiene métodos. Por eso puedes escribir `precio.ToString("C")` sobre un número.
+
+## Recorrer un array
+
+<Comparar columnas titulo="for-each">
+  <Lado titulo="Java">
+
+```java
+int[] nums = {1, 2, 3, 4, 5};
+for (int n : nums) {
+  System.out.println(n);
+}
+```
+
+  </Lado>
+  <Lado titulo="C# (como en clase)">
+
+```csharp
+int[] nums = [1, 2, 3, 4, 5];
+foreach (int n in nums)
+{
+    Console.WriteLine(n);
+}
+```
+
+  </Lado>
+</Comparar>
+
+Fíjate en tres cosas: `foreach` con `in`, la longitud con `Length` (con mayúscula) y la **expresión de colección** `[1, 2, 3, 4, 5]`, que es nueva de C# 12. También vale el inicializador de siempre, `{ 1, 2, 3 }`. En C# la llave de apertura se suele poner en su propia línea: es lo que hace Visual Studio y lo que verás en el código de clase.
+
+## Delegados: lo que en Java es una interfaz funcional
+
+En Java, para guardar "un método" en una variable necesitas una **interfaz funcional** (una interfaz con un solo método) y una lambda o una referencia a método. En C# existe un tipo hecho para eso: el **delegado**, que se declara con la palabra `delegate` y describe una firma.
+
+<Comparar titulo="Guardar un método en una variable">
+  <Lado titulo="Java">
+
+```java
+interface Operacion {
+    int aplicar(int a, int b);
+}
+
+Operacion op = Calculadora::sumar;
+int r = op.aplicar(4, 5);
+```
+
+  </Lado>
+  <Lado titulo="C# (09/11)">
+
+```csharp
+delegate int Operacion(int a, int b);
+
+Operacion op = Calculadora.Sumar;
+int r = op(4, 5);
+```
+
+  </Lado>
+</Comparar>
+
+En C# el delegado se invoca **como si fuera un método** (`op(4, 5)`), sin nombre de método en medio. Y tiene algo que Java no tiene: puede guardar **varios métodos a la vez** con `+=` (*multicast*). Lo ves en [Delegados](/docs/2-dam/desarrollo-de-interfaces/csharp/delegados).
+
+## Eventos: lo que en Java son los *listeners*
+
+En Swing o JavaFX te "suscribes" a un botón con `addActionListener(...)` o `setOnAction(...)`. En C# un **evento** es un miembro de la clase, declarado con `event`, al que te suscribes con `+=` y del que te das de baja con `-=`.
+
+<Comparar titulo="Reaccionar a algo que pasa en otro objeto">
+  <Lado titulo="Java (Swing)">
+
+```java
+boton.addActionListener(e -> System.out.println("Pulsado"));
+```
+
+  </Lado>
+  <Lado titulo="C# (19/11)">
+
+```csharp
+reloj.OnSegundo += () => Console.WriteLine("Ha pasado un segundo");
+```
+
+  </Lado>
+</Comparar>
+
+Lo ves entero en [Eventos](/docs/2-dam/desarrollo-de-interfaces/csharp/eventos).
+
+## Null en el compilador
+
+La plantilla de .NET 8 tiene activados los **tipos de referencia que admiten null**. El compilador distingue `string` (nunca null) de `string?` (puede ser null) y avisa si mezclas los dos. Por eso en clase sale el aviso **CS8600** al hacer `string texto = Console.ReadLine();`: `ReadLine()` devuelve `string?`. En Java no hay nada parecido en el compilador: te enteras con un `NullPointerException` al ejecutar.
+
+## Otras diferencias que te vas a encontrar <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Esto no se explicó en clase. Lo ponemos porque es lo primero con lo que tropieza alguien que viene de Java.
+</NoDadoEnClase>
+
+- **`==` con `string` compara el contenido**, no la referencia. En C# `"hola" == otraCadena` funciona como el `equals()` de Java.
+- **`switch` no deja "caer" de un `case` a otro.** Si un `case` tiene código y no acaba en `break` (o `return`), no compila. En Java se ejecutaría el siguiente `case`.
+- **Propiedades** en vez de *getters* y *setters*: `public int Id { get; set; }`. El 19/11 apareció una así en una captura, pero parece una sugerencia del autocompletado que no se aceptó.
+- **`namespace`** es el equivalente de `package`, pero no tiene que coincidir con las carpetas.
+- **`var`** deja que el compilador deduzca el tipo: `var calc = new Calculadora();`. Java lo tiene desde la versión 10.
+- **`readonly`** es el `final` de un campo que se asigna en el constructor. `const` es solo para valores que se conocen al compilar.
+
+## Practica
+
+<Quiz titulo="Test: de Java a C#">
+  <Pregunta enunciado="¿Qué es lo equivalente a `System.out.println` en C#?" explicacion="`Console.WriteLine` escribe y salta de línea. `Console.Write` no salta.">
+    <Opcion>`Console.Write`</Opcion>
+    <Opcion correcta>`Console.WriteLine`</Opcion>
+    <Opcion>`System.Console.Print`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cómo se escribe un for-each en C#?" explicacion="C# usa la palabra `foreach` y `in`. El `:` es de Java.">
+    <Opcion>`for (int n : nums)`</Opcion>
+    <Opcion correcta>`foreach (int n in nums)`</Opcion>
+    <Opcion>`for each (int n in nums)`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="En el `Program.cs` de la plantilla de .NET 8 que se usa en clase hace falta escribir `static void Main()`." respuesta={false} explicacion="La plantilla usa instrucciones de nivel superior: escribes el código directamente y el compilador genera el `Main` por ti." />
+  <Pregunta enunciado="¿Qué propiedad da el tamaño de un array en C#?" explicacion="En C# los miembros públicos van en PascalCase: `Length`. En Java es `length`.">
+    <Opcion>`length`</Opcion>
+    <Opcion correcta>`Length`</Opcion>
+    <Opcion>`Count()`</Opcion>
+    <Opcion>`size()`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué es un delegado, visto desde Java?" explicacion="Un delegado es un tipo que describe la firma de un método, como hace una interfaz funcional. Además puede guardar varios métodos (multicast).">
+    <Opcion>Una clase abstracta</Opcion>
+    <Opcion correcta>Algo parecido a una interfaz funcional: un tipo para guardar métodos con una firma concreta</Opcion>
+    <Opcion>Un hilo de ejecución</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿Qué símbolo separa los parámetros del cuerpo en una lambda de C#?" respuesta="=>" explicacion="En C# es `=>`; en Java es `->`." />
+  <Pregunta enunciado="¿Por qué sale el aviso CS8600 en `string texto = Console.ReadLine();`?" explicacion="En .NET 8 `ReadLine()` devuelve `string?` porque puede no haber nada que leer, y lo guardas en un `string` que no admite null.">
+    <Opcion>Porque `ReadLine()` devuelve un `int`</Opcion>
+    <Opcion correcta>Porque `ReadLine()` devuelve `string?` y se guarda en un `string` que no admite null</Opcion>
+    <Opcion>Porque falta `using System.IO;`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: Java y C#">
+  <Tarjeta frente="`Integer.parseInt(texto)` en C#">`Convert.ToInt32(texto)`</Tarjeta>
+  <Tarjeta frente="`String` de Java en C#">`string`, que es un alias de `System.String`.</Tarjeta>
+  <Tarjeta frente="`final int X = 15;` en C#">`const int x = 15;` (si se conoce al compilar).</Tarjeta>
+  <Tarjeta frente="`Calculadora::sumar` en C#">`Calculadora.Sumar`, el nombre del método sin paréntesis.</Tarjeta>
+  <Tarjeta frente="`addActionListener(...)` en C#">Suscribirse a un evento con `+=`; darse de baja con `-=`.</Tarjeta>
+  <Tarjeta frente="¿Qué son las instrucciones de nivel superior?">Escribir el código del programa directamente en `Program.cs`, sin `class Program` ni `Main`. Es lo que trae la plantilla de consola de .NET 8.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Traduce de Java a C#" dificultad="facil">
+  Pasa este programa de Java a C# con el estilo de clase (instrucciones de nivel superior):
+
+```java
+Scanner sc = new Scanner(System.in);
+System.out.print("Nombre: ");
+String nombre = sc.nextLine();
+int[] notas = {7, 5, 9};
+int suma = 0;
+for (int n : notas) {
+    suma += n;
+}
+System.out.println("Hola " + nombre + ", tu media es " + (suma / notas.length));
+```
+
+  <Pista>`Scanner` desaparece: usa `Console.ReadLine()`. El for-each es `foreach (... in ...)` y la longitud, `Length`.</Pista>
+  <Pista>Prueba a usar interpolación con `$` para el último mensaje.</Pista>
+
+  <Solucion>
+
+Solución propia (no es del profesor):
+
+```csharp title="Program.cs"
+Console.Write("Nombre: ");
+string? nombre = Console.ReadLine();
+int[] notas = [7, 5, 9];
+int suma = 0;
+foreach (int n in notas)
+{
+    suma += n;
+}
+Console.WriteLine($"Hola {nombre}, tu media es {suma / notas.Length}");
+```
+
+Con 7, 5 y 9 la suma es 21 y la media sale 7. Igual que en Java, dividir dos `int` da un `int`. Con `string?` evitas el aviso CS8600.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

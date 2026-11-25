@@ -26,6 +26,15 @@ const OCULTOS_EN_BUSQUEDA = new Set([
   'Files',
 ]);
 
+/**
+ * Marcas del material de clase: si no llevan hijos se indexa su etiqueta y, si
+ * llevan solo texto, "Etiqueta: texto" (así se puede buscar "no dado en clase").
+ */
+const ETIQUETAS: Record<string, string> = {
+  NoDadoEnClase: 'No dado en clase',
+  NoSeVio: 'Esto no se llega a ver en clase',
+};
+
 /** Atributos de texto que tiene sentido buscar, en orden. */
 const ATRIBUTOS_TEXTO = ['nombre', 'term', 'title', 'titulo', 'description', 'descripcion'];
 
@@ -65,6 +74,37 @@ function atributos(n: Nodo): string[] {
   return out;
 }
 
+function atributo(n: Nodo, nombre: string): string {
+  const a = n.attributes?.find((x) => x.type === 'mdxJsxAttribute' && x.name === nombre);
+  return a && typeof a.value === 'string' ? a.value.trim() : '';
+}
+
+/** Componentes con un texto propio que no sale de `atributos()`. */
+function textoPropio(nodo: Nodo): string | null {
+  switch (nodo.name) {
+    case 'DeClase': {
+      const fecha = atributo(nodo, 'fecha');
+      const partes = [fecha ? `Visto en clase: ${fecha}` : 'Visto en clase', atributo(nodo, 'proyecto'), atributo(nodo, 'nota')];
+      return partes.filter(Boolean).join(' · ');
+    }
+    case 'Mensaje': {
+      if (!soloFrase(nodo)) return null;
+      const cabecera = [`${atributo(nodo, 'de')} → ${atributo(nodo, 'a')}`, atributo(nodo, 'titulo')].filter(Boolean).join(', ');
+      const cuerpo = texto(nodo).trim();
+      return cuerpo ? `${cabecera}: ${cuerpo}` : cabecera;
+    }
+    default: {
+      const etiqueta = nodo.name ? ETIQUETAS[nodo.name] : undefined;
+      if (!etiqueta) return null;
+      const titulo = atributo(nodo, 'titulo');
+      const cab = titulo ? `${etiqueta} (${titulo})` : etiqueta;
+      if (!nodo.children?.length) return cab;
+      if (!soloFrase(nodo)) return null;
+      return `${cab}: ${texto(nodo).trim()}`;
+    }
+  }
+}
+
 function sustituir(nodo: Nodo, contenido: string) {
   const content = contenido.replace(/\s+/g, ' ').trim();
   nodo.data = {
@@ -78,6 +118,8 @@ export function remarkBusquedaLimpia() {
     const visitar = (nodo: Nodo) => {
       if (nodo.type === 'mdxJsxFlowElement' && nodo.name) {
         if (OCULTOS_EN_BUSQUEDA.has(nodo.name)) return sustituir(nodo, '');
+        const propio = textoPropio(nodo);
+        if (propio !== null) return sustituir(nodo, propio);
         const hijos = nodo.children ?? [];
         if (hijos.length === 0) return sustituir(nodo, atributos(nodo).join(' — '));
         if (soloFrase(nodo)) {

@@ -1,0 +1,481 @@
+---
+title: Módulos de Hilt
+description: Cómo se le explica a Hilt lo que no sabe crear solo. @Module e @InstallIn, @Binds para atar una interfaz a su implementación, @Provides para Retrofit y Room, @Singleton, y los errores de Hilt más habituales, con un simulador.
+icon: Boxes
+---
+
+import { SimuladorHilt } from '@/components/temas/arquitectura/simulador-hilt';
+
+Con `@Inject constructor`, Hilt sabe crear **tus clases**. Pero hay dos cosas que no puede adivinar:
+
+1. **Qué implementación usar para una interfaz.** Si un ViewModel pide un `TaskRepository`, ¿le da `TaskRepositoryInMemory`, uno de Room o uno de prueba?
+2. **Cómo crear objetos que no son tuyos.** Retrofit o una base de datos de Room no llevan `@Inject constructor`: se crean con un *builder* (`Retrofit.Builder()...build()`).
+
+Para eso están los **módulos**: clases o interfaces donde le explicas a Hilt esas dos cosas.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué son `@Module` e `@InstallIn(SingletonComponent::class)`.
+  - `@Binds`, para atar una interfaz a su implementación.
+  - `@Provides`, para construir objetos a mano (Retrofit, Room).
+  - Qué hace `@Singleton` y qué pasa si se olvida.
+  - Los errores de Hilt más habituales, con un simulador para provocarlos.
+</Callout>
+
+## `@Module` e `@InstallIn`
+
+Todo módulo lleva dos anotaciones:
+
+```kotlin
+@Module
+@InstallIn(SingletonComponent::class)
+```
+
+- `@Module` marca la clase como módulo de Dagger/Hilt.
+- `@InstallIn(SingletonComponent::class)` lo instala en el componente que **vive lo mismo que la aplicación**. En clase todos los módulos se instalaron ahí.
+
+- El 26/10 el `AppModule` de la PokeApp2627 se leyó como <Dudoso nota="Se lee igual en 3 capturas, con el import `jakarta.inject.Singleton`. Seguramente fue un error del momento.">`@InstallIn(Singleton::class)`</Dudoso>. Lo correcto es `SingletonComponent::class`, que es lo que aparece en el `NetworkModule` de esa misma clase y en todas las siguientes.
+
+## `@Binds`: qué implementación usar
+
+<DeClase fecha="09/10" proyecto="ToDoApp" />
+
+El primer módulo de clase fue el de la ToDoApp. Se empezó vacío y se fue completando:
+
+<Tabs items={['Vacío', 'Borrador', 'Final']}>
+  <Tab value="Vacío">
+
+```kotlin title="di/ApplicationModule.kt"
+@Module
+abstract class ApplicationModule {
+}
+```
+
+Es `abstract` porque va a usar `@Binds`, que solo funciona con funciones abstractas.
+
+  </Tab>
+  <Tab value="Borrador">
+
+```kotlin title="di/ApplicationModule.kt"
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class ApplicationModule {
+
+    abstract fun bindTaskRepository(): TaskRepository
+}
+```
+
+Todavía no compila: a la función le faltan `@Binds` y el parámetro con la implementación.
+
+  </Tab>
+  <Tab value="Final">
+
+```kotlin title="di/ApplicationModule.kt"
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class ApplicationModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindTaskRepository(repository: TaskRepositoryInMemory): TaskRepository
+}
+```
+
+  </Tab>
+</Tabs>
+
+Cómo se lee `bindTaskRepository`:
+
+| Pieza | Qué significa |
+| --- | --- |
+| `@Binds` | "Cuando alguien pida lo que devuelve esta función, dale lo que recibe." |
+| Parámetro `TaskRepositoryInMemory` | La implementación concreta. Tiene que llevar `@Inject constructor`, porque Hilt la crea. |
+| Tipo de retorno `TaskRepository` | La interfaz que se está atando. |
+| `@Singleton` | Una sola instancia para toda la app. Es lo que hace que todas las pantallas compartan la misma lista. |
+
+La función **no tiene cuerpo**: nunca la llamas tú. Hilt solo lee su firma para saber qué atar con qué. Por eso, para cambiar la ToDoApp a otro repositorio, basta con cambiar el tipo del parámetro.
+
+### Clase abstracta o interfaz
+
+<DeClase fecha="26/10, 09/11, 18/11" nota="como interface" />
+
+Desde el 26/10, los módulos con `@Binds` se escribieron como `interface`. Hace lo mismo y se escribe menos: en una interfaz, las funciones sin cuerpo ya son abstractas.
+
+<Comparar titulo="Dos formas de escribir un módulo con @Binds" columnas>
+  <Lado titulo="abstract class (09/10)">
+
+```kotlin
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class ApplicationModule {
+    @Binds
+    @Singleton
+    abstract fun bindTaskRepository(
+        repository: TaskRepositoryInMemory
+    ): TaskRepository
+}
+```
+
+  </Lado>
+  <Lado titulo="interface (26/10 en adelante)">
+
+```kotlin
+@Module
+@InstallIn(SingletonComponent::class)
+interface AppModule {
+    @Binds
+    @Singleton
+    fun bindTaskRepository(
+        repository: TaskRepositoryInMemory
+    ): TaskRepository
+}
+```
+
+  </Lado>
+</Comparar>
+
+En un mismo módulo caben varios `@Binds`, uno por interfaz. Este es el de ToDoOfflineFirst del 18/11, al que se le añadieron los dos de ajustes:
+
+```kotlin title="core/di/AppModule.kt (18/11)"
+@Module
+@InstallIn(SingletonComponent::class)
+interface AppModule {
+    @Binds @Singleton
+    fun bindsTaskRepository(r: TaskRepositoryImpl): TaskRepository
+
+    @Binds @Singleton
+    fun bindsTaskLocalDataSource(ds: TaskLocalDataSource): TaskDataSource
+
+    @Binds @Singleton
+    fun bindsSettingsDataSource(ds: SettingsDataStore): SettingsDatasource
+
+    @Binds @Singleton
+    fun bindsSettingsRepository(r: SettingsRepositoryImpl): SettingsRepository
+}
+```
+
+- <Dudoso nota="Al principio se escribe `SettingsDatasource` y después aparece `SettingsDataSource` en el `AppModule` y en el árbol. Puede que se renombrara o que sea un error de lectura.">`SettingsDatasource`</Dudoso>: el nombre de la interfaz no coincide en todas las capturas.
+
+## `@Provides`: construir objetos a mano
+
+<DeClase fecha="26/10, 13/11" proyecto="PokeApp2627 y Room" />
+
+Cuando el objeto no lleva `@Inject constructor` (porque no es tuyo), escribes una función que **lo construye y lo devuelve**, y le pones `@Provides`. Hilt la llamará cuando alguien pida ese tipo. Como la función tiene cuerpo, el módulo es una `class` normal.
+
+### Retrofit (26/10)
+
+```kotlin title="features/pokemon/di/NetworkModule.kt"
+@Module
+@InstallIn(SingletonComponent::class)
+class NetworkModule {
+    @Provides
+    @Singleton
+    fun provideHttpClient(): PokeApi {
+        val retrofit: Retrofit = Retrofit.Builder()
+            .baseUrl("https://pokeapi.co/api/v2/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+        return retrofit.create(PokeApi::class.java)
+    }
+}
+```
+
+Con esto, cualquier clase puede pedir un `PokeApi` en su constructor, como `PokemonRemoteDataSourceImpl @Inject constructor(private val _api: PokeApi)`, y Hilt se lo da.
+
+- <Dudoso nota="El 26/10 la baseUrl se leyó sin barra final, con rutas que empezaban por `/`. Retrofit exige la barra final.">La barra final de la `baseUrl`</Dudoso>: el 26/10 se leyó sin `/` final. Aquí va con `/`, como las rutas del 09/11. Retrofit y Gson se explican en [Retrofit 3 con Gson](/docs/2-dam/kotlin/datos/retrofit).
+
+### Room (13/11)
+
+<Recorrido
+  titulo="di/AppModule.kt (proyecto Room, 13/11)"
+  lenguaje="kotlin"
+  codigo={`@Module
+@InstallIn(SingletonComponent::class)
+class AppModule {
+    @Provides
+    fun providesDatabase(@ApplicationContext context: Context): PokemonDatabase {
+        val db = Room.databaseBuilder<PokemonDatabase>(
+            context = context,
+            name = "pokemon_db"
+        ).build()
+        return db
+    }
+
+    @Provides
+    fun providesPokemonDao(db: PokemonDatabase): PokeDao {
+        return db.pokemonDao()
+    }
+}`}
+>
+  <Paso lineas="1-3" titulo="Una class, no una interfaz">
+    Las funciones `@Provides` tienen cuerpo, así que el módulo es una `class`.
+  </Paso>
+  <Paso lineas="4-5" titulo="El contexto de la app">
+    Room necesita un `Context`. Con `@ApplicationContext context: Context`, Hilt pasa el contexto de la aplicación (import `dagger.hilt.android.qualifiers.ApplicationContext`).
+  </Paso>
+  <Paso lineas="6-10" titulo="Se construye con el builder">
+    `Room.databaseBuilder<PokemonDatabase>(...)` y `.build()`. Esto es lo que Hilt no podría hacer solo.
+  </Paso>
+  <Paso lineas="13-16" titulo="Provides encadenados">
+    Para crear el DAO hace falta la base de datos. Basta con pedirla como parámetro: Hilt ya sabe crearla con el `@Provides` de arriba.
+  </Paso>
+  <Paso lineas="4, 13" titulo="Sin @Singleton">
+    Ninguno de los dos lleva `@Singleton`. Mira la sección siguiente.
+  </Paso>
+</Recorrido>
+
+## `@Singleton`: una sola instancia
+
+Por defecto, Hilt crea un objeto **nuevo cada vez** que alguien lo pide. Con `@Singleton` (de `javax.inject`) crea uno la primera vez y después **reutiliza ese mismo** en toda la app.
+
+- En la ToDoApp, el `@Binds @Singleton` del repositorio es lo que hace que `TaskListViewModel` y `TaskCreateViewModel` compartan la misma lista. Sin él, cada ViewModel tendría su propio `TaskRepositoryInMemory` y las tareas creadas no aparecerían en la lista.
+- Una base de datos o un cliente de Retrofit son caros de crear y conviene que haya uno solo.
+
+<Comparar titulo="La base de datos de Room en el módulo (13/11)">
+  <Lado tipo="evitar">
+
+```kotlin
+@Provides
+fun providesDatabase(@ApplicationContext context: Context): PokemonDatabase {
+    val db = Room.databaseBuilder<PokemonDatabase>(
+        context = context,
+        name = "pokemon_db"
+    ).build()
+    return db
+}
+```
+
+Sin `@Singleton`, Hilt crea **una base de datos nueva cada vez** que alguien la pide (por ejemplo, cada vez que pide el DAO).
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+@Provides
+@Singleton
+fun providesDatabase(@ApplicationContext context: Context): PokemonDatabase {
+    val db = Room.databaseBuilder<PokemonDatabase>(
+        context = context,
+        name = "pokemon_db"
+    ).build()
+    return db
+}
+```
+
+<NoDadoEnClase inline /> Con `@Singleton` hay una sola base de datos para toda la app. El DAO puede quedarse sin `@Singleton`: lo saca siempre de esa misma base de datos.
+
+  </Lado>
+</Comparar>
+
+<Comparar titulo="El nombre de la función de Retrofit (26/10)">
+  <Lado tipo="evitar">
+
+```kotlin
+@Provides
+@Singleton
+fun provideHttpClient(): PokeApi {
+    val retrofit: Retrofit = Retrofit.Builder()
+        .baseUrl("https://pokeapi.co/api/v2/")
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+    return retrofit.create(PokeApi::class.java)
+}
+```
+
+Se llama `provideHttpClient`, pero no devuelve un cliente HTTP sino la interfaz `PokeApi`. Funciona (a Hilt le da igual el nombre), pero engaña a quien lo lea.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+@Provides
+@Singleton
+fun provideRetrofit(): Retrofit = Retrofit.Builder()
+    .baseUrl("https://pokeapi.co/api/v2/")
+    .addConverterFactory(GsonConverterFactory.create())
+    .build()
+
+@Provides
+@Singleton
+fun providePokeApi(retrofit: Retrofit): PokeApi =
+    retrofit.create(PokeApi::class.java)
+```
+
+<NoDadoEnClase inline /> Cada función crea una cosa y se llama como lo que crea. `providePokeApi` recibe el `Retrofit` del otro `@Provides`, igual que el DAO recibía la base de datos.
+
+  </Lado>
+</Comparar>
+
+<NoDadoEnClase titulo="object en vez de class">
+  Un módulo que solo tiene funciones `@Provides` también se puede escribir como `object` (`object NetworkModule { ... }`): así Hilt no necesita crear una instancia del módulo para llamar a sus funciones. Es como aparece en la documentación de Hilt y en la parte [Android para el proyecto](/docs/2-dam/kotlin/para-el-proyecto). En clase se usó `class`, que también funciona.
+</NoDadoEnClase>
+
+## `@Binds` o `@Provides`
+
+| | `@Binds` | `@Provides` |
+| --- | --- | --- |
+| Para qué | Atar una **interfaz** a una implementación **tuya** que ya tiene `@Inject constructor`. | **Construir** un objeto a mano: librerías, *builders*, objetos que no son tuyos. |
+| La función | Abstracta, sin cuerpo. Un parámetro (la implementación) y devuelve la interfaz. | Con cuerpo. Recibe lo que necesite y devuelve el objeto. |
+| El módulo | `abstract class` o `interface`. | `class` (o `object`). |
+| En clase | Repositorios y DataSource (09/10, 26/10, 09/11, 18/11). | Retrofit (26/10) y Room (13/11). |
+
+Un mismo tipo solo puede tener **una** forma de crearse. Si dos módulos dan lo mismo (por ejemplo, dos `@Provides` de `DataStore<Preferences>`), Hilt da `[Dagger/DuplicateBindings]`.
+
+<NoSeVio titulo="DataStoreModule">
+  El 18/11, en el árbol de ToDoOfflineFirst aparece un `DataStoreModule` en `core/di`, que es el que provee el `DataStore<Preferences>` que recibe `SettingsDataStore`. Su código no se abre en ninguna captura.
+</NoSeVio>
+
+## Los errores de Hilt
+
+| Mensaje (o lo que pasa) | Cuándo | Por qué | Arreglo |
+| --- | --- | --- | --- |
+| `Cannot create an instance of class ...ViewModel` con `NoSuchMethodException` | Al ejecutar | Al ViewModel le falta `@HiltViewModel` (tenga o no `@Inject constructor`), o la pantalla lo crea con `viewModel()` dentro del `NavHost` en vez de con `hiltViewModel()`. **Salió en clase el 18/11.** | Poner `@HiltViewModel` y `@Inject constructor`, y usar `hiltViewModel()`. |
+| `Hilt Activity must be attached to an @HiltAndroidApp Application` | Al ejecutar | Falta `android:name` en el manifest o la `Application` no tiene `@HiltAndroidApp`. | `@HiltAndroidApp` en la `Application` y registrarla en el manifest. El 26/10 se le puso primero `@AndroidEntryPoint`, que es para la Activity, y se cambió en la misma clase. |
+| `[Dagger/MissingBinding] ... cannot be provided without an @Provides-annotated method` | Al compilar | Hilt no sabe crear algo que se pide. Normalmente falta el `@Binds` de una interfaz o el `@Inject constructor` de una clase. | Añadir el `@Binds` o el `@Inject constructor` que falta. |
+| `[Dagger/DuplicateBindings]` | Al compilar | Dos módulos dan lo mismo. | Dejar solo uno. |
+| `@HiltViewModel annotated class should contain exactly one @Inject annotated constructor` | Al compilar | Un ViewModel con `@HiltViewModel` sin `@Inject constructor`. **Salió en clase el 13/11.** | `@Inject constructor()`, aunque no reciba nada. |
+| `The Hilt Android Gradle plugin is applied but no com.google.dagger:hilt-android dependency was found` | Al sincronizar | Está el plugin pero no la dependencia. **Salió en clase el 13/11.** | Añadir `implementation(libs.hilt.android)` y `ksp(libs.hilt.android.compiler)`. |
+
+<Callout type="warn" title="Lee el primer error">
+  Hilt genera código al compilar, así que un error en otra librería que también usa KSP (por ejemplo, un SQL mal escrito en Room) puede arrastrar a Hilt y salir como *Processing did not complete*. El 13/11 pasó justo eso. El error que importa suele ser el **primero** del Build Output.
+</Callout>
+
+## Pruébalo: quita una pieza
+
+En este simulador está toda la ToDoApp montada con Hilt. Desmarca una pieza y mira qué pasaría: si falla al compilar (lo verías en el Build Output) o al ejecutar (lo verías en el Logcat), y con qué mensaje. El resto de la app (por ejemplo, `TaskCreateViewModel`, que también pide un `TaskRepository`) sigue igual.
+
+<SimuladorHilt />
+
+Lo que conviene sacar del simulador:
+
+- Lo que falta **en el grafo de dependencias** (un `@Binds`, un `@Inject constructor` en el repositorio, el constructor de un `@HiltViewModel`) se detecta **al compilar**: Hilt intenta generar el código y no puede.
+- Lo que falta **en los puntos de entrada** (`@HiltAndroidApp`, el manifest, `@AndroidEntryPoint`, `@HiltViewModel`, usar `hiltViewModel()`) compila, pero la app **se cae al ejecutar**.
+- Quitar `@Singleton` no da ningún error, y por eso es el más traicionero: cada ViewModel tendría su propio repositorio y la lista no mostraría las tareas nuevas.
+
+## Practica
+
+<CompletarCodigo
+  titulo="Un módulo con @Binds"
+  enunciado="Completa el módulo para que, cuando alguien pida un NoteRepository, Hilt le dé siempre el mismo NoteRepositoryInMemory."
+  lenguaje="kotlin"
+  codigo={`@[[Module]]
+@InstallIn([[SingletonComponent]]::class)
+interface AppModule {
+    @[[Binds]]
+    @[[Singleton]]
+    fun bindNoteRepository(repository: [[NoteRepositoryInMemory]]): [[NoteRepository]]
+}`}
+/>
+
+<Quiz titulo="Test: módulos de Hilt" descripcion="7 preguntas">
+  <Pregunta enunciado="¿Para qué sirve `@Binds`?" explicacion="Ata una interfaz a una implementación tuya que ya tiene `@Inject constructor`. La función es abstracta: Hilt solo lee su firma.">
+    <Opcion correcta>Para decirle a Hilt qué implementación usar cuando se pide una interfaz</Opcion>
+    <Opcion>Para construir Retrofit con su builder</Opcion>
+    <Opcion>Para que una clase sea singleton</Opcion>
+    <Opcion>Para inyectar en la Activity</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué el `NetworkModule` de clase usa `@Provides` y no `@Binds`?" explicacion="Retrofit no es una clase tuya con `@Inject constructor`: se crea con `Retrofit.Builder()...build()`. Para eso hace falta una función con cuerpo, es decir, `@Provides`.">
+    <Opcion>Porque `@Binds` no funciona con interfaces</Opcion>
+    <Opcion correcta>Porque Retrofit no tiene `@Inject constructor` y hay que construirlo a mano con su builder</Opcion>
+    <Opcion>Porque `@Provides` es más rápido</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Un módulo con funciones `@Binds` puede escribirse como `interface`." respuesta={true} explicacion="Sí: las funciones de una interfaz sin cuerpo ya son abstractas. Desde el 26/10 se escribió así (`interface AppModule`)." />
+  <Pregunta enunciado="¿Qué significa `@InstallIn(SingletonComponent::class)`?" explicacion="Instala el módulo en el componente que vive lo mismo que la aplicación. Lo que provee está disponible en toda la app.">
+    <Opcion correcta>Que el módulo se instala en el componente que vive lo mismo que la aplicación</Opcion>
+    <Opcion>Que todo lo que provee el módulo es automáticamente `@Singleton`</Opcion>
+    <Opcion>Que el módulo solo se puede usar en la Activity</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En la ToDoApp, ¿qué pasaría si quitas `@Singleton` del `@Binds` del repositorio?" explicacion="Compila y arranca, pero cada ViewModel recibe un repositorio nuevo con su propia lista. La tarea creada en una pantalla no aparece en la otra.">
+    <Opcion>No compila</Opcion>
+    <Opcion>La app se cae al arrancar</Opcion>
+    <Opcion correcta>Funciona, pero cada ViewModel tiene su propio repositorio y las tareas no se comparten</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En el módulo de Room del 13/11, ¿cómo consigue `providesPokemonDao` la base de datos?" explicacion="La pide como parámetro (`db: PokemonDatabase`). Hilt ya sabe crearla con `providesDatabase`, así que se la pasa. Son provides encadenados.">
+    <Opcion>Llamando a `providesDatabase(context)` dentro</Opcion>
+    <Opcion correcta>Pidiéndola como parámetro: Hilt la crea con el otro `@Provides`</Opcion>
+    <Opcion>Con `Room.databaseBuilder` otra vez</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿Qué anotación se pone al parámetro `context: Context` de un `@Provides` para recibir el contexto de la aplicación?" respuesta={["@ApplicationContext", "ApplicationContext", "`@ApplicationContext`"]} explicacion="`@ApplicationContext`, de `dagger.hilt.android.qualifiers`. Se usó el 13/11 para crear la base de datos de Room." />
+</Quiz>
+
+<Flashcards titulo="Repaso: módulos de Hilt">
+  <Tarjeta frente="¿Para qué es un módulo de Hilt?">Para explicarle a Hilt lo que no sabe crear solo: qué implementación usar para una interfaz y cómo construir objetos que no son tuyos.</Tarjeta>
+  <Tarjeta frente="`@Module @InstallIn(SingletonComponent::class)`">Marca el módulo y lo instala en el componente que vive lo mismo que la app.</Tarjeta>
+  <Tarjeta frente="`@Binds`">Función abstracta: recibe la implementación y devuelve la interfaz. Módulo `abstract class` o `interface`.</Tarjeta>
+  <Tarjeta frente="`@Provides`">Función con cuerpo que construye y devuelve el objeto (Retrofit, Room). Módulo `class`.</Tarjeta>
+  <Tarjeta frente="`@Singleton`">Una sola instancia para toda la app. Sin él, Hilt crea un objeto nuevo en cada inyección.</Tarjeta>
+  <Tarjeta frente="`@ApplicationContext`">Para recibir el `Context` de la app en un `@Provides`, por ejemplo para crear la base de datos.</Tarjeta>
+  <Tarjeta frente="Errores al compilar o al ejecutar">Si falta algo del grafo (`@Binds`, `@Inject constructor`), no compila. Si falta un punto de entrada (`@HiltAndroidApp`, `@AndroidEntryPoint`, `@HiltViewModel`), se cae al ejecutar.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="El módulo de la app de notas" dificultad="facil">
+  Tu app de notas tiene la interfaz `NoteRepository` y su implementación `NoteRepositoryInMemory @Inject constructor()`. Escribe el módulo de Hilt para que todos los ViewModels compartan la misma instancia del repositorio. Hazlo como en clase a partir del 26/10.
+
+  <Pista>Desde el 26/10 el módulo es una `interface` con `@Module` e `@InstallIn`.</Pista>
+  <Pista>Necesitas `@Binds` y, para compartir la instancia, `@Singleton`.</Pista>
+
+  <Solucion>
+
+```kotlin title="core/di/AppModule.kt"
+@Module
+@InstallIn(SingletonComponent::class)
+interface AppModule {
+    @Binds
+    @Singleton
+    fun bindNoteRepository(repository: NoteRepositoryInMemory): NoteRepository
+}
+```
+
+La función no tiene cuerpo ni se llama nunca: Hilt lee que, cuando se pida un `NoteRepository`, tiene que dar un `NoteRepositoryInMemory`, y que solo uno.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Mejorar el módulo de Room" dificultad="media">
+  Reescribe el `AppModule` del proyecto Room (13/11) para que solo haya **una** base de datos en toda la app. Explica también por qué el DAO no necesita `@Singleton` y qué pasaría si en vez de pedir `db: PokemonDatabase` como parámetro, `providesPokemonDao` construyera su propia base de datos con `Room.databaseBuilder`.
+
+  <Pista>La anotación va en la función que crea la base de datos.</Pista>
+  <Pista>Piensa en cuántas veces se ejecutaría `Room.databaseBuilder(...).build()` en cada caso.</Pista>
+
+  <Solucion>
+
+```kotlin title="di/AppModule.kt"
+@Module
+@InstallIn(SingletonComponent::class)
+class AppModule {
+    @Provides
+    @Singleton
+    fun providesDatabase(@ApplicationContext context: Context): PokemonDatabase {
+        val db = Room.databaseBuilder<PokemonDatabase>(
+            context = context,
+            name = "pokemon_db"
+        ).build()
+        return db
+    }
+
+    @Provides
+    fun providesPokemonDao(db: PokemonDatabase): PokeDao {
+        return db.pokemonDao()
+    }
+}
+```
+
+- Con `@Singleton` en `providesDatabase`, `Room.databaseBuilder(...).build()` se ejecuta una sola vez y todo el que pida la base de datos recibe la misma.
+- El DAO no necesita `@Singleton` porque siempre sale de esa única base de datos: aunque Hilt llame a `providesPokemonDao` varias veces, todos los DAO trabajan sobre la misma base.
+- Si `providesPokemonDao` construyera su propia base de datos, se saltaría el `@Singleton`: cada DAO tendría detrás una base de datos distinta abierta sobre el mismo archivo. Por eso se pide como parámetro y se deja que Hilt la pase.
+
+</Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Módulo">Clase o interfaz con `@Module` e `@InstallIn` donde se explica a Hilt cómo crear lo que no sabe crear solo.</Termino>
+  <Termino nombre="SingletonComponent">El componente de Hilt que vive lo mismo que la aplicación. En clase, todos los módulos iban ahí.</Termino>
+  <Termino nombre="@Binds">Ata una interfaz a su implementación. Función abstracta.</Termino>
+  <Termino nombre="@Provides">Construye un objeto a mano y lo devuelve. Función con cuerpo.</Termino>
+  <Termino nombre="@Singleton">Una sola instancia en toda la app.</Termino>
+</Glosario>
+
+<MarcarCompletado />

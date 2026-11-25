@@ -1,0 +1,369 @@
+---
+title: Errores típicos en el backend
+description: Los errores que salen al montar el backend del proyecto con Node, Express 5, Prisma 6 y Zod 4, con el mensaje que se ve, por qué pasa y cómo se arregla. Se indica cuáles salieron en clase.
+icon: Bug
+---
+
+Cada error con el mensaje que sale (o lo que se ve), por qué pasa y qué hacer. Los que **salieron en clase** llevan la fecha; los que no, la etiqueta de no dado en clase (son de hacer el proyecto).
+
+<Callout type="idea" title="Antes de buscar en internet">
+  Lee el error entero, de arriba abajo: la primera línea dice qué ha pasado y el *stack trace* dice en qué archivo y en qué línea. En clase se vio cómo leerlos con el panel *Problems* del editor, el *stack trace*, el *quick fix* y el agente de Cursor.
+</Callout>
+
+## Al arrancar el proyecto
+
+### El paquete tsc no es TypeScript
+
+<DeClase fecha="20/10" proyecto="node-server" />
+
+<Terminal titulo="bash">
+{`$ npx tsc --init
+This is not the tsc command you are looking for`}
+</Terminal>
+
+**Por qué:** se instaló el paquete `tsc`, que está deprecado y **no es** TypeScript. El compilador viene dentro del paquete `typescript`.
+
+**Qué hacer:**
+
+<Terminal titulo="bash">
+{`$ npm uninstall tsc
+$ rm -rf node_modules package-lock.json
+$ npm install --save-dev typescript
+$ npx tsc --init`}
+</Terminal>
+
+### command not found con nodemon o json-server
+
+<DeClase fecha="20/10, 28/10" />
+
+<Terminal titulo="bash">
+{`$ json-server --watch db.json
+json-server: command not found`}
+</Terminal>
+
+**Por qué:** los paquetes instalados en el proyecto no están en el `PATH` del sistema.
+
+**Qué hacer:** ejecútalos con `npx` (`npx json-server ...`) o desde un script del `package.json` (`npm run dev`, `npm run api`), que sí los encuentra.
+
+### Unexpected end of JSON input
+
+<DeClase fecha="20/10" proyecto="node-server" />
+
+<Terminal titulo="bash">
+{`[nodemon] Failed to parse config ... nodemon.json
+SyntaxError: Unexpected end of JSON input`}
+</Terminal>
+
+**Por qué:** un `package.json` o un `nodemon.json` está sin guardar, a medias o mal escrito (en clase, el `nodemon.json` estaba sin guardar). El JSON es estricto: sin comas finales y con las claves entre comillas dobles.
+
+**Qué hacer:** guarda el archivo y revisa las comas y las comillas.
+
+### does not provide an export named 'default'
+
+<DeClase fecha="20/10" proyecto="node-server" />
+
+<Terminal titulo="bash">
+{`SyntaxError: The requested module './app.js' does not provide an export named 'default'`}
+</Terminal>
+
+**Por qué:** el archivo está sin guardar (en clase fue eso, con `app.ts`), o importas por defecto (`import app from`) algo que se exporta con nombre (`export const app`).
+
+**Qué hacer:** guarda, y haz que coincidan: `export default app` con `import app from './app.js'`, o `export const app` con `import { app } from './app.js'`.
+
+### 'z' cannot be used as a value because it was imported using 'import type'
+
+<DeClase fecha="27/10" proyecto="node-server-26-27" nota="validate.ts con Zod 4" />
+
+**Por qué:** `import type` solo trae tipos y desaparece al compilar. Si después usas `z` como valor (`z.treeifyError(...)`, `z.object(...)`), no existe.
+
+**Qué hacer:** como en el `validate.ts` de clase, importa el tipo con `import type { ZodType } from 'zod'` y el valor con `import { z } from 'zod'`.
+
+### Funciones de Zod tachadas en el editor
+
+<DeClase fecha="27/10" proyecto="node-server-26-27" />
+
+**Por qué:** son avisos de obsoleto de Zod 4 (el código sale tachado, avisos ts 6385 y 6387). Siguen funcionando, pero van a desaparecer.
+
+**Qué hacer:** cámbialos como se hizo en clase:
+
+| Zod 3 (obsoleto) | Zod 4 |
+| --- | --- |
+| `z.string().email()` | `z.email()` |
+| `error.flatten()` | `z.treeifyError(error)` |
+| `ZodSchema` | `ZodType` |
+
+No uses la subruta `zod/v3` para quitarte el aviso.
+
+### Choque de tipos entre Zod y Prisma con exactOptionalPropertyTypes
+
+<DeClase fecha="27/10" proyecto="node-server-26-27" nota="updateUser" />
+
+**Por qué:** el `tsconfig` de clase tiene `exactOptionalPropertyTypes: true`. Con esa opción, un campo opcional (`name?: string`) no admite que le pases `undefined` explícitamente, y el tipo que infiere Zod para un `PATCH` no encaja con el `UserUpdateInput` de Prisma.
+
+**Qué hacer:** el profesor escribió el tipo en línea en el servicio, `data: { name?: string; email?: string }`, en vez de usar el `UpdateUserInput` de Zod.
+
+### Un error que habla de CommonJS y verbatimModuleSyntax
+
+<DeClase fecha="20/10" proyecto="node-server" />
+
+<Terminal titulo="Editor">
+{`ECMAScript imports and exports cannot be written in a CommonJS file under 'verbatimModuleSyntax'. Adjust the 'type' field in the nearest 'package.json' to make this file an ECMAScript module...`}
+</Terminal>
+
+**Por qué:** el `tsconfig` tiene `verbatimModuleSyntax` y `module: "nodenext"`, pero falta `"type": "module"` en el `package.json`, así que TypeScript (y luego Node) tratan los archivos como CommonJS, donde no se puede escribir `import` ni `export`.
+
+**Qué hacer:** añade `"type": "module"` al `package.json`.
+
+### Cannot find module '.../app' (ERR_MODULE_NOT_FOUND) <NoDadoEnClase inline />
+
+<Terminal titulo="bash">
+{`$ node dist/index.js
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/proyecto/dist/app' imported from /proyecto/dist/index.js`}
+</Terminal>
+
+**Por qué:** con `"type": "module"` y `module: "nodenext"`, los imports de tus archivos llevan `.js` al final, aunque el archivo sea `.ts`. TypeScript ya avisa en el editor y al compilar (*Relative import paths need explicit file extensions...*). En desarrollo, `tsx` lo resuelve igualmente y puede que no lo notes, pero Node, al ejecutar el `dist` compilado, no lo encuentra. La regla se explicó en clase el 20/10; este mensaje, no salió.
+
+**Qué hacer:** `import app from './app.js'`, no `'./app'`.
+
+### @prisma/client did not initialize yet <NoDadoEnClase inline />
+
+<Terminal titulo="bash">
+{`Error: @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.`}
+</Terminal>
+
+En los tests puede salir como `Must use import to load ES Module ... .prisma/client/default.js`.
+
+**Por qué:** el cliente de Prisma se genera a partir del `schema.prisma` y no se sube al repositorio. Después de `npm ci` o `npm install`, o de cambiar el schema, hay que generarlo.
+
+**Qué hacer:** `npx prisma generate`. El orden después de un `git pull` es `npm install` → `npx prisma generate` → `npx prisma migrate dev`.
+
+### Falta variable de entorno <NoDadoEnClase inline />
+
+<Terminal titulo="bash">
+{`Error: Falta variable de entorno: JWT_SECRET`}
+</Terminal>
+
+**Por qué:** el `env.ts` de clase usa `required()` y no deja arrancar si falta una variable obligatoria en el `.env` (casi siempre `JWT_SECRET` o `DATABASE_URL`). Es a propósito: mejor fallar al arrancar que a mitad de una petición.
+
+**Qué hacer:** copia el `.env.example` a `.env` y rellénalo.
+
+### EADDRINUSE: address already in use :::3000 <NoDadoEnClase inline />
+
+**Por qué:** ya hay otro servidor en ese puerto (normalmente, uno que dejaste abierto en otra terminal).
+
+**Qué hacer:** ciérralo (Ctrl+C en esa terminal) o cambia `PORT` en el `.env`.
+
+## Con la base de datos
+
+### migrate dev dice que hay drift y quiere borrar la base
+
+<DeClase fecha="03/11" proyecto="node-server-26-27" nota="se provocó a propósito en Supabase" />
+
+**Por qué:** alguien cambió la base a mano, fuera de las migraciones, y ya no coincide con lo que dicen los archivos de `prisma/migrations`. `migrate status` no lo ve, porque solo mira la tabla `_prisma_migrations`; `migrate dev` sí.
+
+**Qué hacer:** en desarrollo, `npx prisma migrate reset` (se pierden los datos; con un [seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) vuelven solos). Y no toques las tablas a mano: cambia el `schema.prisma` y crea una migración.
+
+### Las tablas con mayúsculas no se encuentran en el SQL Editor
+
+<DeClase fecha="03/11" proyecto="node-server-26-27" nota="SQL Editor de Supabase" />
+
+**Por qué:** PostgreSQL pasa a minúsculas los nombres sin comillas. Prisma crea las tablas con el nombre del modelo (`"Media"`, `"User"`).
+
+**Qué hacer:** escribe el nombre entre comillas dobles: `select * from "Media";`. Ojo: `select * from user` sin comillas no da error, devuelve el usuario de la sesión de Postgres.
+
+### P1001: Can't reach database server <NoDadoEnClase inline />
+
+**Por qué:** Postgres no está arrancado, o la `DATABASE_URL` tiene mal el host, el puerto o la contraseña.
+
+**Qué hacer:** abre Docker Desktop y `docker compose up -d` (el `docker-compose.yml` de clase levanta Postgres 16 en el 5432), y revisa la `DATABASE_URL`.
+
+### Con Supabase, migrate se queda colgado o falla <NoDadoEnClase inline />
+
+**Por qué:** las migraciones no van bien por el *pooler* en modo transacción. En clase se usó el *Session pooler* (puerto 5432).
+
+**Qué hacer:** si usas el pooler del puerto 6543, añade `?pgbouncer=true` al final de esa `DATABASE_URL` y, en el `datasource`, `directUrl = env("DIRECT_URL")` con la conexión directa (puerto 5432), que es la que usan las migraciones.
+
+### El precio llega como "59.9" (texto) <NoDadoEnClase inline />
+
+**Por qué:** es normal. Prisma manda los `Decimal` como texto para no perder decimales.
+
+**Qué hacer:** conviértelo en el cliente si necesitas operar. En Angular, la interfaz lleva `precio: string`.
+
+## Con las peticiones
+
+### req.body es undefined <NoDadoEnClase inline />
+
+**Por qué:** falta `app.use(express.json())` antes de las rutas, o en Postman el *body* no está en *raw → JSON* (y no se manda `Content-Type: application/json`).
+
+**Qué hacer:** revisa el orden de `app.ts` (en clase: `helmet` → `cors` → `express.json` → logger → limitador → rutas → `errorHandler`) y la pestaña *Body* de Postman.
+
+### Missing parameter name al arrancar <NoDadoEnClase inline />
+
+**Por qué:** en Express 5 la sintaxis de las rutas cambió. `app.get('*', ...)` ya no vale.
+
+**Qué hacer:** escribe `app.get('/{*splat}', ...)` para "cualquier ruta".
+
+### Cannot set property query of #&lt;IncomingMessage&gt; which has only a getter <NoDadoEnClase inline />
+
+**Por qué:** en Express 5, `req.query` es de solo lectura. Pasa si intentas validar los *query params* con un middleware que hace `req.query = parsed.data`, como el `validate` de clase hace con el `body`.
+
+**Qué hacer:** valida en el controlador con `safeParse(req.query)` y pasa `resultado.data` al servicio. Está en el [listado paginado](/docs/2-dam/apis/backend-proyecto/listado-paginado).
+
+### La API responde con una página HTML de error en vez de JSON <NoDadoEnClase inline />
+
+**Por qué:** el error no llega a tu `errorHandler` y lo responde el manejador por defecto de Express. Pasa si el `errorHandler` tiene **tres** parámetros (Express solo lo reconoce con cuatro) o si se registra **antes** de las rutas.
+
+**Qué hacer:** `(err, req, res, next)` con los cuatro parámetros, y `app.use(errorHandler)` al final de `app.ts`. Está en [Errores con su código HTTP](/docs/2-dam/apis/backend-proyecto/errores-http).
+
+### Swagger sale en blanco
+
+<DeClase fecha="03/11" proyecto="node-server-26-27" nota="v1.0.0, Swagger en /api-docs" />
+
+**Por qué:** Helmet manda una cabecera de seguridad (CSP) con `upgrade-insecure-requests`, y el navegador intenta cargar Swagger UI por `https` en `localhost`.
+
+**Qué hacer:** en clase se puso `helmet({ contentSecurityPolicy: false })`, que quita la CSP de **toda** la API (el CHANGELOG del profesor dice "solo para Swagger", pero el código la quita en toda la app).
+
+<Comparar titulo="Quitar la CSP para Swagger">
+  <Lado tipo="evitar">
+
+```ts
+app.use(helmet({ contentSecurityPolicy: false }));
+// ...
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+```
+
+Toda la API se queda sin la cabecera CSP.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```ts
+app.use('/api-docs', helmet({ contentSecurityPolicy: false }), swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use(helmet());
+```
+
+`/api-docs` va **antes** del `helmet()` general y lleva el suyo sin CSP; el resto de la API sigue con la CSP completa.
+
+  </Lado>
+</Comparar>
+
+La versión buena <NoDadoEnClase inline /> no se dio en clase.
+
+### Los tests dan 429 Too Many Requests
+
+<DeClase fecha="03/11" proyecto="node-server-26-27" nota="v0.8.0 y v0.9.0" />
+
+**Por qué:** salta el límite de peticiones (`authLimiter` deja 5 intentos fallidos cada 15 minutos, y los tests hacen muchos).
+
+**Qué hacer:** como en clase, no montes los limitadores cuando `NODE_ENV=test`: `if (env.NODE_ENV !== 'test') app.use(generalLimiter);`.
+
+## Al conectar Angular con tu API
+
+Salen en el navegador, pero se arreglan en el backend (o en la URL a la que llama Angular).
+
+### blocked by CORS policy
+
+<DeClase fecha="18/11" proyecto="proj-game" nota="clase de Angular" />
+
+<Terminal titulo="Consola del navegador">
+{`Access to XMLHttpRequest at 'https://tu-api.example.com/api/productos' from origin 'https://tu-web.vercel.app' has been blocked by CORS policy`}
+</Terminal>
+
+**Por qué:** la API no da permiso al origen de tu web. Si además el mensaje habla del *`loopback` address space*, como en clase, la web publicada está llamando a `localhost`.
+
+**Qué hacer:** añade el origen de la web a la lista de CORS del backend, y que la web publicada llame a la API desplegada, no a `localhost`. Está en [CORS y rutas protegidas](/docs/2-dam/apis/backend-proyecto/cors-y-token).
+
+### Mixed Content <NoDadoEnClase inline />
+
+<Terminal titulo="Consola del navegador">
+{`Mixed Content: The page at 'https://tu-web.vercel.app/' was loaded over HTTPS, but requested an insecure resource 'http://...'`}
+</Terminal>
+
+**Por qué:** la web va por `https` (Vercel) y la API por `http`.
+
+**Qué hacer:** la API desplegada también tiene que ir por `https`.
+
+## Practica
+
+<Quiz titulo="Test: ¿qué ha pasado?" descripcion="6 preguntas">
+  <Pregunta enunciado="Has hecho `git pull`, `npm install` y al arrancar sale `@prisma/client did not initialize yet`. ¿Qué te falta?" explicacion="El cliente de Prisma se genera a partir del schema y no está en el repositorio: `npx prisma generate`.">
+    <Opcion>`npx prisma migrate reset`</Opcion>
+    <Opcion correcta>`npx prisma generate`</Opcion>
+    <Opcion>Reinstalar Node</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En Postman mandas un `POST` con JSON y en el controlador `req.body` es `undefined`. ¿Qué es lo más probable?" explicacion="Sin `express.json()` antes de las rutas, Express no lee el cuerpo JSON. También pasa si en Postman el body no está en raw → JSON.">
+    <Opcion correcta>Falta `app.use(express.json())` antes de las rutas</Opcion>
+    <Opcion>Falta `cors()`</Opcion>
+    <Opcion>El `errorHandler` va al final</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="`migrate status` dice que todo está bien, pero `migrate dev` quiere borrar la base. ¿Qué pasa?" explicacion="Hay drift: la base se cambió a mano. `status` solo mira la tabla `_prisma_migrations` y no lo ve.">
+    <Opcion>Es un fallo de Prisma</Opcion>
+    <Opcion correcta>Hay drift: alguien cambió la base fuera de las migraciones</Opcion>
+    <Opcion>Falta el seed</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado='Con `"type": "module"` en el `package.json`, un import de tu propio código lleva la ruta `./app.js` aunque el archivo sea `app.ts`.' respuesta={true} explicacion="Es la regla de ES Modules con `nodenext` que se explicó el 20/10. Sin la extensión sale `ERR_MODULE_NOT_FOUND`." />
+  <Pregunta enunciado="En un `SELECT` de Supabase, `select * from Media` dice que la tabla no existe. ¿Por qué?" explicacion='Sin comillas, Postgres pasa el nombre a minúsculas (`media`). Prisma creó la tabla como `"Media"`, con mayúscula y entre comillas.'>
+    <Opcion>Porque la migración no se aplicó</Opcion>
+    <Opcion correcta>Porque sin comillas Postgres busca `media`, en minúsculas</Opcion>
+    <Opcion>Porque Supabase no deja hacer `SELECT`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Tu API responde los errores con una página HTML en vez de con tu JSON. ¿Qué revisas?" explicacion="El `errorHandler` tiene que tener cuatro parámetros e ir al final de `app.ts`. Si no, responde el manejador por defecto de Express.">
+    <Opcion>Que `helmet` vaya el primero</Opcion>
+    <Opcion correcta>Que el `errorHandler` tenga cuatro parámetros y vaya después de las rutas</Opcion>
+    <Opcion>Que el puerto sea el 3000</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: errores del backend">
+  <Tarjeta frente="This is not the tsc command you are looking for">Se instaló el paquete `tsc`. Quítalo e instala `typescript` con `-D`.</Tarjeta>
+  <Tarjeta frente="@prisma/client did not initialize yet">`npx prisma generate`.</Tarjeta>
+  <Tarjeta frente="ERR_MODULE_NOT_FOUND con tus imports">Falta el `.js` al final del import (con `"type": "module"`).</Tarjeta>
+  <Tarjeta frente="EADDRINUSE :::3000">Ya hay un servidor en ese puerto. Ciérralo o cambia el puerto.</Tarjeta>
+  <Tarjeta frente="P1001">No llega a la base: Postgres apagado o `DATABASE_URL` mal.</Tarjeta>
+  <Tarjeta frente="Drift">La base se cambió a mano. En desarrollo, `npx prisma migrate reset`.</Tarjeta>
+  <Tarjeta frente="Missing parameter name (Express 5)">`'*'` ya no vale: `'/{*splat}'`.</Tarjeta>
+  <Tarjeta frente="Swagger en blanco">La CSP de Helmet. Quítala solo en `/api-docs`.</Tarjeta>
+  <Tarjeta frente="429 en los tests">El limitador. No lo montes con `NODE_ENV=test`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Diagnostica el app.ts" dificultad="media">
+  Este `app.ts` tiene tres errores que hacen que `req.body` llegue vacío, que los errores salgan en HTML y que Angular dé error de CORS. Encuéntralos.
+
+```ts title="src/app.ts"
+const app = express();
+
+app.use(errorHandler);
+app.use(helmet());
+app.use('/api/productos', productosRoutes);
+app.use(express.json());
+
+export default app;
+```
+
+  <Pista>Fíjate en qué falta y en el orden: el cuerpo se lee antes de las rutas y los errores se manejan después.</Pista>
+  <Pista>Angular está en otro origen (`localhost:4200`).</Pista>
+
+  <Solucion>
+
+1. `express.json()` va **después** de las rutas: cuando llega la petición a `productosRoutes`, el cuerpo aún no se ha leído. Tiene que ir antes.
+2. `errorHandler` va el **primero**: los errores de las rutas no le llegan, porque Express solo pasa los errores a los manejadores que vienen después. Tiene que ir el último.
+3. Falta `cors()`: sin él, el navegador no deja a Angular (otro origen) leer las respuestas.
+
+```ts title="src/app.ts"
+const app = express();
+
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+app.use('/api/productos', productosRoutes);
+app.use(errorHandler);
+
+export default app;
+```
+
+</Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

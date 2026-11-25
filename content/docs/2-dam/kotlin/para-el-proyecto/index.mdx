@@ -1,0 +1,85 @@
+---
+title: Android para el proyecto
+description: Lo que piden los requisitos de la app Android (PMDMO y PSPRO) y no se ha dado en clase, o se dio a medias, con código que compila con las versiones de clase.
+icon: Smartphone
+---
+
+Este bloque es para **hacer la app Android del proyecto**. Los requisitos piden cosas que en clase no salieron (intents implícitos, relaciones en Room, `POST` con Retrofit…) o que se quedaron a medias en las capturas (el módulo de DataStore, leer de Room con `Flow`, volver atrás después de guardar). Aquí tienes cómo hacerlas, apoyándote en lo que sí se dio.
+
+<NoDadoEnClase>
+  Casi todo lo de este bloque **no se ha dado en clase**: es la forma más estándar de hacer lo que piden los requisitos. Cada página separa lo que se vio en clase (con la fecha) de lo que no. Si en la defensa te preguntan, di que lo has buscado tú.
+</NoDadoEnClase>
+
+## La app de ejemplo
+
+Todos los ejemplos usan la misma app: una **tienda con categorías y productos** (una categoría tiene muchos productos). Cambia los nombres por los de tu proyecto.
+
+- El código principal de cada página **compila** (`assembleDebug`) con las versiones de clase: Kotlin 2.4, Compose, Hilt 2.60.1, Navigation 2.10.2, Room 3.0.3, Retrofit 3.0.0 y DataStore 1.3.0.
+- No se ha probado en el emulador. Las soluciones de los ejercicios y algunos fragmentos cortos (como `CrearProductoViewModel` o las funciones de crear, editar y borrar del repositorio) están escritos para esas versiones, pero no se han compilado aparte.
+- Las pantallas que se nombran sin enseñarlas (`LoginScreen`, `ProductosScreen`, `CrearProductoContent`…) son las tuyas.
+
+## Páginas
+
+<Cards>
+  <Card icon="ListChecks" title="Requisitos de la app" href="/docs/2-dam/kotlin/para-el-proyecto/requisitos" description="Qué piden, qué se dio y qué falta, con enlaces." />
+  <Card icon="Share2" title="Intent implícito y localización" href="/docs/2-dam/kotlin/para-el-proyecto/intent-y-localizacion" description="Abrir otras apps y tener la app en inglés y español." />
+  <Card icon="Database" title="Room con relaciones (1 a N)" href="/docs/2-dam/kotlin/para-el-proyecto/room-relaciones" description="ForeignKey, índice, @Relation de Room 3 y @Upsert." />
+  <Card icon="RefreshCw" title="Room como fuente de verdad" href="/docs/2-dam/kotlin/para-el-proyecto/offline-first" description="Leer de Room con Flow y refrescar desde la API." />
+  <Card icon="Settings" title="DataStore" href="/docs/2-dam/kotlin/para-el-proyecto/datastore" description="El módulo, el modo oscuro en el tema y el token." />
+  <Card icon="Network" title="Conectar con tu API" href="/docs/2-dam/kotlin/para-el-proyecto/conectar-con-tu-api" description="10.0.2.2, http en desarrollo y el interceptor del token." />
+  <Card icon="Send" title="POST, PUT y DELETE con Retrofit" href="/docs/2-dam/kotlin/para-el-proyecto/crud-con-retrofit" description="El CRUD completo contra tu API." />
+  <Card icon="Navigation" title="Navegación del proyecto" href="/docs/2-dam/kotlin/para-el-proyecto/navegacion-del-proyecto" description="Barra inferior, login sin volver atrás y volver tras guardar." />
+  <Card icon="TriangleAlert" title="Prácticas raras de clase" href="/docs/2-dam/kotlin/para-el-proyecto/practicas-raras" description="Lo que se hizo así en directo y cómo se hace bien." />
+  <Card icon="Package" title="Dependencias de Gradle" href="/docs/2-dam/kotlin/para-el-proyecto/dependencias-gradle" description="Lo que hay que añadir y por qué cada versión." />
+  <Card icon="Bug" title="Errores típicos en Android" href="/docs/2-dam/kotlin/para-el-proyecto/errores-tipicos" description="El mensaje, por qué pasa y cómo se arregla." />
+</Cards>
+
+## Qué clases necesitas tener vistas
+
+Este bloque se apoya en las clases de Android del 07/10 al 18/11. Lo que se usa de cada una:
+
+| Clase | Proyecto | Lo que se usa aquí |
+| --- | --- | --- |
+| 07/10 | TipCalculator | `stringResource` y las carpetas `values` y `values-es` |
+| 09/10 | ToDoApp | Rutas tipadas, `NavHost` y Hilt con `@Binds` |
+| 16/10 y 23/10 | ToDoApp | `StateFlow`, estados sellados y `viewModelScope.launch` |
+| 26/10 | PokeApp2627 | Retrofit con Gson, `Response<T>`, `NetworkModule` y el permiso `INTERNET` |
+| 09/11 | PokeApp2627 | `Flow`, `stateIn` y el repositorio *offline first* en memoria |
+| 13/11 | Room | Room 3 con KSP y Hilt, y el catálogo `libs.versions.toml` |
+| 16/11 | PokeApp2627 | La app leyendo de Room (un fragmento de 3 minutos) |
+| 18/11 | ToDoOfflineFirst | DataStore, la pantalla de ajustes, grafos anidados y `popBackStack()` |
+
+Los apuntes de esas clases están en el resto del módulo de [Kotlin](/docs/2-dam/kotlin). La API a la que llama la app es la del backend en Node, en [Infraestructuras de Servicios y APIs](/docs/2-dam/apis).
+
+## Por dónde empezar
+
+<Steps>
+  <Step>
+
+#### Mira qué te falta
+
+  Empieza por los [requisitos](/docs/2-dam/kotlin/para-el-proyecto/requisitos): cada fila dice si se dio, a medias o no, y te lleva a la página que lo explica.
+
+  </Step>
+  <Step>
+
+#### Monta los datos
+
+  Room con relaciones, el repositorio que lee de Room y refresca de la API, y Retrofit contra tu API. Es lo que más cuesta y de lo que depende todo lo demás.
+
+  </Step>
+  <Step>
+
+#### Remata la app
+
+  Navegación con barra inferior y login, DataStore, localización e intent implícito. Son más cortos y casi independientes.
+
+  </Step>
+  <Step>
+
+#### Repasa antes de entregar
+
+  Revisa las [prácticas raras](/docs/2-dam/kotlin/para-el-proyecto/practicas-raras) para no copiarlas y ten a mano los [errores típicos](/docs/2-dam/kotlin/para-el-proyecto/errores-tipicos).
+
+  </Step>
+</Steps>

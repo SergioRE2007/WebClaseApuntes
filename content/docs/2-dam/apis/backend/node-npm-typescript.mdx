@@ -1,0 +1,548 @@
+---
+title: "Node, npm y TypeScript: montar el proyecto"
+description: Cómo se monta desde cero el proyecto de backend de clase con npm, TypeScript, ES Modules, nodemon y tsx, con los errores que salieron por el camino.
+icon: Package
+---
+
+Antes de escribir una sola ruta hay que montar el proyecto: crear el `package.json`, instalar las dependencias en su sitio, configurar TypeScript y conseguir que el servidor se reinicie solo al guardar. El 20/10 el profesor lo hizo en directo y se equivocó varias veces; esos errores son justo lo que mejor explica cómo funciona npm, así que aquí están todos.
+
+<DeClase fecha="20/10" proyecto="node-server" nota="montado en directo; el 27/10 se repasa el de la referencia" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué son Node y npm, comparados con la JVM y Maven/Gradle.
+  - La diferencia entre `dependencies` y `devDependencies`, y para qué sirven los paquetes `@types/*`.
+  - Por qué `nodemon` a secas da `command not found` y qué hace `npx`.
+  - El error del paquete `tsc`, que no es TypeScript.
+  - Las opciones del `tsconfig.json` de clase y las reglas de los ES Modules (la extensión `.js`, `import type`).
+  - Cómo se arranca en desarrollo con nodemon y tsx.
+</Callout>
+
+## Node y npm, vistos desde Java
+
+**Node.js** ejecuta JavaScript fuera del navegador, igual que la JVM ejecuta el *bytecode* de Java. **npm** es su gestor de paquetes: descarga librerías y lanza scripts, como Maven o Gradle.
+
+| En Java | En Node |
+| --- | --- |
+| `pom.xml` o `build.gradle` | `package.json` |
+| Las dependencias en `~/.m2` | La carpeta `node_modules/` del propio proyecto |
+| Versiones exactas que se resuelven | `package-lock.json` (las versiones exactas que se instalaron) |
+| `mvn package` | `npm run build` |
+| `javac` | `tsc`, el compilador de TypeScript |
+
+El profesor usa **Node v22.20.0** instalado con <Concepto termino="nvm" definicion="Node Version Manager: instala varias versiones de Node y cambia entre ellas. La guía de instalación de clase es la Guía0 del repositorio guides-angular.">nvm</Concepto>. La guía de instalación para Windows está en el repositorio original de las guías: [github.com/hokahey007/guides-angular](https://github.com/hokahey007/guides-angular) (Guía0, NVM, Node y npm).
+
+## Montar el proyecto paso a paso
+
+Así quedó el proyecto en directo al final del 20/10, sin los tropiezos (que vienen después):
+
+<Steps>
+  <Step>
+
+#### Crear el `package.json`
+
+`npm init` pregunta el nombre, la versión… y genera el archivo. En clase salió con `"name": "server"`, `"main": "index.js"` y un script `test` por defecto.
+
+  </Step>
+  <Step>
+
+#### Instalar las dependencias de producción
+
+`npm install express` y `npm install morgan` (el log de peticiones). Van a `dependencies`.
+
+  </Step>
+  <Step>
+
+#### Instalar las de desarrollo con `--save-dev`
+
+`npm install --save-dev typescript tsx ts-node nodemon @types/node @types/express @types/morgan`. Van a `devDependencies`. En clase se instalaron de una en una.
+
+  </Step>
+  <Step>
+
+#### Generar el `tsconfig.json`
+
+`npx tsc --init` crea un `tsconfig.json` lleno de comentarios. Luego se descomentan `rootDir` y `outDir` y se ajustan `types`.
+
+  </Step>
+  <Step>
+
+#### Configurar nodemon
+
+Se crea `nodemon.json` y el script `"dev"` en `package.json`.
+
+  </Step>
+  <Step>
+
+#### Activar los ES Modules
+
+`"type": "module"` en `package.json` y, en `src/`, los ficheros `index.ts` y `app.ts`. Los imports de tus ficheros llevan `.js`.
+
+  </Step>
+  <Step>
+
+#### Arrancar
+
+`npm run dev`. nodemon vigila `src` y relanza el servidor cada vez que guardas.
+
+  </Step>
+</Steps>
+
+## `dependencies` frente a `devDependencies`
+
+npm guarda cada paquete en uno de los dos bloques del `package.json`:
+
+- **`dependencies`**: lo que hace falta para que el programa funcione en producción. En clase: `express`, `morgan`, `dotenv`… y en la referencia también `@prisma/client`, `zod`, `bcrypt`, `jsonwebtoken`, `cors`, `helmet`.
+- **`devDependencies`** (`npm install --save-dev` o `-D`): lo que solo hace falta para programar. En clase: `typescript`, `tsx`, `ts-node`, `nodemon`, los `@types/*` y, más adelante, `jest`.
+
+<Concepto termino="@types" definicion="Paquetes con los tipos de TypeScript de librerías que están escritas en JavaScript, como express o morgan. No llevan código que se ejecute, solo declaraciones.">Los paquetes `@types/xxx`</Concepto> traen los tipos de TypeScript de una librería escrita en JavaScript. Como solo los usa el compilador, van en `devDependencies`.
+
+<Callout type="warn" title="Errores reales de clase">
+  - `@types/morgan` se instaló sin `-D` y acabó en `dependencies`.
+  - `nodemon` también se instaló sin el flag.
+  - `npm @types/node` (sin `install`) responde `Unknown command`.
+
+  Se arregla con `npm uninstall <paquete>` y reinstalando con `--save-dev`. También se puede mover la línea a mano de un bloque a otro, como hizo el profesor con `@types/node`, pero ojo con las comas (siguiente apartado).
+</Callout>
+
+<CompletarCodigo
+  titulo="Cada paquete en su sitio"
+  enunciado="Completa los comandos para que cada paquete acabe en el bloque correcto."
+  lenguaje="bash"
+  codigo={`npm install express morgan
+npm install [[--save-dev|-D]] typescript tsx nodemon
+npm install -D [[@types/express]] @types/morgan @types/node
+npm [[uninstall]] @types/morgan   # estaba en dependencies por error`}
+/>
+
+## Versiones y el `^`
+
+En el `package.json` las versiones van con un rango delante:
+
+| Rango | Qué acepta | Ejemplo |
+| --- | --- | --- |
+| `^5.1.0` | Versiones menores y parches de la 5: desde la 5.1.0 hasta antes de la 6.0.0 | `"express": "^5.1.0"` |
+| `~5.7.2` | Solo parches: desde la 5.7.2 hasta antes de la 5.8.0 | `"typescript": "~5.7.2"` (Angular) |
+
+Por eso el `package.json` de la referencia dice `@prisma/client ^6.18.0` y la terminal enseña `Generated Prisma Client (v6.19.0)`: la 6.19.0 entra en el rango. La versión que de verdad se ha instalado se mira en `node_modules/<paquete>/package.json` (el 27/10 se hizo así con Zod) o en el `package-lock.json`.
+
+## `npx`: por qué `nodemon` a secas no funciona
+
+Los paquetes se instalan **dentro del proyecto**, en `node_modules`. Sus programas quedan en `node_modules/.bin`, que no está en el PATH de la terminal. Por eso:
+
+<Terminal titulo="zsh">
+{`$ nodemon
+zsh: command not found: nodemon
+$ npx nodemon
+[nodemon] 3.1.14
+[nodemon] watching path(s): src/**/*
+[nodemon] starting \`npx tsx watch src/index.ts\``}
+</Terminal>
+
+`npx` busca el programa en `node_modules/.bin` y lo ejecuta. Lo mismo pasó el 28/10 con `json-server` ([Probar APIs](/docs/2-dam/apis/backend/probar-apis)). La otra forma es meterlo en un script de `package.json` y lanzarlo con `npm run`: dentro de un script, npm sí encuentra los programas de `node_modules/.bin`. Por eso la referencia escribe `"dev": "nodemon src/index.ts"`, sin `npx`.
+
+## El error del paquete `tsc`
+
+Este fue el tropiezo largo del 20/10 (del minuto 4 al 15). El profesor escribió `npm install tsc` y npm avisó:
+
+<Terminal titulo="zsh">
+{`$ npm install tsc
+npm warn deprecated tsc@2.0.4: Package no longer supported.
+$ npx tsc --init
+This is not the tsc command you are looking for`}
+</Terminal>
+
+El paquete de npm llamado `tsc` **no es TypeScript**: es un paquete viejo y abandonado. El compilador `tsc` viene dentro del paquete **`typescript`**. Mientras el paquete `tsc` siga instalado, ocupa el comando y `npx tsc` no llega al compilador de verdad.
+
+<Steps>
+  <Step>
+
+#### Quitar el paquete equivocado
+
+`npm uninstall tsc`. En clase también se quitaron `tsx` y `ts-node` para descartar.
+
+  </Step>
+  <Step>
+
+#### Reinstalar en limpio
+
+`rm -rf node_modules` y `rm -rf package-lock.json`, y otra vez `npm install`.
+
+  </Step>
+  <Step>
+
+#### Instalar TypeScript, el de verdad
+
+`npm install --save-dev typescript`. Ahora `npx tsc` enseña la ayuda del compilador y `npx tsc --init` responde `Created a new tsconfig.json`.
+
+  </Step>
+</Steps>
+
+Por el camino también salieron `node: bad option: --init` (cortado en la captura; lo más probable es que fuera el binario del paquete equivocado) y una errata, `npm uninatall`, a la que npm respondió sugiriendo `uninstall`.
+
+## `tsconfig.json`
+
+Es la configuración del compilador. Este es el de la referencia (lo esencial, del 03/11):
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "module": "nodenext",
+    "target": "esnext",
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+    "noUncheckedIndexedAccess": true,
+    "strict": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true,
+    "esModuleInterop": true
+  },
+  "exclude": ["node_modules", "dist", "src/tests"]
+}
+```
+
+Por un mensaje de error del 27/10 se sabe que también tiene `"exactOptionalPropertyTypes": true`. En el proyecto en directo, además, se veían `"types": ["node", "express"]` (primero solo `["node"]`) y `"jsx": "react-jsx"`, que en un backend sobra: viene de la plantilla de `tsc --init`.
+
+<TypeTable
+  type={{
+    rootDir: { type: '"./src"', description: 'Dónde está el código fuente.' },
+    outDir: { type: '"./dist"', description: 'Dónde deja el JavaScript compilado. En clase se creó a mano con `mkdir dist`. `npm start` ejecuta `dist/index.js`.' },
+    module: { type: '"nodenext"', description: 'Sigue las reglas de Node para los módulos: con `"type": "module"`, ES Modules con la extensión en los imports.' },
+    target: { type: '"esnext"', description: 'Versión de JavaScript que genera: la más moderna.' },
+    strict: { type: 'true', description: 'Activa todas las comprobaciones estrictas (null, any implícito…).' },
+    noUncheckedIndexedAccess: { type: 'true', description: 'Leer `obj[clave]` o `array[i]` da `T | undefined`: obliga a comprobar que existe.' },
+    exactOptionalPropertyTypes: { type: 'true', description: '`name?: string` no admite `undefined` puesto a mano. Es lo que hace chocar los tipos de Zod con los de Prisma (ver CRUD de usuarios).' },
+    verbatimModuleSyntax: { type: 'true', description: 'Los imports se quedan como los escribes. Obliga a usar `import type` para lo que solo es un tipo.' },
+    isolatedModules: { type: 'true', description: 'Cada fichero se puede compilar por separado (lo necesitan tsx y ts-jest).' },
+    'sourceMap / declaration': { type: 'true', description: 'Genera mapas para depurar y ficheros `.d.ts` con los tipos.' },
+    skipLibCheck: { type: 'true', description: 'No comprueba los `.d.ts` de `node_modules` (compila más rápido).' },
+    esModuleInterop: { type: 'true', description: 'Permite `import express from \'express\'` con librerías escritas en CommonJS.' },
+    exclude: { type: 'string[]', description: 'Lo que no se compila. `src/tests` se excluye para que los tests no acaben en `dist`.' },
+  }}
+/>
+
+## ES Modules: `"type": "module"` y la extensión `.js`
+
+El proyecto usa **ES Modules** (`import`/`export`), no los `require()` antiguos (CommonJS). Para eso hacen falta dos cosas que van juntas:
+
+1. `"type": "module"` en `package.json`.
+2. `module: "nodenext"` y `verbatimModuleSyntax` en `tsconfig.json`.
+
+Si falta la primera, TypeScript protesta en cuanto escribes un `import`:
+
+<Terminal titulo="Problems">
+{`ECMAScript imports and exports cannot be written in a CommonJS file under verbatimModuleSyntax. Adjust the 'type' field...`}
+</Terminal>
+
+Y con ES Modules, **los imports de tus ficheros llevan `.js` aunque el fichero sea `.ts`**: tú importas lo que existirá después de compilar. TypeScript sabe que `./app.js` es `app.ts`.
+
+<Comparar titulo="Imports relativos con nodenext" columnas>
+  <Lado tipo="evitar" titulo="Da error">
+
+```ts
+import app from './app';
+import { env } from './config/env';
+```
+
+`Relative import paths need explicit file extensions`.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Así sí">
+
+```ts
+import app from './app.js';
+import { env } from './config/env.js';
+```
+
+  </Lado>
+</Comparar>
+
+Los imports de paquetes (`'express'`, `'zod'`) van sin extensión; la regla es solo para tus ficheros.
+
+### `import type`
+
+Con `verbatimModuleSyntax`, lo que **solo es un tipo** se importa con `import type`, y desaparece al compilar:
+
+```ts title="Imports de tipos"
+import type { Request, Response, NextFunction } from 'express';
+```
+
+Lo que se usa **como valor** (una función, un objeto) necesita un `import` normal. El 27/10 salió el error `'z' cannot be used as a value because it was imported using 'import type'` al escribir `import type { z } from 'zod'`; el arreglo rápido del editor es "Remove 'type' from import declaration". Lo verás en [Validación con Zod 4](/docs/2-dam/apis/backend/validacion-zod).
+
+## nodemon y tsx
+
+- **tsx** ejecuta TypeScript directamente, sin compilar a mano antes.
+- **nodemon** vigila los ficheros y relanza el programa cuando cambian. Escribiendo `rs` en su terminal reinicia a mano.
+
+Los dos proyectos lo configuran distinto:
+
+<Comparar titulo="nodemon.json">
+  <Lado tipo="evitar">
+
+```json title="nodemon.json (en directo, 20/10)"
+{
+  "watch": ["src"],
+  "ext": "ts",
+  "exec": "npx tsx watch src/index.ts"
+}
+```
+
+Con el script `"dev": "npx nodemon"`. Funciona, pero la vigilancia está **duplicada**: nodemon ya vigila `src` y `tsx watch` también vigila por su cuenta.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Así está en la referencia">
+
+```json title="nodemon.json (referencia, desde la v1.0.2)"
+{ "watch": ["src"], "ext": "ts", "exec": "tsx src/index.ts" }
+```
+
+Con el script `"dev": "nodemon src/index.ts"`. Hasta la v1.0.2 el `exec` era `ts-node src/index.ts`; se cambió a `tsx` porque funciona mejor con ES Modules.
+
+  </Lado>
+</Comparar>
+
+Al arrancar, nodemon dice lo que vigila y lo que lanza:
+
+<Terminal titulo="zsh">
+{`$ npm run dev
+[nodemon] watching path(s): src/**/*
+[nodemon] watching extensions: ts
+[nodemon] starting \`npx tsx watch src/index.ts\`
+Server is running on port 3000`}
+</Terminal>
+
+Al parar con Ctrl+C a veces sale `Previous process hasn't exited yet. Force killing...`: nodemon cierra a la fuerza el proceso anterior. No es un error tuyo.
+
+## Los scripts de `package.json`
+
+Los de la referencia en la v0.9.0, que son los que vas a usar:
+
+```json title="package.json (referencia, v0.9.0)"
+"type": "module",
+"scripts": {
+  "dev": "nodemon src/index.ts",
+  "build": "tsc -p .",
+  "start": "node dist/index.js",
+  "test": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest",
+  "test:watch": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --watch",
+  "test:coverage": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --coverage"
+}
+```
+
+| Script | Para qué |
+| --- | --- |
+| `npm run dev` | Desarrollo, con recarga al guardar. |
+| `npm run build` | Compila `src/` a `dist/` con `tsc`. |
+| `npm start` | Ejecuta lo compilado (producción). `start` y `test` no necesitan `run`. |
+| `npm test` | Los tests (ver [Logs, rate limiting y tests](/docs/2-dam/apis/backend/logs-rate-limiting-tests)). |
+
+En el proyecto en directo solo había `"dev": "npx nodemon"`, y el `main` se cambió a `"dist/index.js"`.
+
+## JSON estricto
+
+`package.json`, `nodemon.json` y `tsconfig.json` son JSON, y el JSON no perdona. En clase salieron estos tres:
+
+| Mensaje del editor | Por qué |
+| --- | --- |
+| `Trailing comma` | Una coma después del último elemento. |
+| `Expected comma` | Falta la coma entre dos propiedades. |
+| `Property keys must be doublequoted` | Una clave sin comillas dobles (al descomentar `rootDir` se quedó una comilla fuera). |
+| `Unexpected end of JSON input` | El fichero está incompleto o **sin guardar**. Así falló nodemon: `Failed to parse config ... nodemon.json`. |
+
+`tsconfig.json` es una excepción a medias: admite comentarios (es JSONC), por eso `tsc --init` lo genera lleno de ellos.
+
+## Más comandos de npm
+
+| Comando | Qué hace |
+| --- | --- |
+| `npm install` | Instala todo lo que dice `package.json` (`added N packages` o `up to date`). |
+| `npm uninstall <paquete>` | Lo quita de `node_modules` y de `package.json`. |
+| `rm -rf node_modules package-lock.json` y `npm install` | Reinstalar en limpio cuando algo se ha liado. |
+| `npm ci` | Instala **exactamente** lo del `package-lock.json`. Se usa en Docker y antes de desplegar. |
+| `npm audit` | Avisa de vulnerabilidades. En clase salió `3 high severity vulnerabilities`. |
+| `npm audit fix --force` | Lo sugiere npm, pero puede meter versiones que rompen cosas: **no se ejecuta a ciegas**. |
+
+Sobre seguridad, el 27/10 se enseñó la web de TuxCare (ciclo de vida de los paquetes, CVE y soporte después del fin de vida) solo como contexto, y se miró en el tooltip del editor que la última versión de Express era la 5.3.0 mientras el proyecto usaba `^5.1.0`.
+
+## Versiones de los dos proyectos
+
+| Paquete | En directo (`node-server`) | Referencia (`node-server-26-27`) |
+| --- | --- | --- |
+| express | `^5.3.0` | `^5.1.0` |
+| morgan | `^1.12.1` | `^1.10.1` |
+| dotenv | <Dudoso nota="Es raro, porque la referencia usa ^17.2.3. Puede ser un error de lectura.">`^18.0.8`</Dudoso> | `^17.2.3` |
+| typescript | `^7.0.2` (dev) | `^5.9.3` (dev) |
+| tsx | `^4.23.15` (dev) | sin versión visible (dev, desde la v1.0.2) |
+| ts-node | `^10.9.2` (dev) | `^10.9.2` (dev, hasta la v1.0.2) |
+| nodemon | `^3.1.14` (dev) | `^3.1.10` (dev) |
+| @types/node | `^26.6.5` (dev) | `^24.10.0` (dev) |
+| @types/express | `^5.0.6` (dev) | `^5.0.5` (dev) |
+
+<NoSeVio titulo="npm install dotenv">
+  En el proyecto en directo `dotenv` se importa en `env.ts`, pero no se ve instalarlo en ninguna captura ni aparece en el `package.json`. Puede que sea el `added 1 package` que sale en la terminal a las 20:48.
+</NoSeVio>
+
+## Practica
+
+<Quiz titulo="Test: Node, npm y TypeScript" descripcion="8 preguntas">
+  <Pregunta enunciado="¿En qué bloque del `package.json` tiene que acabar `@types/express`?" explicacion="Los `@types/*` solo los usa el compilador de TypeScript, así que son de desarrollo: `npm install -D @types/express`.">
+    <Opcion>`dependencies`</Opcion>
+    <Opcion correcta>`devDependencies`</Opcion>
+    <Opcion>En ninguno: se instala de forma global</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Escribes `nodemon` en la terminal y sale `command not found`, aunque está instalado. ¿Por qué?" explicacion="El programa está en `node_modules/.bin`, que no está en el PATH. Se lanza con `npx nodemon` o desde un script de npm.">
+    <Opcion>Porque nodemon solo funciona en macOS</Opcion>
+    <Opcion correcta>Porque está instalado en el proyecto y su ejecutable no está en el PATH</Opcion>
+    <Opcion>Porque falta `"type": "module"`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="`npx tsc --init` responde «This is not the tsc command you are looking for». ¿Qué ha pasado?" explicacion="Se instaló el paquete `tsc`, que está abandonado y no es TypeScript. Hay que quitarlo y usar el `tsc` que trae el paquete `typescript`.">
+    <Opcion>Falta instalar `ts-node`</Opcion>
+    <Opcion correcta>Se ha instalado el paquete `tsc`, que no es el compilador de TypeScript</Opcion>
+    <Opcion>La versión de Node es demasiado antigua</Opcion>
+  </Pregunta>
+  <Pregunta enunciado='Con `"type": "module"` y `module: nodenext`, ¿cómo importas `src/config/env.ts` desde `src/index.ts`?' explicacion="Los imports relativos llevan la extensión del fichero compilado, `.js`, aunque el fuente sea `.ts`.">
+    <Opcion>`import { env } from './config/env';`</Opcion>
+    <Opcion>`import { env } from './config/env.ts';`</Opcion>
+    <Opcion correcta>`import { env } from './config/env.js';`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado='Con `"express": "^5.1.0"`, npm puede instalar la versión 6.0.0.' respuesta={false} explicacion="El `^` acepta menores y parches de la misma versión mayor: de la 5.1.0 hasta antes de la 6.0.0." />
+  <Pregunta enunciado="¿Qué comando instala exactamente las versiones del `package-lock.json`, el que se usa en Docker?" explicacion="`npm ci` no recalcula versiones: instala lo que dice el lockfile.">
+    <Opcion>`npm install --force`</Opcion>
+    <Opcion correcta>`npm ci`</Opcion>
+    <Opcion>`npm audit fix`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Lo que importas con `import type` lo puedes usar como valor, por ejemplo llamar a una función." respuesta={false} explicacion="`import type` solo trae tipos y desaparece al compilar. Para usarlo como valor hace falta un `import` normal." />
+  <Pregunta tipo="texto" enunciado="¿Qué escribes en la terminal de nodemon para que reinicie a mano?" respuesta="rs" explicacion="`rs` + Intro reinicia el proceso sin tener que guardar ningún fichero." />
+</Quiz>
+
+<Flashcards titulo="Repaso: montar el proyecto">
+  <Tarjeta frente="`dependencies` frente a `devDependencies`">En `dependencies` va lo que se ejecuta en producción (express, morgan, dotenv…). En `devDependencies` (`-D`) lo que solo sirve para programar (typescript, tsx, nodemon, `@types/*`, jest).</Tarjeta>
+  <Tarjeta frente="¿Qué es un paquete `@types/xxx`?">Los tipos de TypeScript de una librería escrita en JavaScript. Solo los usa el compilador.</Tarjeta>
+  <Tarjeta frente="¿Para qué sirve `npx`?">Para ejecutar un programa instalado en `node_modules/.bin` del proyecto, que no está en el PATH.</Tarjeta>
+  <Tarjeta frente="El paquete `tsc` de npm">No es TypeScript: está abandonado. El compilador viene en el paquete `typescript` (`npm install -D typescript`).</Tarjeta>
+  <Tarjeta frente="Dos cosas para usar ES Modules en el backend">`"type": "module"` en `package.json` y `module: "nodenext"` (con `verbatimModuleSyntax`) en `tsconfig.json`.</Tarjeta>
+  <Tarjeta frente="¿Por qué `import app from './app.js'` si el fichero es `app.ts`?">Con `nodenext` se importa el nombre del fichero que existirá después de compilar. TypeScript lo traduce a `app.ts`.</Tarjeta>
+  <Tarjeta frente="nodemon + tsx">tsx ejecuta TypeScript sin compilar a mano; nodemon vigila `src` y lo relanza al guardar.</Tarjeta>
+  <Tarjeta frente="`Unexpected end of JSON input`">El JSON está incompleto o sin guardar. Le pasó a `nodemon.json` en clase.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Arregla este package.json" dificultad="facil">
+  Este `package.json` tiene tres problemas que salieron en clase. Encuéntralos y di cómo los arreglas. Después piensa si el script `dev` funciona tal como está.
+
+```json title="package.json"
+{
+  "name": "server",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon",
+  },
+  "dependencies": {
+    "express": "^5.3.0",
+    "morgan": "^1.12.1",
+    "@types/morgan": "^1.9.10",
+    "nodemon": "^3.1.14",
+    "tsc": "^2.0.4"
+  }
+}
+```
+
+  <Pista>Fíjate en las comas, en qué bloque está cada paquete y en si ese paquete es el que crees.</Pista>
+  <Pista>Para el script: ¿dónde busca npm los programas cuando lanza un script, y dónde los busca la terminal a secas?</Pista>
+
+  <Solucion>
+
+1. **Coma final** en `"dev": "nodemon",`: el JSON no la admite (`Trailing comma`).
+2. **`@types/morgan` y `nodemon` en `dependencies`**: son de desarrollo. `npm uninstall @types/morgan nodemon` y `npm install -D @types/morgan nodemon`.
+3. **El paquete `tsc`** no es TypeScript: `npm uninstall tsc` y `npm install -D typescript`.
+
+
+El script `"dev": "nodemon"` **no es un problema**: dentro de un script, npm encuentra los programas de `node_modules/.bin`, y nodemon lee lo que tiene que lanzar de `nodemon.json`. El `command not found` salía al escribir `nodemon` **en la terminal**. En clase se dejó como `"dev": "npx nodemon"` y en la referencia es `"dev": "nodemon src/index.ts"`; las dos formas funcionan.
+
+```json title="package.json (arreglado)"
+{
+  "name": "server",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/index.ts"
+  },
+  "dependencies": {
+    "express": "^5.3.0",
+    "morgan": "^1.12.1"
+  },
+  "devDependencies": {
+    "@types/morgan": "^1.9.10",
+    "nodemon": "^3.1.14",
+    "typescript": "^7.0.2"
+  }
+}
+```
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="De cero a npm run dev" dificultad="media">
+  Escribe, en orden, los comandos y ficheros para montar un proyecto como el de clase: Express con TypeScript, ES Modules, y que se reinicie solo al guardar. El servidor solo tiene que responder `Hello World` en `GET /`.
+
+  <Pista>Primero `npm init`; luego las dependencias, separando producción y desarrollo.</Pista>
+  <Pista>Te hacen falta `nodemon.json`, el script `dev`, `"type": "module"` y los imports con `.js`.</Pista>
+
+  <Solucion>
+
+```bash
+npm init
+npm install express
+npm install -D typescript tsx nodemon @types/node @types/express
+npx tsc --init
+```
+
+En `tsconfig.json`: `rootDir: "./src"`, `outDir: "./dist"`, `module: "nodenext"`. En `package.json`: `"type": "module"` y `"scripts": { "dev": "nodemon src/index.ts" }`.
+
+```json title="nodemon.json"
+{ "watch": ["src"], "ext": "ts", "exec": "tsx src/index.ts" }
+```
+
+```ts title="src/app.ts"
+import express from 'express';
+
+const app = express();
+
+app.get('/', (req, res) => {
+  res.send('Hello World');
+});
+
+export default app;
+```
+
+```ts title="src/index.ts"
+import app from './app.js';
+
+app.listen(3000, () => {
+  console.log('Server is running on port 3000');
+});
+```
+
+Y `npm run dev`. Es la versión del 20/10 sin el `env.ts`, que se ve en la página siguiente.
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="npm">Gestor de paquetes de Node: instala dependencias en `node_modules` y ejecuta los scripts de `package.json`.</Termino>
+  <Termino nombre="devDependencies">Paquetes que solo hacen falta para programar. Se instalan con `-D`.</Termino>
+  <Termino nombre="npx">Ejecuta programas de `node_modules/.bin` sin instalarlos de forma global.</Termino>
+  <Termino nombre="tsconfig.json">Configuración del compilador de TypeScript. Se genera con `npx tsc --init`.</Termino>
+  <Termino nombre="ES Modules">`import`/`export`. Con `nodenext`, los imports relativos llevan `.js`.</Termino>
+  <Termino nombre="nodemon">Vigila los ficheros y relanza el servidor al guardar. `rs` reinicia a mano.</Termino>
+  <Termino nombre="tsx">Ejecuta TypeScript directamente, sin compilar antes.</Termino>
+</Glosario>
+
+<MarcarCompletado />

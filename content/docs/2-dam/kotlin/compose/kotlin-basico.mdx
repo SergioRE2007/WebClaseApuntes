@@ -1,0 +1,455 @@
+---
+title: "Kotlin desde Java: lo básico"
+description: "Variables con val y var, tipos, plantillas de texto, funciones con parámetros por defecto y con nombre, if y when como expresión, null safety y colecciones: lo que necesitas de Kotlin para seguir el curso."
+icon: Code
+---
+
+En clase no hubo un tema de "aprender Kotlin": el lenguaje se fue viendo sobre la marcha mientras se hacían la TipCalculator, la ToDoApp y la PokeApp. Esta página junta todo lo que salió, explicado para quien ya sabe Java. La parte de clases, lambdas y funciones de extensión sigue en [Kotlin desde Java: clases y funciones](/docs/2-dam/kotlin/compose/kotlin-clases-y-funciones).
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Declarar variables con `val` y `var`, y por qué casi siempre se usa `val`.
+  - Los tipos básicos, los literales (`5_000L`, `0.0f`) y las plantillas de texto (`"Tarea $id"`).
+  - Funciones con parámetros por defecto y argumentos con nombre.
+  - `if` y `when` como expresiones que devuelven un valor.
+  - La <Concepto termino="Null safety" definicion="Kotlin distingue en el tipo si algo puede ser `null` (`Int?`) o no (`Int`). El compilador no te deja usar un valor nulable sin comprobarlo.">null safety</Concepto>: `Int?`, `?.`, `?.let`, `!!` y `?:`.
+  - Listas de solo lectura y mutables, y el bucle `for (x in lista)`.
+</Callout>
+
+## Primer vistazo: Java frente a Kotlin
+
+Lo primero que notas al pasar de Java a Kotlin es que se escribe bastante menos: no hay punto y coma, no hace falta `new`, el tipo va **detrás** del nombre y muchas veces ni se escribe porque el compilador lo deduce.
+
+<Comparar columnas titulo="La misma clase en los dos lenguajes">
+  <Lado titulo="Java">
+
+```java
+public class Saludo {
+    public static void main(String[] args) {
+        final String nombre = "Ana";
+        int edad = 19;
+        edad++;
+        System.out.println("Hola, " + nombre
+            + " (" + edad + ")");
+    }
+}
+```
+
+  </Lado>
+  <Lado titulo="Kotlin">
+
+```kotlin
+fun main() {
+    val nombre = "Ana"
+    var edad = 19
+    edad++
+    println("Hola, $nombre ($edad)")
+}
+```
+
+  </Lado>
+</Comparar>
+
+| Java | Kotlin | Comentario |
+| --- | --- | --- |
+| `final String s = "a";` | `val s = "a"` | `val` no se puede reasignar. |
+| `int n = 0;` | `var n = 0` | `var` sí se puede reasignar. |
+| `new Persona()` | `Persona()` | No existe `new`. |
+| `void` | `Unit` | Si una función no devuelve nada, devuelve `Unit` (y no hace falta escribirlo). |
+| `String s = null;` | `val s: String? = null` | Solo los tipos con `?` admiten `null`. |
+| `a.equals(b)` | `a == b` | En Kotlin `==` llama a `equals`. Para comparar referencias se usa `===`. |
+| `"Hola " + n` | `"Hola $n"` | Plantillas de texto. |
+
+## `val` y `var`
+
+<DeClase fecha="07/10, 09/11" proyecto="TipCalculator y PokeApp2627" />
+
+- **`val`** (de *value*) es una variable que no se puede reasignar, como `final` en Java.
+- **`var`** (de *variable*) se puede reasignar.
+
+```kotlin title="ValVar.kt"
+val nombre = "Bulbasaur"
+nombre = "Ivysaur"            // Error: Val cannot be reassigned
+
+var clics = 0
+clics = clics + 1             // Bien
+```
+
+La costumbre en Kotlin es **usar `val` siempre que se pueda** y `var` solo cuando de verdad hace falta. En clase se vio muy claro con el estado de la TipCalculator: primero el `data class` tenía campos `var` que se cambiaban a mano, y después todos pasaron a `val` y se usó `copy()` para crear un estado nuevo (lo verás en la [siguiente página](/docs/2-dam/kotlin/compose/kotlin-clases-y-funciones#data-class-y-copy)).
+
+<Callout type="warn" title="Un val puede cambiar por dentro">
+  `val` impide **reasignar** la variable, pero no impide cambiar el objeto al que apunta. Una `val` con una lista mutable se puede vaciar y rellenar:
+
+```kotlin
+private val _pokemons: MutableList<Pokemon> = mutableListOf()
+
+suspend fun save(pokemons: List<Pokemon>) {
+    _pokemons.clear()
+    _pokemons.addAll(pokemons)
+}
+```
+
+  Es el `PokemonInMemoryDataSource` del 09/11. La referencia `_pokemons` es siempre la misma; lo que cambia es su contenido. Igual que con un `final ArrayList` en Java.
+</Callout>
+
+## Tipos y literales
+
+Kotlin no distingue entre tipos primitivos y clases envoltorio como Java (`int` e `Integer`): todo se escribe con mayúscula (`Int`, `Long`, `Float`, `Double`, `Boolean`, `String`) y el compilador decide por debajo cuándo usar el primitivo.
+
+El tipo se puede escribir detrás del nombre, con dos puntos, o dejar que Kotlin lo deduzca (inferencia de tipos):
+
+```kotlin title="Tipos.kt"
+val id: Int = 3             // con tipo
+val nombre = "Pikachu"      // Kotlin deduce String
+val activo = false          // Boolean
+val propina = 0.0f          // Float: la f (o F) al final
+val total = 59.9            // Double: un decimal sin f es Double
+val espera = 5_000L         // Long: la L al final
+```
+
+- **`5_000L`**: el guion bajo solo sirve para leer mejor los números largos (`5_000L` es `5000L`). La `L` lo hace `Long`. En clase se usaba para los milisegundos: `delay(5_000L)` y `WhileSubscribed(5_000L)`.
+- **`0.0f` / `0.0F`**: un `Float`. En la TipCalculator, el valor del `Slider` y la propina eran `Float` (`tipAmount: Float = 0.0F`).
+- Kotlin **no convierte números solo**: no puedes pasar un `Int` donde se espera un `Long` sin `.toLong()`.
+
+### Constantes
+
+Una constante de verdad (conocida al compilar) se declara con `const val`, y puede ir fuera de cualquier clase, en lo alto del archivo:
+
+```kotlin title="TaskRepositoryInMemory.kt"
+private const val delay = 5_000L
+```
+
+<DeClase fecha="23/10" proyecto="ToDoApp" nota="el retardo que simulaba la red" />
+
+## Plantillas de texto
+
+<DeClase fecha="09/10" proyecto="ToDoApp" />
+
+En vez de concatenar con `+`, se mete la variable en el texto con `$`. Si es una expresión (una propiedad, una llamada), va entre llaves con `${...}`:
+
+```kotlin title="Plantillas.kt"
+val id = 3
+Text("Tarea $id")                     // Tarea 3
+
+val pokemon = Pokemon(id = 25, name = "pikachu", pokemonImageUrl = null)
+Text("${pokemon.name} es el número ${pokemon.id}")
+```
+
+En la ruta de la ToDoApp también se usó dentro de un argumento: `Route(route = "taskDetail/$id")`.
+
+## Funciones
+
+Una función se declara con `fun`. Los parámetros llevan el tipo detrás y el tipo de retorno va después de los paréntesis:
+
+```kotlin title="Funciones.kt"
+fun sumar(a: Int, b: Int): Int {
+    return a + b
+}
+
+// Si el cuerpo es una sola expresión, se puede escribir con =
+fun sumar2(a: Int, b: Int): Int = a + b
+
+// Sin valor de retorno: devuelve Unit y no hace falta escribirlo
+fun saludar(nombre: String) {
+    println("Hola, $nombre")
+}
+```
+
+### Parámetros por defecto y argumentos con nombre
+
+Esto se usa **muchísimo** en Compose y en clase salió todos los días. Un parámetro puede tener un valor por defecto, y al llamar a la función puedes poner el nombre de cada argumento:
+
+```kotlin title="TaskListScreen.kt"
+@Composable
+fun TaskListScreen(
+    modifier: Modifier = Modifier,
+    toCreate: () -> Unit,
+    toDetail: (Int) -> Unit,
+    isLoading: Boolean = true,
+    tasks: List<Task> = listOf(),
+) { /* ... */ }
+```
+
+```kotlin title="Llamadas.kt"
+// Solo los obligatorios: el resto toma su valor por defecto
+TaskListScreen(toCreate = { }, toDetail = { })
+
+// Con nombre, en el orden que quieras
+TaskListScreen(
+    toDetail = { id -> println(id) },
+    toCreate = { },
+    isLoading = false,
+)
+```
+
+<DeClase fecha="23/10" proyecto="ToDoApp" nota="la pantalla sin estado de la lista" />
+
+- En Java tendrías que escribir varias **sobrecargas** del método para conseguir lo mismo. En Kotlin, con valores por defecto, basta una función.
+- Los **argumentos con nombre** hacen que se lea qué es cada cosa (`isLoading = false` frente a un `false` suelto). El profesor los usa casi siempre: `_repository.create(title = ..., description = ..., limitDate = ...)`, `Room.databaseBuilder(context = context, name = "pokemon_db")`.
+- La **coma final** después del último parámetro (`tasks: List<Task> = listOf(),`) está permitida, y en clase se escribe así a menudo: facilita añadir parámetros después.
+- Con **Ctrl+P** dentro de los paréntesis, Android Studio enseña los parámetros que admite la función.
+
+## `if` y `when` son expresiones
+
+<DeClase fecha="07/10" proyecto="TipCalculator" />
+
+En Kotlin, `if` **devuelve un valor**, así que sustituye al operador ternario de Java (`cond ? a : b`, que no existe en Kotlin). Cuando lo usas para dar un valor, **el `else` es obligatorio**: si no, ¿qué valdría cuando la condición es falsa?
+
+```kotlin title="TipCalculatorViewModel.kt"
+_state = _state.copy(
+    tip = isEnabled,
+    tipAmount = if (!isEnabled) 0.0f else _state.tipAmount
+)
+```
+
+Mientras faltaba el `else`, el IDE marcaba error. Es exactamente lo que pasó en clase.
+
+**`when`** es el `switch` de Kotlin, pero mucho más potente: no hace falta `break`, cada rama puede ser una expresión, y también devuelve un valor. Esta es la lógica de la propina que había en la TipCalculator antes de pasarla al ViewModel (quedó comentada):
+
+```kotlin title="Lógica antigua de la propina"
+val totalWithTip = when (tipValue) {
+    1.0f -> totalAmount!! * 1.05f
+    2.0f -> totalAmount!! * 1.1f
+    else -> totalAmount!!
+}
+```
+
+- Si `tipValue` vale `1.0f`, se suma un 5 %; si vale `2.0f`, un 10 %; en cualquier otro caso, el total sin propina.
+- Como el `when` da un valor, también necesita la rama `else` (salvo que el compilador sepa que has cubierto todos los casos, como con una `sealed class`; lo verás en la [página siguiente](/docs/2-dam/kotlin/compose/kotlin-clases-y-funciones#sealed-class-y-sealed-interface)).
+
+## Null safety
+
+<DeClase fecha="09/10, 26/10, 18/11" proyecto="ToDoApp, PokeApp2627 y ToDoOfflineFirst" />
+
+El famoso `NullPointerException` de Java casi desaparece en Kotlin porque **el tipo dice si algo puede ser `null`**:
+
+- `val id: Int` **nunca** es `null`. Si intentas asignarle `null`, no compila.
+- `val id: Int?` (con interrogación) **sí** puede ser `null`. Y el compilador no te deja usarlo como si no lo fuera.
+
+Para trabajar con un valor nulable hay cuatro herramientas:
+
+<Tabs items={['?. (llamada segura)', '?.let { }', '?: (elvis)', '!! (forzar)']}>
+  <Tab value="?. (llamada segura)">
+
+```kotlin
+val sprites: PokemonSprites? = response.sprites
+val url: String? = sprites?.frontDefault
+```
+
+Si `sprites` es `null`, toda la expresión vale `null` en vez de lanzar una excepción. Es lo que hace el mapper `toModel()` del 26/10: `pokemonImageUrl = this.sprites?.frontDefault`.
+
+  </Tab>
+  <Tab value="?.let { }">
+
+```kotlin
+@Composable
+fun TaskDetailScreen(modifier: Modifier = Modifier, id: Int? = null) {
+    id?.let {
+        Text("Tarea $id")
+    }
+}
+```
+
+El bloque solo se ejecuta si `id` no es `null`. Dentro, el valor (ya no nulable) se llama `it`. Es la `TaskDetailScreen` del 09/10. El 09/11 se usó igual para pintar la imagen solo si había URL: `imageUrl?.let { AsyncImage(...) }`.
+
+  </Tab>
+  <Tab value="?: (elvis)">
+
+```kotlin
+override val darkMode: Flow<Boolean>
+    get() = dataStore.data.map { preferences -> preferences[uiMode] ?: false }
+```
+
+`a ?: b` vale `a` si no es `null`, y `b` si lo es. Sirve para dar un valor por defecto. En el ejemplo del 18/11, si todavía no se ha guardado la preferencia, el modo oscuro vale `false`.
+
+  </Tab>
+  <Tab value="!! (forzar)">
+
+```kotlin
+val body = response.body()!!
+pokemons.add(pokemon!!)
+```
+
+`!!` le dice al compilador "confía en mí, no es `null`". Si resulta que sí lo es, lanza un `NullPointerException` y **la app se cierra**. Salió el 26/10 con Retrofit y está en la lista de prácticas que no conviene copiar: si la API falla, la app se cae.
+
+  </Tab>
+</Tabs>
+
+<Callout type="warn" title="Evita !!">
+  Si te ves escribiendo `!!`, casi siempre hay una forma mejor: `?.let`, `?:` o comprobar antes con `if (x != null)`. Dentro de ese `if`, Kotlin ya trata `x` como no nulable (es un *smart cast*, lo verás en la página siguiente).
+</Callout>
+
+## `TODO()`
+
+<DeClase fecha="16/10, 23/10, 26/10" proyecto="ToDoApp y PokeApp2627" />
+
+`TODO()` es una función de la librería estándar que **lanza `NotImplementedError`** si se ejecuta. El profesor la usa como marcador de "esto está por hacer":
+
+```kotlin title="TaskListScreen.kt"
+when (state) {
+    is TaskListScreenState.Error -> TODO()
+    // ...
+}
+```
+
+¿Por qué compila aunque esa rama "debería" pintar algo? Porque `TODO()` devuelve el tipo especial **`Nothing`**, que en Kotlin encaja en cualquier sitio (es subtipo de todos los tipos). Compila, pero si el estado llega a ser `Error`, la app se cae. No confundas `TODO()` con el comentario `// TODO`, que solo es un recordatorio para el IDE.
+
+## Colecciones y bucles
+
+<DeClase fecha="26/10, 09/11" proyecto="PokeApp2627" />
+
+Kotlin separa las listas **de solo lectura** de las **mutables**:
+
+| Función | Qué crea | ¿Se puede cambiar? |
+| --- | --- | --- |
+| `listOf(1, 2, 3)` / `listOf()` | `List<Int>` | No: no tiene `add` ni `remove`. |
+| `mutableListOf<Task>()` | `MutableList<Task>` | Sí: `add`, `addAll`, `remove`, `clear`... |
+
+```kotlin title="PokemonRemoteDataSourceImpl.kt"
+override suspend fun readAllPokemon(): List<Pokemon> {
+    val response = _api.readAllPokemon()
+    val pokemons = mutableListOf<Pokemon>()
+    if (response.isSuccessful) {
+        val body = response.body()!!
+        for (item in body.results) {
+            val pokemon = readPokemonByName(item.name)
+            pokemons.add(pokemon!!)
+        }
+    }
+    return pokemons
+}
+```
+
+- El bucle **`for (item in lista)`** es el `for-each` de Java (`for (Item item : lista)`). Para números: `for (i in 0 until 10)` o `for (i in 1..10)`.
+- La función devuelve `List<Pokemon>` (solo lectura) aunque por dentro use una `MutableList`: quien la llama no puede modificarla.
+- `toList()` hace una **copia** de solo lectura. Por eso el repositorio en memoria devolvía `_taskList.toList()`: así nadie de fuera podía tocar la lista interna.
+- Hay muchas funciones que reciben una lambda: `first { it.id == id }` devuelve el primer elemento que cumple la condición (y lanza una excepción si no hay ninguno; `firstOrNull` devuelve `null`), `map`, `filter`, `any`... Las lambdas se explican en la [página siguiente](/docs/2-dam/kotlin/compose/kotlin-clases-y-funciones#lambdas-y-tipos-función).
+
+<Callout type="info" title="Las !! de este código">
+  Este fragmento es el de clase y tiene dos `!!` (`body()!!` y `pokemon!!`). Si la API falla en un pokémon, la app se cierra. Cómo hacerlo bien es cosa del [bloque de datos](/docs/2-dam/kotlin/datos) (Retrofit).
+</Callout>
+
+## Practica
+
+<CompletarCodigo
+  titulo="Valores por defecto y nulables"
+  enunciado="Completa la función para que reciba un id opcional y solo pinte el texto si no es null."
+  lenguaje="kotlin"
+  codigo={`@Composable
+fun TaskDetailScreen(
+    modifier: Modifier = Modifier,
+    id: [[Int?]] = [[null]],
+) {
+    id[[?.]]let {
+        Text("Tarea [[$id|$it]]")
+    }
+}`}
+/>
+
+<CompletarCodigo
+  titulo="if como expresión y elvis"
+  enunciado="Si la propina está desactivada vale 0, y si no, la que había. Después, da false por defecto a una preferencia nulable."
+  lenguaje="kotlin"
+  codigo={`val tipAmount = [[if]] (!isEnabled) 0.0f [[else]] _state.tipAmount
+val darkMode = preferences[uiMode] [[?:]] false`}
+/>
+
+<Quiz titulo="Test: Kotlin básico" descripcion="7 preguntas">
+  <Pregunta enunciado='¿Qué equivale a `final String nombre = "Ana";` de Java?' explicacion="`val` no se puede reasignar, como `final`. El tipo `String` se deduce del valor.">
+    <Opcion correcta>`val nombre = "Ana"`</Opcion>
+    <Opcion>`var nombre = "Ana"`</Opcion>
+    <Opcion>`const nombre = "Ana"`</Opcion>
+    <Opcion>`final val nombre = "Ana"`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Con `val lista = mutableListOf(1, 2)` se puede hacer `lista.add(3)`." respuesta={true} explicacion="`val` impide reasignar la variable, no cambiar el objeto. La lista es mutable y `add` funciona." />
+  <Pregunta enunciado="¿Por qué no compila `val t = if (activo) 1.0f`?" explicacion="Un `if` usado como expresión tiene que dar un valor en todos los casos, así que necesita `else`.">
+    <Opcion>Porque `if` no puede devolver un `Float`.</Opcion>
+    <Opcion correcta>Porque falta el `else`.</Opcion>
+    <Opcion>Porque hay que poner el tipo: `val t: Float`.</Opcion>
+    <Opcion>Porque en Kotlin se usa `activo ? 1.0f : 0f`.</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado='Si `nombre` es un `String?` que vale `null`, ¿qué vale `nombre ?: "Anónimo"`?' respuesta={["Anónimo", "\"Anónimo\""]} explicacion="El operador elvis devuelve lo de la derecha cuando lo de la izquierda es `null`." />
+  <Pregunta enunciado="¿Qué pasa si ejecutas `response.body()!!` y `body()` devuelve `null`?" explicacion="`!!` fuerza a tratar el valor como no nulo. Si es `null`, lanza `NullPointerException` y, si nadie la captura, la app se cierra.">
+    <Opcion>Devuelve `null` y sigue.</Opcion>
+    <Opcion>No compila.</Opcion>
+    <Opcion correcta>Lanza `NullPointerException` y la app se cae.</Opcion>
+    <Opcion>Devuelve un objeto vacío.</Opcion>
+  </Pregunta>
+  <Pregunta enunciado='¿Cuáles de estas llamadas a `fun crear(titulo: String, descripcion: String = "", urgente: Boolean = false)` compilan?' explicacion="Solo `titulo` es obligatorio. Con nombre, los argumentos pueden ir en cualquier orden. La última falla porque falta `titulo`.">
+    <Opcion correcta>`crear("Comprar pan")`</Opcion>
+    <Opcion correcta>`crear(urgente = true, titulo = "Examen")`</Opcion>
+    <Opcion correcta>`crear("Examen", urgente = true)`</Opcion>
+    <Opcion>`crear(descripcion = "Sin título")`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`TODO()` compila en cualquier rama porque devuelve `Nothing`, pero si se ejecuta lanza `NotImplementedError`." respuesta={true} explicacion="`Nothing` es subtipo de todos los tipos, así que encaja en cualquier sitio. Al ejecutarse lanza la excepción." />
+</Quiz>
+
+<Flashcards titulo="Repaso: Kotlin básico">
+  <Tarjeta frente="`val` frente a `var`">`val` no se puede reasignar (como `final`); `var` sí. Usa `val` siempre que puedas.</Tarjeta>
+  <Tarjeta frente="¿Qué es `5_000L`?">El número 5000 de tipo `Long`. El `_` solo ayuda a leerlo.</Tarjeta>
+  <Tarjeta frente="Plantilla de texto con una propiedad">`"Nombre: ${pokemon.name}"`. Con una variable sola basta `$id`.</Tarjeta>
+  <Tarjeta frente="¿Qué significa `Int?`?">Un `Int` que puede ser `null`. Sin `?`, el compilador no deja asignarle `null`.</Tarjeta>
+  <Tarjeta frente="`x?.let { ... }`">Ejecuta el bloque solo si `x` no es `null`. Dentro, el valor se llama `it`.</Tarjeta>
+  <Tarjeta frente="Operador elvis `?:`">`a ?: b` vale `a` si no es `null`, y `b` si lo es. Sirve para dar un valor por defecto.</Tarjeta>
+  <Tarjeta frente="`listOf` frente a `mutableListOf`">`listOf` crea una lista de solo lectura; `mutableListOf`, una que admite `add`, `remove`, `clear`...</Tarjeta>
+  <Tarjeta frente="¿Qué devuelve `TODO()`?">`Nothing`: compila en cualquier sitio, pero al ejecutarse lanza `NotImplementedError`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="De Java a Kotlin" dificultad="facil">
+  Traduce este método de Java a una función de Kotlin de una sola expresión, con `descuento` opcional (por defecto `0.0`) y sin usar el operador ternario.
+
+```java
+public static double precioFinal(double precio, double descuento, boolean socio) {
+    return socio ? precio * (1 - descuento) : precio;
+}
+```
+
+  Después, llámala con argumentos con nombre para un socio con un 10 % de descuento.
+
+  <Pista>En Kotlin, el ternario se escribe con `if (...) a else b`.</Pista>
+  <Pista>Una función de una sola expresión se escribe con `=` en vez de llaves y `return`.</Pista>
+
+  <Solucion>
+
+```kotlin
+fun precioFinal(precio: Double, descuento: Double = 0.0, socio: Boolean): Double =
+    if (socio) precio * (1 - descuento) else precio
+
+val p = precioFinal(precio = 50.0, descuento = 0.10, socio = true) // 45.0
+```
+
+  Como `descuento` tiene valor por defecto pero `socio` va detrás y no lo tiene, para saltarte `descuento` tienes que usar nombres: `precioFinal(50.0, socio = false)`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Sin !!" dificultad="media">
+  Reescribe este fragmento sin `!!`, de forma que si `body()` es `null` la función devuelva una lista vacía en vez de cerrar la app.
+
+```kotlin
+val body = response.body()!!
+return body.results.map { it.name }
+```
+
+  <Pista>El operador elvis puede ir a la derecha de una llamada segura: `a?.b ?: valorPorDefecto`.</Pista>
+
+  <Solucion>
+
+```kotlin
+return response.body()?.results?.map { it.name } ?: emptyList()
+```
+
+  Si `body()` es `null`, la llamada segura `?.` hace que toda la cadena valga `null`, y el elvis la cambia por una lista vacía. También vale con un `if`:
+
+```kotlin
+val body = response.body()
+return if (body != null) body.results.map { it.name } else emptyList()
+```
+
+  Dentro del `if`, Kotlin ya sabe que `body` no es `null` (*smart cast*).
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

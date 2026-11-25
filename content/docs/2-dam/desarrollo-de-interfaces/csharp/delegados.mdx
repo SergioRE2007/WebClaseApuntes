@@ -1,0 +1,471 @@
+---
+title: Delegados
+description: Qué es un delegado, cómo se asigna, se invoca y se reasigna, el multicast con += y GetInvocationList(), y los métodos estáticos y de instancia en un delegado (clase del 09/11).
+icon: Workflow
+---
+
+Un **delegado** es un tipo que guarda **métodos**. Es la pieza sobre la que se montan las lambdas y los eventos, y por tanto los botones y demás controles de una interfaz gráfica. Toda la clase del 09/11 se hizo en `Program.cs` con una calculadora.
+
+<DeClase fecha="09/11" proyecto="Clase1" nota="PDF Creación de interfaces, tema 1, apartados 1.4 y 1.5 (pág. 5)" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Declarar un delegado y asignarle un método, de la forma larga y de la corta.
+  - Invocarlo y reasignarlo.
+  - Meter varios métodos en el mismo delegado (*multicast*) con `+=` y quitarlos con `-=`.
+  - Por qué con un multicast solo recibes lo que devuelve el último método, y cómo recoger todos con `GetInvocationList()`.
+  - Guardar en un delegado métodos `static` y métodos de un objeto.
+</Callout>
+
+## Qué es un delegado
+
+Un delegado describe una **firma**: qué devuelve un método y qué parámetros recibe. Cualquier método con esa misma firma se puede guardar en una variable de ese tipo y llamarse a través de ella.
+
+```csharp title="Program.cs"
+delegate int Operacion(int a, int b);
+```
+
+Esto se lee: "`Operacion` es el tipo de los métodos que reciben dos `int` y devuelven un `int`". Los PDF de la asignatura lo definen como *"un contrato entre el emisor y el receptor"*: quien usa el delegado no sabe qué método hay dentro, solo que cumple esa firma.
+
+Si vienes de Java, es lo mismo que una **interfaz funcional** (como `IntBinaryOperator`), pero con su propia palabra clave y sin tener que inventar un nombre de método: el delegado se llama directamente, `op(4, 5)`.
+
+<Callout type="warn" title="Un delegado es un tipo">
+  Como una clase, el `delegate` va **después** de las instrucciones de nivel superior en `Program.cs`. Si lo subes arriba sale el error CS8803 (se probó en clase). Lo tienes explicado en [Visual Studio y el proyecto Clase1](/docs/2-dam/desarrollo-de-interfaces/csharp/visual-studio-y-proyecto#el-orden-importa).
+</Callout>
+
+## La clase, paso a paso
+
+<Steps>
+  <Step>
+
+#### El punto de partida
+
+  `Program.cs` dividido con comentarios de sección: arriba la ejecución y abajo las definiciones. Está el delegado `Operacion` y la clase `Calculadora` con dos métodos **estáticos**, `Sumar` y `Restar`, que escriben la operación y devuelven el resultado.
+
+  </Step>
+  <Step>
+
+#### Asignar un método
+
+  Primero con `new`, y después con la **forma corta**, que es la que se queda:
+
+```csharp
+// Primero, con new:
+Operacion op = new Operacion(Calculadora.Sumar);
+
+// Después, la forma corta (sustituye a la línea anterior):
+Operacion op = Calculadora.Sumar;
+```
+
+  Fíjate en que `Calculadora.Sumar` va **sin paréntesis**: no se llama al método, se guarda.
+
+  </Step>
+  <Step>
+
+#### Invocarlo como si fuera un método
+
+  `op(4, 5);` llama a lo que haya dentro. IntelliSense enseña la firma `int Operacion(int a, int b)`. Sale `Suma: 4 + 5 = 9`.
+
+  </Step>
+  <Step>
+
+#### Reasignarlo
+
+  Si cambias la asignación a `Calculadora.Restar`, la misma llamada `op(4, 5)` escribe `Resta: 4 - 5 = -1`. El delegado puede apuntar a **cualquier** método con la misma firma.
+
+  </Step>
+  <Step>
+
+#### Multicast con `+=`
+
+  Con `op += Calculadora.Restar;` se **añade** un método más. Ahora una sola llamada `op(4, 5)` ejecuta los dos, en el orden en que se añadieron: `Suma: 4 + 5 = 9` y después `Resta: 4 - 5 = -1`.
+
+  </Step>
+  <Step>
+
+#### Recoger cada resultado con `GetInvocationList()`
+
+  `op(4, 5)` se sustituye por un `foreach` que recorre la lista de métodos del delegado y llama a cada uno por separado.
+
+  </Step>
+  <Step>
+
+#### Un método de instancia
+
+  A `Restar` se le quita `static`. `op += Calculadora.Restar;` deja de compilar y hay que crear un objeto: `op += calc.Restar;`.
+
+  </Step>
+  <Step>
+
+#### Campos privados con estado
+
+  `Calculadora` recibe dos campos, `val1 = 6` y `val2 = 3`, y `Restar` pasa a usarlos. La resta sale `6 - 3 = 3`.
+
+  </Step>
+</Steps>
+
+## Asignar, invocar y reasignar
+
+Así lo cuenta el PDF (apartado 1.4):
+
+```csharp title="Ejemplo del PDF, 1.4"
+using System;
+
+delegate int Operacion(int x, int y);
+
+class Program
+{
+    static int Sumar(int a, int b) => a + b;
+    static int Restar(int a, int b) => a - b;
+
+    static void Main()
+    {
+        Operacion op = Sumar;                    // Asignar el método Sumar
+        Console.WriteLine("Suma: " + op(5, 3));  // Suma: 8
+        op = Restar;                             // Reasignar a Restar
+        Console.WriteLine("Resta: " + op(5, 3)); // Resta: 2
+    }
+}
+```
+
+- **Asignar**: `Operacion op = Sumar;`. El método tiene que tener **la misma firma** que el delegado (dos `int`, devuelve `int`). Los nombres de los parámetros no importan: el delegado usa `x` e `y` y los métodos, `a` y `b`.
+- **Invocar**: `op(5, 3)`, como si `op` fuera un método.
+- **Reasignar** con `=`: el delegado deja de apuntar a `Sumar` y apunta a `Restar`.
+- `=> a + b` es un método escrito en una línea. Lo verás en [Validador, métodos anónimos y lambdas](/docs/2-dam/desarrollo-de-interfaces/csharp/validador-y-lambdas).
+
+## Multicast: varios métodos en un delegado
+
+Un delegado puede guardar **varios métodos** a la vez:
+
+- `+=` **añade** un método al final.
+- `-=` **quita** un método (aparece en los apuntes; en clase se usa el 19/11 con los eventos).
+- Al invocar el delegado se ejecutan **todos**, en el orden en que se añadieron.
+
+El PDF (apartado 1.5) lo explica así: *"Los delegados pueden contener múltiples métodos. Cuando se llama al delegado, se ejecutan todos los métodos asignados en el orden en que fueron añadidos"*. Su ejemplo, que en el PDF es otro programa con su propio `Main` y los mismos `Sumar` y `Restar` de una línea:
+
+```csharp title="Ejemplo del PDF, 1.5 (dentro de Main)"
+Operacion op = Sumar;
+op += Restar;                            // Añadir Restar
+foreach (Operacion metodo in op.GetInvocationList())
+{
+    Console.WriteLine(metodo(5, 3));     // 8 y 2
+}
+```
+
+Escribe `8` y `2`: cada vuelta llama a un método de la lista. Lo de `GetInvocationList()` lo explicamos justo debajo.
+
+### El problema del valor de retorno
+
+Si llamas directamente a un delegado multicast que devuelve algo, **se ejecutan todos los métodos, pero solo recibes lo que devuelve el último**:
+
+```csharp title="Ejemplo propio"
+Operacion op = Calculadora.Sumar;
+op += Calculadora.Restar;
+int r = op(4, 5);   // escribe la suma y la resta, pero r vale -1
+```
+
+En clase se llamó a `op(4, 5)` sin guardar el resultado; la variable `r` la hemos añadido para que se vea qué se recibe.
+
+Por eso, para tener **cada** resultado, se recorre la lista de métodos con `GetInvocationList()`. Es un método que tienen todos los delegados (viene de `System.Delegate`):
+
+```csharp title="Program.cs (09/11, mitad de la clase)"
+// See https://aka.ms/new-console-template for more information
+//Ejecución de la función principal
+Operacion op = Calculadora.Sumar;
+op += Calculadora.Restar;
+
+// Ejecucion del delegado
+foreach (Operacion operacion in op.GetInvocationList())
+{
+    int resultado = operacion(10, 5);
+    Console.WriteLine($"Resultado: {resultado}");
+}
+
+// Definiciones
+// Funciones
+delegate int Operacion(int a, int b);
+
+// Clases
+class Calculadora
+{
+    public static int Sumar(int a, int b)
+    {
+        int suma = a + b;
+        Console.WriteLine($"Suma: {a} + {b} = {suma}");
+        return suma;
+    }
+
+    public static int Restar(int a, int b)
+    {
+        int resta = a - b;
+        Console.WriteLine($"Resta: {a} - {b} = {resta}");
+        return resta;
+    }
+}
+```
+
+<Terminal titulo="Consola de depuración de Microsoft Visual Studio">
+{`Suma: 10 + 5 = 15
+Resultado: 15
+Resta: 10 - 5 = 5
+Resultado: 5`}
+</Terminal>
+
+Cada vuelta del `foreach` saca **un** método de la lista (`operacion`, del tipo `Operacion`) y lo llama con `(10, 5)`. Así cada resultado se queda en su variable. Visual Studio marca de paso que `operacion` "no es NULL aquí".
+
+<NoSeVio titulo="Cómo se escribió el foreach">
+  No hay capturas del minuto 06:12 al 08:15: el `foreach` aparece ya terminado.
+</NoSeVio>
+
+## Métodos estáticos y de instancia
+
+Un método `static` es de la **clase**: se pasa al delegado con el nombre de la clase, `Calculadora.Sumar`. Un método **de instancia** es de un **objeto**: hay que crearlo antes y pasar `objeto.Metodo`.
+
+En clase se le quitó `static` a `Restar`. Entonces `op += Calculadora.Restar;` <Dudoso nota="Visual Studio marca un error, pero el texto no se lee. Todo indica que es porque Restar acaba de dejar de ser static.">deja de compilar</Dudoso>, y hay que crear una `Calculadora`:
+
+```csharp title="Program.cs"
+Operacion op = Calculadora.Sumar;          // estático: con el nombre de la clase
+Calculadora calc = new Calculadora();
+op += calc.Restar;                         // de instancia: con el objeto
+```
+
+Un mismo delegado puede **mezclar** métodos estáticos y de instancia.
+
+<NoDadoEnClase titulo="El error de llamar a un método de instancia desde la clase">
+  En clase no se lee el código del error. Lo normal en este caso es **CS0120**: hace falta una referencia de objeto para usar un miembro que no es estático. Es el mismo error que en Java te da llamar a un método no estático desde `main`.
+</NoDadoEnClase>
+
+### La versión final: el objeto tiene estado
+
+La gracia de guardar un método de instancia es que **usa los datos de su objeto**. Recorre la versión final de la clase:
+
+<Recorrido
+  titulo="Program.cs (09/11, versión final)"
+  lenguaje="csharp"
+  codigo={`//Ejecución de la función principal
+Operacion op = Calculadora.Sumar;
+Calculadora calc = new Calculadora();
+op += calc.Restar;
+
+// Ejecucion del delegado
+foreach (Operacion operacion in op.GetInvocationList())
+{
+    int resultado = operacion(10, 5);
+    Console.WriteLine($"Resultado: {resultado}");
+}
+
+// Definiciones
+// Funciones
+delegate int Operacion(int a, int b);
+
+// Clases
+class Calculadora
+{
+    private int val1 = 6;
+    private int val2 = 3;
+
+    public static int Sumar(int a, int b)
+    {
+        int suma = a + b;
+        Console.WriteLine($"Suma: {a} + {b} = {suma}");
+        return suma;
+    }
+
+    public int Restar(int a, int b)
+    {
+        int resta = val1 - val2;
+        Console.WriteLine($"Resta: {val1} - {val2} = {resta}");
+        return resta;
+    }
+}`}
+>
+  <Paso lineas="15" titulo="El delegado">
+    La firma: dos `int` de entrada y un `int` de salida. Va abajo, con los tipos.
+  </Paso>
+  <Paso lineas="2" titulo="Un método estático">
+    `Sumar` es `static`, así que se asigna con el nombre de la clase.
+  </Paso>
+  <Paso lineas="3-4" titulo="Un método de instancia">
+    `Restar` ya no es `static`: hay que crear el objeto `calc` y añadir `calc.Restar` con `+=`.
+  </Paso>
+  <Paso lineas="7" titulo="GetInvocationList()">
+    Devuelve los métodos del delegado en orden: primero `Sumar` y después `calc.Restar`.
+  </Paso>
+  <Paso lineas="9-10" titulo="Llamar a cada uno">
+    Cada método se llama con `(10, 5)` y su resultado se escribe por separado.
+  </Paso>
+  <Paso lineas="20-21" titulo="Campos privados">
+    El objeto tiene estado propio: `val1 = 6` y `val2 = 3`.
+  </Paso>
+  <Paso lineas="23-28" titulo="Sumar usa sus parámetros">
+    Escribe `Suma: 10 + 5 = 15` y devuelve 15.
+  </Paso>
+  <Paso lineas="30-35" titulo="Restar usa los campos">
+    Recibe `a` y `b`, pero calcula con `val1` y `val2`: escribe `Resta: 6 - 3 = 3` y devuelve 3.
+  </Paso>
+</Recorrido>
+
+<Terminal titulo="Consola de depuración de Microsoft Visual Studio">
+{`Suma: 10 + 5 = 15
+Resultado: 15
+Resta: 6 - 3 = 3
+Resultado: 3`}
+</Terminal>
+
+Mira cómo viaja cada llamada:
+
+<Flujo
+  titulo="Recorrer un delegado multicast"
+  nodos={["Program.cs", "op", "Calculadora.Sumar", "calc.Restar"]}
+>
+  <Mensaje de="Program.cs" a="op" titulo="op.GetInvocationList()">
+    El `foreach` pide la lista de métodos del delegado: `Sumar` y `calc.Restar`, en el orden de los `+=`.
+  </Mensaje>
+  <Mensaje de="op" a="Calculadora.Sumar" titulo="operacion(10, 5)">
+    Primera vuelta: se llama a `Sumar`, que es estático. Escribe `Suma: 10 + 5 = 15`.
+  </Mensaje>
+  <Mensaje de="Calculadora.Sumar" a="Program.cs" tipo="respuesta" titulo="15">
+    El resultado llega a `resultado` y se escribe `Resultado: 15`.
+  </Mensaje>
+  <Mensaje de="op" a="calc.Restar" titulo="operacion(10, 5)">
+    Segunda vuelta: se llama a `Restar` **del objeto `calc`**. Usa sus campos y escribe `Resta: 6 - 3 = 3`.
+  </Mensaje>
+  <Mensaje de="calc.Restar" a="Program.cs" tipo="respuesta" titulo="3">
+    Se escribe `Resultado: 3`. No hay más métodos en la lista y el bucle acaba.
+  </Mensaje>
+</Flujo>
+
+<Callout title="Restar recibe a y b, pero no los usa">
+  En la versión final `Restar` sigue teniendo los parámetros `a` y `b` (los necesita para encajar con la firma de `Operacion`), pero calcula con `val1` y `val2`. Sirve para enseñar que un método de instancia puede usar el estado de su objeto. No se ve si el profesor lo comentó.
+</Callout>
+
+- El primer campo se escribió como <Dudoso nota="El cursor tapa parte del nombre. Poco después solo aparecen val1 y val2.">`private int _resultado;`</Dudoso> y luego desaparece.
+- Hubo un paso intermedio con un fallo en el texto (`{val1} - {b}`) que se corrigió a `{val1} - {val2}`.
+
+## Practica
+
+<Quiz titulo="Test: delegados">
+  <Pregunta enunciado="Con `delegate int Operacion(int a, int b);`, ¿qué método se puede asignar a una variable `Operacion`?" explicacion="Tiene que coincidir la firma: dos `int` de entrada y un `int` de salida. El nombre del método y de los parámetros da igual.">
+    <Opcion correcta>`static int Multiplicar(int x, int y)`</Opcion>
+    <Opcion>`static void Mostrar(int a, int b)`</Opcion>
+    <Opcion>`static int Doble(int a)`</Opcion>
+    <Opcion>`static double Media(int a, int b)`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cuál es la forma corta de `Operacion op = new Operacion(Calculadora.Sumar);`?" explicacion="El nombre del método, sin paréntesis. Con paréntesis lo estarías llamando.">
+    <Opcion correcta>`Operacion op = Calculadora.Sumar;`</Opcion>
+    <Opcion>`Operacion op = Calculadora.Sumar();`</Opcion>
+    <Opcion>`Operacion op += Sumar;`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="Con los `Sumar` y `Restar` estáticos de clase: `op = Calculadora.Sumar; op += Calculadora.Restar; int r = op(4, 5);`. ¿Cuánto vale `r`?" respuesta="-1" explicacion="Se ejecutan los dos métodos, pero un multicast solo devuelve lo del último: 4 - 5 = -1." />
+  <Pregunta enunciado="¿Para qué sirve `GetInvocationList()`?" explicacion="Devuelve los métodos del delegado para recorrerlos y llamar a cada uno por separado.">
+    <Opcion>Para borrar todos los métodos del delegado</Opcion>
+    <Opcion correcta>Para obtener la lista de métodos del delegado y llamar a cada uno por separado</Opcion>
+    <Opcion>Para saber cuántos parámetros tiene el delegado</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="`Restar` ya no es `static`. ¿Cómo lo añades al delegado?" explicacion="Un método de instancia necesita un objeto.">
+    <Opcion>`op += Calculadora.Restar;`</Opcion>
+    <Opcion correcta>`Calculadora calc = new Calculadora(); op += calc.Restar;`</Opcion>
+    <Opcion>`op += static Restar;`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Un mismo delegado puede tener a la vez métodos estáticos y métodos de instancia." respuesta={true} explicacion="En la versión final del 09/11, `op` lleva `Calculadora.Sumar` (estático) y `calc.Restar` (de instancia)." />
+  <Pregunta tipo="vf" enunciado="Al invocar un delegado multicast, los métodos se ejecutan en orden alfabético." respuesta={false} explicacion="Se ejecutan en el orden en que se añadieron con `+=`." />
+  <Pregunta tipo="texto" enunciado="En la versión final, con `val1 = 6` y `val2 = 3`, ¿qué escribe `Restar` al llamarlo con `(10, 5)`? (copia la línea)" respuesta="Resta: 6 - 3 = 3" explicacion="`Restar` calcula con los campos del objeto y no con sus parámetros." />
+</Quiz>
+
+<Flashcards titulo="Repaso: delegados">
+  <Tarjeta frente="¿Qué es un delegado?">Un **tipo** que representa la firma de un método. Cualquier método con esa firma se puede guardar en una variable de ese tipo.</Tarjeta>
+  <Tarjeta frente="Declarar un delegado">`delegate int Operacion(int a, int b);`</Tarjeta>
+  <Tarjeta frente="Invocar un delegado">Como un método: `op(4, 5)`.</Tarjeta>
+  <Tarjeta frente="`=` frente a `+=`">`=` sustituye lo que había; `+=` añade un método más (multicast).</Tarjeta>
+  <Tarjeta frente="¿Qué devuelve un multicast si lo llamas directamente?">Solo lo del **último** método, aunque se ejecuten todos.</Tarjeta>
+  <Tarjeta frente="Recoger todos los resultados">`foreach (Operacion o in op.GetInvocationList()) { int r = o(10, 5); }`</Tarjeta>
+  <Tarjeta frente="Método estático frente a de instancia en un delegado">Estático: `Calculadora.Sumar`. De instancia: `calc.Restar`, con un objeto creado antes.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="¿Qué escribe?" dificultad="facil">
+  Con los métodos estáticos `Sumar` y `Restar` de la mitad de la clase:
+
+```csharp
+Operacion op = Calculadora.Sumar;
+op += Calculadora.Restar;
+op += Calculadora.Sumar;
+int r = op(2, 1);
+Console.WriteLine($"r = {r}");
+```
+
+  ¿Qué líneas salen en la consola y cuánto vale `r`?
+
+  <Pista>Un mismo método se puede añadir dos veces: se ejecuta dos veces.</Pista>
+  <Pista>El valor devuelto es el del último método de la lista.</Pista>
+
+  <Solucion>
+
+```text
+Suma: 2 + 1 = 3
+Resta: 2 - 1 = 1
+Suma: 2 + 1 = 3
+r = 3
+```
+
+Se ejecutan los tres métodos en el orden de los `+=` y `r` recibe lo que devuelve el último, `Sumar`: 3.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Calculadora completa" dificultad="media">
+  Añade a `Calculadora` los métodos estáticos `Multiplicar` y `Dividir` (división entera), mete las cuatro operaciones en un solo delegado `Operacion` y escribe cada resultado con `GetInvocationList()`. Con `(10, 5)` tiene que salir 15, 5, 50 y 2.
+
+  <Pista>Copia la forma de `Sumar`: calcula, escribe la operación y devuelve el resultado.</Pista>
+  <Pista>Recuerda el orden de `Program.cs`: primero el código que se ejecuta, después el `delegate` y la clase.</Pista>
+
+  <Solucion>
+
+Solución propia:
+
+```csharp title="Program.cs"
+Operacion op = Calculadora.Sumar;
+op += Calculadora.Restar;
+op += Calculadora.Multiplicar;
+op += Calculadora.Dividir;
+
+foreach (Operacion operacion in op.GetInvocationList())
+{
+    int resultado = operacion(10, 5);
+    Console.WriteLine($"Resultado: {resultado}");
+}
+
+delegate int Operacion(int a, int b);
+
+class Calculadora
+{
+    public static int Sumar(int a, int b)
+    {
+        Console.WriteLine($"Suma: {a} + {b} = {a + b}");
+        return a + b;
+    }
+
+    public static int Restar(int a, int b)
+    {
+        Console.WriteLine($"Resta: {a} - {b} = {a - b}");
+        return a - b;
+    }
+
+    public static int Multiplicar(int a, int b)
+    {
+        Console.WriteLine($"Multiplicación: {a} * {b} = {a * b}");
+        return a * b;
+    }
+
+    public static int Dividir(int a, int b)
+    {
+        Console.WriteLine($"División: {a} / {b} = {a / b}");
+        return a / b;
+    }
+}
+```
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

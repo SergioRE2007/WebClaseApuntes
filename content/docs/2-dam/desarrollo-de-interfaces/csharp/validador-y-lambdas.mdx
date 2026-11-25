@@ -1,0 +1,490 @@
+---
+title: Validador, métodos anónimos y lambdas
+description: Un delegado multicast que encadena validaciones, por qué la primera versión mentía, el cortocircuito con &&, los métodos anónimos, las lambdas y los miembros con cuerpo de expresión (clase del 18/11).
+icon: ListChecks
+---
+
+import { ValidadorEncadenado } from '@/components/temas/csharp/validador-encadenado';
+
+El 18/11 se siguió con los delegados en un ejemplo práctico: un **validador** al que se le encadenan varias comprobaciones sobre un número. Sirvió para ver un problema real del multicast (solo cuenta el último método), cómo arreglarlo, y las **tres formas de escribir un método** para meterlo en un delegado: con nombre, anónimo y lambda.
+
+<DeClase fecha="18/11" proyecto="Clase1" nota="archivos Program.cs y Validador.cs" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Encadenar validaciones con un delegado multicast que devuelve `bool`.
+  - Por qué invocar el delegado directamente da un resultado engañoso.
+  - Recorrer `GetInvocationList()` con un acumulador `&&` y aprovechar el cortocircuito.
+  - Escribir métodos **anónimos** (`delegate (int n) { ... }`) y **lambdas** de bloque y de expresión.
+  - Los **miembros con cuerpo de expresión**: `EsImpar(int x) => !EsPar(x);`.
+</Callout>
+
+## El Validador
+
+`Validador.cs` tiene un delegado propio, `ValidarNumero`, y varios métodos estáticos con su misma firma (reciben un `int` y devuelven `bool`). Cada uno escribe su resultado en consola. Así quedó al final de la clase:
+
+```csharp title="Validador.cs (18/11)"
+using System;
+
+public class Validador
+{
+    public delegate bool ValidarNumero(int x);
+
+    /*Func<int, bool> ValidarNumero2;
+
+    public delegate void DelegadoSinResultado(int x);
+    Action<int, string, string, int> DelegadoSinResultado2;
+
+    Predicate<int> ValidarNumero3;
+
+    public delegate bool MiDelegado(int x, string str);
+    Func<int, string, bool> MiDelegado2;*/
+
+    public static void ImprimeNumero(int x)
+    {
+        Console.WriteLine($"El número ingresado es: {x}");
+    }
+
+    public static bool EsNegativo(int x)
+    {
+        bool resultado = x < 0;
+        Console.WriteLine($"El resultado de la funcion EsNegativo para {x} es: {resultado}");
+        return resultado;
+    }
+
+    public static bool EsPositivo(int x)
+    {
+        bool resultado = x > 0;
+        Console.WriteLine($"El resultado de la funcion EsPositivo para {x} es: {resultado}");
+        return resultado;
+    }
+
+    public static bool EsImpar(int x) => !EsPar(x);
+
+    public static bool EsPar(int x)
+    {
+        bool resultado = x % 2 == 0;
+        Console.WriteLine($"El resultado de la funcion EsPar para {x} es: {resultado}");
+        return resultado;
+    }
+
+    public static bool MayorACero(int x)
+    {
+        bool resultado = x > 0;
+        Console.WriteLine($"El resultado de la funcion MayorACero para {x} es: {resultado}");
+        return resultado;
+    }
+
+    public static bool Ejecutar(ValidarNumero validate, int x)
+    {
+        bool resultado = true;
+        foreach (ValidarNumero paso in validate.GetInvocationList())
+        {
+            resultado = resultado && paso(x);
+        }
+        if (resultado)
+        {
+            Console.WriteLine($"El numero {x} cumple con las validaciones");
+        }
+        else
+        {
+            Console.WriteLine($"El numero {x} NO cumple con las validaciones");
+        }
+        return resultado;
+    }
+}
+```
+
+El bloque comentado con `/* */` son las declaraciones que se probaron en la segunda mitad de la clase: lo tienes en [Func, Action y Predicate](/docs/2-dam/desarrollo-de-interfaces/csharp/func-action-predicate). `ImprimeNumero` no devuelve nada, así que **no encaja** con `ValidarNumero`: se escribió para hablar de `Action`.
+
+## El programa que lo usa
+
+`Program.cs` pide un número dentro de un `do/while` y repite **hasta que cumpla todas las validaciones**. Recórrelo:
+
+<Recorrido
+  titulo="Program.cs (18/11)"
+  lenguaje="csharp"
+  codigo={`bool esValido = true;
+do
+{
+    Console.Write("\\nIngrese un número entero: ");
+    int x = Convert.ToInt32(Console.ReadLine());
+
+    Validador.ValidarNumero validar = Validador.EsPositivo;
+    validar += Validador.EsPar;
+    validar += delegate (int numero)
+    {
+        bool resultado = numero % 3 == 0;
+        Console.WriteLine($"El resultado de la función anónima para {numero} es divisible por 3: {resultado}");
+        return resultado;
+    };
+    validar += (int numero) =>
+    {
+        bool resultado = numero > 10;
+        Console.WriteLine($"El resultado de la función lambda para {numero} es mayor que 10: {resultado}");
+        return resultado;
+    };
+    validar += (int numero) => numero > 20;
+
+    esValido = Validador.Ejecutar(validar, x);
+} while (!esValido);`}
+>
+  <Paso lineas="1-5, 24" titulo="Pedir hasta que valga">
+    El `do/while` se ejecuta al menos una vez y vuelve a pedir otro número mientras `esValido` sea `false`. `\n` deja una línea en blanco antes de cada pregunta.
+  </Paso>
+  <Paso lineas="7" titulo="El delegado, con el nombre de la clase">
+    `ValidarNumero` está declarado **dentro** de `Validador`, así que desde fuera se escribe `Validador.ValidarNumero`. Sin el prefijo da error (se probó al final de la clase).
+  </Paso>
+  <Paso lineas="8" titulo="Método con nombre">
+    `+=` añade `EsPar`. Igual que con la calculadora, el nombre va sin paréntesis.
+  </Paso>
+  <Paso lineas="9-14" titulo="Método anónimo">
+    Un método **sin nombre**, escrito ahí mismo con la palabra `delegate`. Lleva su `return` dentro y un `;` después de la llave de cierre, porque toda la línea es una asignación.
+  </Paso>
+  <Paso lineas="15-20" titulo="Lambda de bloque">
+    Lo mismo con `=>`: parámetros, flecha y un bloque entre llaves con su `return`.
+  </Paso>
+  <Paso lineas="21" titulo="Lambda de expresión">
+    Si el cuerpo es una sola expresión, sobran las llaves y el `return`: devuelve `numero > 20`. Esta no escribe nada en consola.
+  </Paso>
+  <Paso lineas="23" titulo="Ejecutar las validaciones">
+    `Ejecutar` recibe el delegado con los cinco métodos y el número, y devuelve si cumple todas.
+  </Paso>
+</Recorrido>
+
+Al empezar la clase la cadena solo tenía los tres primeros (`EsPositivo`, `EsPar` y el método anónimo). Las dos lambdas se añadieron durante la clase.
+
+## Por qué la primera versión mentía
+
+Al empezar la clase, `Ejecutar` llamaba al delegado directamente. Con **-6** se escribían los tres resultados (False, True y True)… y salía *"El numero -6 cumple con las validaciones"*, aunque `EsPositivo` había dicho False.
+
+<Comparar titulo="El método Ejecutar">
+  <Lado tipo="evitar" titulo="Primera versión: engañosa">
+
+```csharp
+public static bool Ejecutar(ValidarNumero validate, int x)
+{
+    bool resultado = validate(x);
+    if (resultado) { /* cumple */ } else { /* NO cumple */ }
+    return resultado;
+}
+```
+
+`validate(x)` ejecuta **todos** los métodos, pero un multicast solo devuelve lo del **último**. El último era el de "divisible por 3", y -6 lo es: True.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Versión final de clase">
+
+```csharp
+public static bool Ejecutar(ValidarNumero validate, int x)
+{
+    bool resultado = true;
+    foreach (ValidarNumero paso in validate.GetInvocationList())
+    {
+        resultado = resultado && paso(x);
+    }
+    // ... escribe si cumple o no
+    return resultado;
+}
+```
+
+Evalúa los métodos **uno a uno** y acumula con `&&`: solo es `true` si **todos** lo son.
+
+  </Lado>
+</Comparar>
+
+Es lo mismo que pasaba con la calculadora del 09/11 (ver [Delegados](/docs/2-dam/desarrollo-de-interfaces/csharp/delegados#el-problema-del-valor-de-retorno)): para tener cada resultado hay que recorrer `GetInvocationList()`.
+
+### Cómo se llegó a la versión final
+
+1. Primero, dentro de `Ejecutar`, un `foreach` con `Console.WriteLine(del.ToString())`, solo para **ver** qué métodos llevaba el delegado.
+2. Después se reescribió para evaluarlos uno a uno. Pasó por `resultado = false`, por `resultado = paso(x)` y por un error **CS0103** (se escribió `repaso` en vez de `paso`, un nombre que no existe).
+3. Se quedó en `resultado = resultado && paso(x)`, con `resultado = true` al principio. La variable del bucle pasó a llamarse `paso`.
+
+### El acumulador y el cortocircuito
+
+- `resultado` **empieza en `true`**. Si empezara en `false`, `false && lo-que-sea` sería siempre `false` y ningún número cumpliría nunca.
+- `&&` hace **cortocircuito**: si lo de la izquierda ya es `false`, no evalúa lo de la derecha. En cuanto un paso da False, `resultado` vale `false` y en las siguientes vueltas **ya no se llama** a `paso(x)`.
+
+Por eso, con la versión final, -6 solo escribe la línea de `EsPositivo`: los demás métodos ni se ejecutan.
+
+<NoDadoEnClase titulo="El orden de los operandos importa">
+  Si escribieras `resultado = paso(x) && resultado;`, el método se llamaría **siempre** (está a la izquierda) y verías todos los mensajes. El resultado final sería el mismo, pero sin cortocircuito.
+</NoDadoEnClase>
+
+### Pruébalo
+
+Marca qué métodos lleva la cadena, elige la versión de `Ejecutar` y un número, y mira qué escribe la consola. Empieza con -6 en la primera versión y después en la final.
+
+<ValidadorEncadenado />
+
+Las pruebas que se hicieron en clase con la versión final:
+
+| Número | Qué se escribe | Resultado |
+| --- | --- | --- |
+| -6 | Solo `EsPositivo`: False | NO cumple |
+| 8 | `EsPositivo` True, `EsPar` True, divisible por 3 False | NO cumple |
+| 7 | `EsPositivo` True, `EsPar` False | NO cumple |
+
+<Terminal titulo="Consola de depuración de Microsoft Visual Studio">
+{`Ingrese un número entero: 8
+El resultado de la funcion EsPositivo para 8 es: True
+El resultado de la funcion EsPar para 8 es: True
+El resultado de la función anónima para 8 es divisible por 3: False
+El numero 8 NO cumple con las validaciones`}
+</Terminal>
+
+Como el `do/while` repite hasta que se cumplan todas, el programa vuelve a pedir otro número. Con la cadena completa, el primer número positivo que lo acepta es el **24**: positivo, par, divisible por 3, mayor que 10 y mayor que 20.
+
+## Tres formas de escribir el método
+
+Un delegado acepta cualquier método que encaje con su firma, se escriba como se escriba:
+
+<Tabs items={['Con nombre', 'Método anónimo', 'Lambda de bloque', 'Lambda de expresión']}>
+  <Tab value="Con nombre">
+
+```csharp
+validar += Validador.EsPar;
+```
+
+Un método normal, declarado en una clase. Se pasa su nombre sin paréntesis (en inglés, *method group*).
+
+  </Tab>
+  <Tab value="Método anónimo">
+
+```csharp
+validar += delegate (int numero)
+{
+    bool resultado = numero % 3 == 0;
+    Console.WriteLine($"... divisible por 3: {resultado}");
+    return resultado;
+};
+```
+
+La palabra `delegate`, los parámetros y el cuerpo. Sin parámetros: `delegate () { ... }`.
+
+  </Tab>
+  <Tab value="Lambda de bloque">
+
+```csharp
+validar += (int numero) =>
+{
+    bool resultado = numero > 10;
+    Console.WriteLine($"... mayor que 10: {resultado}");
+    return resultado;
+};
+```
+
+Parámetros, `=>` y un bloque con `return`. Sin parámetros: `() => { ... }`.
+
+  </Tab>
+  <Tab value="Lambda de expresión">
+
+```csharp
+validar += (int numero) => numero > 20;
+```
+
+Una sola expresión: su valor es lo que se devuelve.
+
+  </Tab>
+</Tabs>
+
+- El método anónimo y la lambda de bloque hacen **lo mismo**; la lambda es la forma moderna y más corta. En clase se compararon las dos sintaxis una al lado de la otra.
+- En los dos casos va un **`;` después de la llave de cierre**: es el final de la instrucción `validar += ...;`.
+- Al pasar el ratón por `delegate`, Visual Studio llamó al método anónimo <Dudoso nota="Es lo que pone el tooltip en la captura; no está claro si se refiere al método anónimo o a otra cosa.">"lambda expression"</Dudoso>.
+- Durante la clase se probó también una lambda "menor que 100" que no se quedó en el código.
+
+En Java la lambda de expresión sería `numero -> numero > 20`: cambia la flecha.
+
+## Miembros con cuerpo de expresión
+
+<DeClase fecha="18/11" proyecto="Clase1" nota="EsImpar en Validador.cs" />
+
+La flecha `=>` también sirve para escribir **un método normal** en una línea, cuando su cuerpo es una sola expresión. En clase se creó `EsImpar` reutilizando `EsPar`:
+
+<Comparar titulo="EsImpar en Validador.cs">
+  <Lado tipo="evitar" titulo="Primer intento: no compila">
+
+```csharp
+public static bool EsImpar(int x) => { ... }
+```
+
+Después de `=>` en un método tiene que ir **una expresión**, no un bloque entre llaves. Daba errores.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Como quedó">
+
+```csharp
+public static bool EsImpar(int x) => !EsPar(x);
+```
+
+Equivale a `{ return !EsPar(x); }`.
+
+  </Lado>
+</Comparar>
+
+- El primer intento <Dudoso nota="El cursor tapa el operador; se supone %.">usaba `%`</Dudoso> dentro de las llaves.
+- Como `EsImpar` llama a `EsPar`, al usarlo también se escribe la línea de `EsPar`. Por ejemplo, `EsImpar(7)` escribe *"El resultado de la funcion EsPar para 7 es: False"* y devuelve `true`.
+- El PDF usa la misma forma en sus ejemplos: `static int Sumar(int a, int b) => a + b;`.
+
+## Lambdas que usan variables de fuera
+
+Una lambda (o un método anónimo) puede **leer y modificar variables locales** del código que la rodea. Se llama **captura de variables** o *closure*. En clase se vio a fondo el 19/11 con un contador de segundos: lo tienes en [Eventos](/docs/2-dam/desarrollo-de-interfaces/csharp/eventos#captura-de-variables).
+
+## Lo que no queda claro de esta clase
+
+<NoSeVio titulo="Huecos en las capturas">
+  - Entre los minutos 04:14 y 06:43, y entre 07:55 y 11:04, casi no hay capturas: seguramente se explicó de palabra.
+  - `validar += Validador.MayorACero;` aparece con un error aunque el método existe, y no se explica. Esa línea no se quedó en el código.
+  - No queda claro si al final `Ejecutar` volvió a recibir `ValidarNumero` o se quedó con `Predicate<int>`, ni con qué tipo terminó la variable `validar`: la última captura tiene `ValidaValidarNumero` a medio escribir.
+  - `Program.cs` termina con `Operacion op = Calculadora.Restar;` y `//EjecutarOperacion(op, 10, 20);`, que vienen de la clase anterior. `EjecutarOperacion` no aparece definida en ningún sitio. Además, el 09/11 `Restar` había pasado a ser de instancia y aquí se usa como estático: no se sabe si se volvió a cambiar.
+</NoSeVio>
+
+<NoSeVio titulo="Ejercicio 4 de Moodle (métodos anónimos)">
+  El 19/11 se movió su entrega al lunes 23/11/2026 a las 23:59, pero el enunciado no se ve en las capturas.
+</NoSeVio>
+
+## Practica
+
+<CompletarCodigo
+  titulo="Tres formas del mismo método"
+  enunciado="Completa las tres versiones de un método que dice si un número es menor que 100."
+  lenguaje="csharp"
+  codigo={`validar += [[delegate]] (int numero)
+{
+    return numero < 100;
+}[[;]]
+validar += (int numero) [[=>]] { return numero < 100; };
+validar += (int numero) => [[numero < 100|numero<100]];`}
+/>
+
+<Quiz titulo="Test: validador y lambdas">
+  <Pregunta enunciado="Con la primera versión de `Ejecutar` (`bool resultado = validate(x);`) y la cadena `EsPositivo`, `EsPar` y divisible por 3, ¿qué pasa con -6?" explicacion="Se ejecutan los tres, pero solo cuenta lo que devuelve el último (divisible por 3): True. Por eso decía que cumplía.">
+    <Opcion>Dice que NO cumple, porque `EsPositivo` da False</Opcion>
+    <Opcion correcta>Dice que cumple, porque solo cuenta el último método, que da True</Opcion>
+    <Opcion>No compila</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="Con la versión final de `Ejecutar` y el número 8, ¿a cuántos métodos de la cadena se llega a llamar?" respuesta={["3", "tres"]} explicacion="`EsPositivo` (True), `EsPar` (True) y divisible por 3 (False). A partir de ahí el cortocircuito evita las dos lambdas." />
+  <Pregunta enunciado="¿Por qué `resultado` empieza valiendo `true` en `Ejecutar`?" explicacion="El acumulador con `&&` solo puede seguir siendo `true` si empieza en `true`.">
+    <Opcion>Porque C# no deja inicializar un `bool` a `false`</Opcion>
+    <Opcion correcta>Porque con `false`, `false && ...` sería siempre `false` y nunca se cumpliría</Opcion>
+    <Opcion>Porque `GetInvocationList()` lo necesita</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="Con la cadena completa de clase (positivo, par, divisible por 3, mayor que 10 y mayor que 20), ¿cuál es el menor número positivo que cumple todas?" respuesta="24" explicacion="Tiene que ser múltiplo de 6 (par y divisible por 3) y mayor que 20: 24." />
+  <Pregunta enunciado="¿Cuál es un método anónimo?" explicacion="El método anónimo usa la palabra `delegate`. Las otras son una lambda y un método con nombre.">
+    <Opcion correcta>`delegate (int n) { return n > 0; }`</Opcion>
+    <Opcion>`(int n) => n > 0`</Opcion>
+    <Opcion>`Validador.EsPositivo`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué es `public static bool EsImpar(int x) => !EsPar(x);`?" explicacion="Un método normal con nombre cuyo cuerpo es una sola expresión.">
+    <Opcion>Una lambda guardada en un campo</Opcion>
+    <Opcion correcta>Un miembro con cuerpo de expresión</Opcion>
+    <Opcion>Un método anónimo</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Después de la llave de cierre de un método anónimo añadido con `+=` va un `;`." respuesta={true} explicacion="Toda la línea `validar += delegate (...) { ... };` es una instrucción y acaba en `;`." />
+  <Pregunta tipo="vf" enunciado="`ImprimeNumero(int x)`, que no devuelve nada, se puede añadir a un `ValidarNumero`." respuesta={false} explicacion="`ValidarNumero` devuelve `bool`; un método `void` no encaja con su firma." />
+</Quiz>
+
+<Flashcards titulo="Repaso: validador y lambdas">
+  <Tarjeta frente="Multicast que devuelve `bool` llamado directamente">Se ejecutan todos, pero solo cuenta el resultado del **último**.</Tarjeta>
+  <Tarjeta frente="Acumulador de validaciones">`bool resultado = true;` y en el `foreach`: `resultado = resultado && paso(x);`</Tarjeta>
+  <Tarjeta frente="Cortocircuito de `&&`">Si la izquierda es `false`, no se evalúa la derecha: los métodos siguientes no se llaman.</Tarjeta>
+  <Tarjeta frente="Método anónimo">`delegate (int n) { ...; return r; };`</Tarjeta>
+  <Tarjeta frente="Lambda de bloque y de expresión">`(int n) => { ...; return r; }` y `(int n) => n > 20`.</Tarjeta>
+  <Tarjeta frente="Miembro con cuerpo de expresión">Un método escrito con `=>` y una sola expresión: `EsImpar(int x) => !EsPar(x);`</Tarjeta>
+  <Tarjeta frente="Delegado declarado dentro de una clase">Desde fuera se escribe con el nombre de la clase: `Validador.ValidarNumero`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Ver todos los mensajes" dificultad="media">
+  Cambia `Ejecutar` para que se llame **siempre** a todos los métodos de la cadena (y se vean todos sus mensajes), pero que el resultado siga siendo `true` solo si todos dan `true`.
+
+  <Pista>El problema es que `resultado && paso(x)` no llama a `paso(x)` cuando `resultado` ya es `false`.</Pista>
+  <Pista>Guarda primero lo que devuelve `paso(x)` en una variable.</Pista>
+
+  <Solucion>
+
+Solución propia:
+
+```csharp title="Validador.cs"
+public static bool Ejecutar(ValidarNumero validate, int x)
+{
+    bool resultado = true;
+    foreach (ValidarNumero paso in validate.GetInvocationList())
+    {
+        bool r = paso(x);            // se llama siempre
+        resultado = resultado && r;
+    }
+    if (resultado)
+    {
+        Console.WriteLine($"El numero {x} cumple con las validaciones");
+    }
+    else
+    {
+        Console.WriteLine($"El numero {x} NO cumple con las validaciones");
+    }
+    return resultado;
+}
+```
+
+También vale `resultado = paso(x) && resultado;`, con la llamada a la izquierda.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Validador de notas" dificultad="media">
+  En un proyecto nuevo, crea un delegado `ValidarNota` (recibe un `int` y devuelve `bool`) dentro de una clase `ValidadorNotas`, con un `Ejecutar` como el de clase. En `Program.cs`, pide una nota hasta que esté **entre 0 y 10** y sea un **aprobado** (5 o más). Escribe la primera comprobación como **método anónimo** y la segunda como **lambda de bloque**.
+
+  <Pista>La estructura de `Program.cs` es la de clase: un `do/while`, el delegado con `+=` y `Ejecutar` al final.</Pista>
+  <Pista>Recuerda el orden: primero el código que se ejecuta, después la clase.</Pista>
+
+  <Solucion>
+
+Solución propia:
+
+```csharp title="Program.cs"
+bool valida;
+do
+{
+    Console.Write("\nNota (0 a 10): ");
+    int nota = Convert.ToInt32(Console.ReadLine());
+
+    ValidadorNotas.ValidarNota validar = delegate (int n)
+    {
+        bool r = n >= 0 && n <= 10;
+        Console.WriteLine($"¿Está entre 0 y 10? {r}");
+        return r;
+    };
+    validar += (int n) =>
+    {
+        bool r = n >= 5;
+        Console.WriteLine($"¿Está aprobada? {r}");
+        return r;
+    };
+
+    valida = ValidadorNotas.Ejecutar(validar, nota);
+} while (!valida);
+
+public class ValidadorNotas
+{
+    public delegate bool ValidarNota(int n);
+
+    public static bool Ejecutar(ValidarNota validar, int n)
+    {
+        bool resultado = true;
+        foreach (ValidarNota paso in validar.GetInvocationList())
+        {
+            resultado = resultado && paso(n);
+        }
+        Console.WriteLine(resultado ? "Nota válida" : "Nota no válida, prueba otra vez");
+        return resultado;
+    }
+}
+```
+
+Con 12 solo se escribe la primera comprobación (False) y vuelve a pedir; con 4 se escriben las dos; con 7 se acepta.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

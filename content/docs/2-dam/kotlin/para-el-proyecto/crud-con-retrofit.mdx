@@ -1,0 +1,392 @@
+---
+title: POST, PUT y DELETE con Retrofit
+description: El CRUD completo contra tu API con Retrofit 3 y Gson, DTO para recibir y para mandar, el listado paginado y cómo dejar Room al día después de cada cambio.
+icon: Send
+---
+
+Los requisitos piden **dos CRUD completos** contra tu API. En clase solo hubo `@GET`. El resto se escribe igual, con una anotación por verbo HTTP y `@Body` para mandar un objeto como JSON.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Las anotaciones de Retrofit para cada verbo y para los parámetros.
+  - Por qué hay un DTO para lo que recibes y otro para lo que mandas.
+  - Cómo leer el listado paginado de tu backend.
+  - Qué hacer en Room después de crear, editar o borrar en la API.
+</Callout>
+
+## Lo que se vio en clase
+
+<DeClase fecha="26/10" proyecto="PokeApp2627" nota="versión del 09/11" />
+
+Una interfaz con funciones `suspend` que devuelven `Response<T>`, `@GET` con `@Path`, y DTO con `@SerializedName` para los nombres que no coinciden con el JSON:
+
+```kotlin title="PokeApi.kt y PokemonApiModels.kt (09/11)"
+interface PokeApi {
+    @GET("pokemon")
+    suspend fun readAllPokemon(): Response<PokemonListResult>
+    @GET("pokemon/{name}")
+    suspend fun readPokemonByName(@Path(value = "name") name: String): Response<PokemonResult>
+    @GET("pokemon/{id}")
+    suspend fun readPokemonById(@Path(value = "id") id: Int): Response<PokemonResult>
+}
+
+data class PokemonResult(val id: Int, val name: String, val sprites: PokemonSprites?)
+data class PokemonSprites(@SerializedName("front_default") val frontDefault: String)
+data class PokemonListResult(val results: List<PokemonListItemResult>)
+data class PokemonListItemResult(val name: String, val url: String)
+```
+
+- `Response<T>` tiene `isSuccessful` (código 2xx) y `body()`, que es **nulable**.
+- Antes de escribir las `data class` se miró el JSON real en **Postman** (`GET https://pokeapi.co/api/v2/pokemon/`).
+- El listado de PokeAPI se pagina con `limit` y `offset`, y no trae la imagen: está en el detalle (`sprites.front_default`). Por eso se hacían N+1 peticiones.
+
+Lo de clase lo tienes en [Retrofit 3 con Gson: la capa remota](/docs/2-dam/kotlin/datos/retrofit).
+
+## El CRUD completo <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  En clase solo se usó `@GET`. `POST`, `PUT`, `DELETE`, `@Body` y `@Query` de Retrofit no salieron.
+</NoDadoEnClase>
+
+### Los DTO
+
+Tu backend devuelve el listado **paginado**: un objeto con los `items` y los datos de la página (aquí, recortado al primer producto de tres).
+
+```json title="GET api/productos (respuesta del backend)"
+{
+  "items": [
+    { "id": 1, "nombre": "Ratón inalámbrico", "precio": "24.5", "stock": 30, "categoria": { "id": 1, "nombre": "Periféricos" } }
+  ],
+  "total": 3,
+  "page": 1,
+  "limit": 10,
+  "totalPages": 1
+}
+```
+
+Cada campo del JSON es una propiedad del DTO, con el **mismo nombre**:
+
+```kotlin title="TiendaApiModels.kt"
+data class PaginaDto<T>(
+    val items: List<T>,
+    val total: Int,
+    val page: Int,
+    val limit: Int,
+    val totalPages: Int
+)
+
+data class CategoriaDto(val id: Int, val nombre: String)
+
+data class ProductoDto(
+    val id: Int,
+    val nombre: String,
+    val precio: String,
+    val stock: Int,
+    val categoria: CategoriaDto
+)
+
+data class NuevoProductoDto(
+    val nombre: String,
+    val precio: Double,
+    val stock: Int,
+    val categoriaId: Int
+)
+```
+
+- `PaginaDto<T>` es **genérica**: vale para el listado de productos (`PaginaDto<ProductoDto>`) y para el de cualquier otro modelo. Como un `Pagina<T>` en Java.
+- `precio` es `String` en `ProductoDto` porque Prisma manda los `Decimal` como texto (`"24.5"`).
+- Cómo se hace ese listado en el backend está en [Listado con búsqueda, filtro, orden y paginación](/docs/2-dam/apis/backend-proyecto/listado-paginado).
+
+<Comparar titulo="Un DTO para recibir y otro para mandar" columnas>
+  <Lado titulo="Lo que recibes">
+
+```kotlin
+data class ProductoDto(
+    val id: Int,
+    val nombre: String,
+    val precio: String,
+    val stock: Int,
+    val categoria: CategoriaDto
+)
+```
+
+Lleva el `id` y la categoría entera, como la devuelve la API.
+
+  </Lado>
+  <Lado titulo="Lo que mandas">
+
+```kotlin
+data class NuevoProductoDto(
+    val nombre: String,
+    val precio: Double,
+    val stock: Int,
+    val categoriaId: Int
+)
+```
+
+Sin `id` (lo pone la base) y solo con el id de la categoría.
+
+  </Lado>
+</Comparar>
+
+Es la misma idea que `Omit<Post, 'id'>` en Angular.
+
+### La interfaz
+
+<Recorrido
+  titulo="TiendaApi.kt"
+  lenguaje="kotlin"
+  codigo={`interface TiendaApi {
+    @GET("api/productos")
+    suspend fun getProductos(
+        @Query("q") q: String? = null,
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 50
+    ): Response<PaginaDto<ProductoDto>>
+
+    @GET("api/productos/{id}")
+    suspend fun getProducto(@Path("id") id: Int): Response<ProductoDto>
+
+    @POST("api/productos")
+    suspend fun crearProducto(@Body producto: NuevoProductoDto): Response<ProductoDto>
+
+    @PUT("api/productos/{id}")
+    suspend fun actualizarProducto(
+        @Path("id") id: Int,
+        @Body producto: NuevoProductoDto
+    ): Response<ProductoDto>
+
+    @DELETE("api/productos/{id}")
+    suspend fun borrarProducto(@Path("id") id: Int): Response<Unit>
+}`}
+>
+  <Paso lineas="2-7" titulo="Listar con parámetros">
+    `@Query("q")` añade `?q=...` a la URL. Si el valor es `null`, Retrofit no lo pone. Con los valores por defecto, `getProductos()` pide `api/productos?page=1&limit=50`.
+  </Paso>
+  <Paso lineas="7" titulo="El tipo tiene que cuadrar con el JSON">
+    El backend devuelve un objeto con `items`, no una lista. Si pusieras `Response<List<ProductoDto>>`, Gson fallaría con `Expected BEGIN_ARRAY but was BEGIN_OBJECT`.
+  </Paso>
+  <Paso lineas="9-10" titulo="Leer uno">
+    `@Path("id")` cambia `{id}` en la ruta por el valor del parámetro, como en clase.
+  </Paso>
+  <Paso lineas="12-13" titulo="Crear">
+    `@POST` con `@Body`: Gson convierte el objeto en el JSON del cuerpo. La API devuelve el producto creado, ya con su `id`.
+  </Paso>
+  <Paso lineas="15-19" titulo="Editar">
+    `@PUT` lleva las dos cosas: el `id` en la ruta y los datos nuevos en el cuerpo.
+  </Paso>
+  <Paso lineas="21-22" titulo="Borrar">
+    `Response<Unit>` para cuando la API no devuelve nada (un `204 No Content` al borrar).
+  </Paso>
+</Recorrido>
+
+| Anotación | Dónde va | Qué hace |
+| --- | --- | --- |
+| `@GET`, `@POST`, `@PUT`, `@DELETE` | En la función | El verbo HTTP y la ruta (sin `/` inicial) |
+| `@Path("id")` | En un parámetro | Sustituye `{id}` en la ruta |
+| `@Query("q")` | En un parámetro | Añade `?q=valor` a la URL; si es `null`, no lo pone |
+| `@Body` | En un parámetro | Manda el objeto como JSON en el cuerpo |
+| `@SerializedName("x")` | En una propiedad del DTO | Cuando el nombre en el JSON no es igual que en Kotlin |
+
+<Callout type="warn" title="Hay dos @Query">
+  El `@Query` de Retrofit (`retrofit2.http.Query`) no tiene nada que ver con el de Room (`androidx.room3.Query`). Si la interfaz de Retrofit y el DAO están en el mismo archivo, o Android Studio importa el que no es, salen errores muy raros. Ten cada uno en su archivo y mira el `import`.
+</Callout>
+
+- Los nombres de las propiedades tienen que ser **iguales** que los del JSON. Si no, `@SerializedName("nombre_en_json")` encima de la propiedad, como el `front_default` de clase.
+
+### Después de cambiar algo en la API
+
+Lo que hay en la pantalla sale de Room ([Room como fuente de verdad](/docs/2-dam/kotlin/para-el-proyecto/offline-first)). Así que después de crear, editar o borrar en la API, **hay que dejar Room igual**, y la pantalla se actualiza sola.
+
+<Mermaid
+  titulo="Crear un producto"
+  chart={`sequenceDiagram
+    participant VM as ViewModel
+    participant R as Repositorio
+    participant A as API
+    participant DB as Room
+    VM->>R: crear(nuevo)
+    R->>A: POST api/productos
+    A-->>R: 201 Created
+    R->>A: GET api/productos (refresh)
+    A-->>R: 200 OK con la lista
+    R->>DB: upsert de categorías y productos
+    DB-->>VM: el Flow emite la lista nueva`}
+/>
+
+Amplía la interfaz del repositorio con las tres operaciones:
+
+```kotlin title="ProductoRepository.kt"
+interface ProductoRepository {
+    val productos: Flow<List<Producto>>
+    suspend fun refresh()
+    suspend fun crear(producto: NuevoProductoDto)
+    suspend fun actualizar(id: Int, producto: NuevoProductoDto)
+    suspend fun borrar(id: Int)
+}
+
+class ProductoRepositoryImpl @Inject constructor(
+    private val dao: TiendaDao,
+    private val api: TiendaApi
+) : ProductoRepository {
+
+    // productos y refresh(), como en la página anterior
+
+    override suspend fun crear(producto: NuevoProductoDto) {
+        val respuesta = api.crearProducto(producto)
+        if (!respuesta.isSuccessful) {
+            throw IOException("La API respondió ${respuesta.code()}")
+        }
+        refresh()
+    }
+
+    override suspend fun actualizar(id: Int, producto: NuevoProductoDto) {
+        val respuesta = api.actualizarProducto(id, producto)
+        if (!respuesta.isSuccessful) {
+            throw IOException("La API respondió ${respuesta.code()}")
+        }
+        refresh()
+    }
+
+    override suspend fun borrar(id: Int) {
+        val respuesta = api.borrarProducto(id)
+        if (!respuesta.isSuccessful) {
+            throw IOException("La API respondió ${respuesta.code()}")
+        }
+        dao.deleteProductoPorId(id)
+    }
+}
+```
+
+Y en el DAO, una consulta para borrar por id:
+
+```kotlin title="TiendaDao.kt"
+@Query("DELETE FROM producto WHERE id = :id")
+suspend fun deleteProductoPorId(id: Int)
+```
+
+- Al crear y al editar basta con `refresh()`: trae la lista de la API y hace `@Upsert`, que inserta lo nuevo y actualiza lo cambiado.
+- **Al borrar, `refresh()` no basta.** `@Upsert` nunca borra: el producto que ya no está en la API seguiría en Room. Por eso se borra a mano del DAO.
+- Si la API responde un `400` por un dato mal escrito, el mensaje del backend está en `respuesta.errorBody()?.string()` (el JSON del error, como texto).
+- `refresh()` pide solo la primera página (50 productos). Si tu app va a tener más, pide todas las páginas (`page = 2`, `3`… hasta `totalPages`). Subir el `limit` no sirve: el backend de ejemplo no admite más de 50 y responde un `400`.
+
+## Practica
+
+<CompletarCodigo
+  titulo="Editar una categoría"
+  enunciado="Completa la función de Retrofit que edita una categoría."
+  lenguaje="kotlin"
+  codigo={`@[[PUT]]("api/categorias/{id}")
+suspend fun actualizarCategoria(
+    @[[Path]]("id") id: Int,
+    @[[Body]] categoria: NuevaCategoriaDto
+): [[Response]]<CategoriaDto>`}
+/>
+
+<Quiz titulo="Test: CRUD con Retrofit">
+  <Pregunta enunciado="¿Qué anotación manda un objeto como JSON en el cuerpo de la petición?" explicacion="`@Body`: Gson convierte el objeto en JSON. `@Query` va en la URL y `@Path` sustituye un trozo de la ruta.">
+    <Opcion>`@Query`</Opcion>
+    <Opcion correcta>`@Body`</Opcion>
+    <Opcion>`@Path`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado='Si un parámetro con `@Query("q")` vale `null`, Retrofit no añade `?q=` a la URL.' respuesta={true} explicacion="Los parámetros `@Query` nulos se omiten. Por eso `q: String? = null` sirve para una búsqueda opcional." />
+  <Pregunta enunciado="¿Por qué `NuevoProductoDto` no tiene `id`?" explicacion="Lo que mandas al crear no tiene id: lo pone la base de datos y la API lo devuelve en la respuesta.">
+    <Opcion>Porque Gson no sabe mandar números</Opcion>
+    <Opcion correcta>Porque el id lo pone la base de datos al crear</Opcion>
+    <Opcion>Porque Retrofit lo añade solo</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="La API borra y responde `204` sin cuerpo. ¿Qué tipo devuelve la función?" explicacion="`Response<Unit>`: no hay cuerpo que convertir, pero sigues pudiendo mirar `isSuccessful` y `code()`.">
+    <Opcion>`Response<ProductoDto>`</Opcion>
+    <Opcion correcta>`Response<Unit>`</Opcion>
+    <Opcion>`Unit`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="La función dice `Response<List<ProductoDto>>` y sale `Expected BEGIN_ARRAY but was BEGIN_OBJECT`. ¿Qué pasa?" explicacion="El backend devuelve un objeto paginado (`items`, `total`…), no una lista. El tipo tiene que ser `Response<PaginaDto<ProductoDto>>`.">
+    <Opcion>Falta el permiso de internet</Opcion>
+    <Opcion correcta>El JSON es un objeto paginado y la función espera una lista</Opcion>
+    <Opcion>La `baseUrl` no acaba en `/`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Borras un producto en la API y llamas a `refresh()`. ¿Sigue en la pantalla?" explicacion="Sí: `refresh()` hace `@Upsert`, que inserta y actualiza pero nunca borra. Hay que borrarlo también de Room.">
+    <Opcion>No, `refresh()` lo quita</Opcion>
+    <Opcion correcta>Sí, porque `@Upsert` no borra lo que ya no está en la API</Opcion>
+    <Opcion>Depende de `CASCADE`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En el JSON la propiedad se llama `image_url` y en tu DTO `imageUrl`. ¿Qué haces?" explicacion='`@SerializedName("image_url")` encima de la propiedad, como el `front_default` de clase.'>
+    <Opcion correcta>Pones `@SerializedName` con el nombre del JSON</Opcion>
+    <Opcion>Nada, Gson lo adivina</Opcion>
+    <Opcion>Cambias el backend obligatoriamente</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: CRUD con Retrofit">
+  <Tarjeta frente="`@Path` frente a `@Query`">`@Path("id")` cambia `{id}` dentro de la ruta. `@Query("q")` añade `?q=valor` al final.</Tarjeta>
+  <Tarjeta frente="`@Body`">Manda un objeto como JSON en el cuerpo. Se usa en `POST` y `PUT`.</Tarjeta>
+  <Tarjeta frente="`Response<Unit>`">Para respuestas sin cuerpo, como un `204` al borrar.</Tarjeta>
+  <Tarjeta frente="DTO de recibir frente a DTO de mandar">El de recibir lleva `id` y los datos anidados. El de mandar, sin `id` y con los ids de las relaciones.</Tarjeta>
+  <Tarjeta frente="`PaginaDto<T>`">DTO genérico para el listado paginado del backend: `items`, `total`, `page`, `limit` y `totalPages`.</Tarjeta>
+  <Tarjeta frente="Después de borrar en la API">Borrar también en Room (`deleteProductoPorId`), porque `refresh()` con `@Upsert` no borra.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="El CRUD de categorías" dificultad="media">
+  Añade a `TiendaApi` las cinco funciones del CRUD de categorías (`api/categorias`): listar (sin paginar), leer una, crear, editar y borrar. Escribe también el `NuevaCategoriaDto`.
+
+  <Pista>Copia las de productos y cambia los tipos. Si tu backend devuelve las categorías como una lista simple, el tipo es `Response<List<CategoriaDto>>`.</Pista>
+
+  <Solucion>
+
+```kotlin
+data class NuevaCategoriaDto(val nombre: String)
+
+@GET("api/categorias")
+suspend fun getCategorias(): Response<List<CategoriaDto>>
+
+@GET("api/categorias/{id}")
+suspend fun getCategoria(@Path("id") id: Int): Response<CategoriaDto>
+
+@POST("api/categorias")
+suspend fun crearCategoria(@Body categoria: NuevaCategoriaDto): Response<CategoriaDto>
+
+@PUT("api/categorias/{id}")
+suspend fun actualizarCategoria(
+    @Path("id") id: Int,
+    @Body categoria: NuevaCategoriaDto
+): Response<CategoriaDto>
+
+@DELETE("api/categorias/{id}")
+suspend fun borrarCategoria(@Path("id") id: Int): Response<Unit>
+```
+
+  Mira antes en Postman qué devuelve tu backend: si `GET api/categorias` está paginado, el tipo es `Response<PaginaDto<CategoriaDto>>`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Borrar una categoría con productos" dificultad="dificil">
+  Escribe `borrarCategoria(id)` en el repositorio. Ten en cuenta que en Room la clave ajena tiene `onDelete = ForeignKey.CASCADE`.
+
+  <Pista>Necesitas en el DAO un `@Query("DELETE FROM categoria WHERE id = :id")`.</Pista>
+  <Pista>¿Qué pasa con los productos de esa categoría en Room cuando la borras? ¿Y en el backend?</Pista>
+
+  <Solucion>
+
+```kotlin title="TiendaDao.kt"
+@Query("DELETE FROM categoria WHERE id = :id")
+suspend fun deleteCategoriaPorId(id: Int)
+```
+
+```kotlin title="ProductoRepositoryImpl.kt"
+override suspend fun borrarCategoria(id: Int) {
+    val respuesta = api.borrarCategoria(id)
+    if (!respuesta.isSuccessful) {
+        throw IOException("La API respondió ${respuesta.code()}")
+    }
+    dao.deleteCategoriaPorId(id)
+}
+```
+
+  Con `CASCADE`, al borrar la categoría en Room se borran solos sus productos, así que no hace falta borrarlos uno a uno. Lo importante es que **el backend haga lo mismo** (en Prisma, `onDelete: Cascade` en la relación). Si el backend no deja borrar una categoría con productos, responderá un error y la función lanzará la excepción antes de tocar Room.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

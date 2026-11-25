@@ -1,0 +1,385 @@
+---
+title: Listado con búsqueda, filtro, orden y paginación
+description: El listado principal del proyecto hecho en el backend con Express 5, Zod 4 y Prisma 6, con los criterios en la URL, la consulta con where, orderBy, skip y take, y la respuesta con el total.
+icon: ListFilter
+---
+
+import { SimuladorListado } from '@/components/temas/backend-proyecto/simulador-listado';
+
+Es **el requisito que más pesa**: al menos uno de los listados principales tiene que permitir **búsqueda, filtrado, ordenación y paginación**, los criterios se mandan **desde Angular al backend** y la consulta la hace **el ORM**, no Angular (requisitos, §5). La API tiene que devolver también lo necesario para paginar: el **total**. Se revisa en el H10.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué se vio de paginación en clase (con JSON Server) y qué cambia con tu API.
+  - Validar y convertir los *query params* con Zod 4.
+  - Construir `where`, `orderBy`, `skip` y `take` con Prisma 6.
+  - Devolver la página y el total en una sola respuesta.
+</Callout>
+
+## Lo que se vio en clase
+
+<DeClase fecha="12/11" proyecto="proj-game" nota="clase de Angular, contra JSON Server" />
+
+En clase solo se paginó **desde Angular contra JSON Server**, que ya sabe paginar solo con `_page` y `_limit`:
+
+```ts title="game.service.ts (fragmento de clase)"
+getGamesPyPage(pag: number, tamPage: number) {
+  return this.http.get<Game[]>(this.apiUrl + `?_page=${pag}&_limit=${tamPage}`, { observe: 'response' });
+}
+```
+
+- El final de la URL sale cortado en las capturas: es <Dudoso nota="El final de la URL de `getGamesPyPage` sale cortado.">dudoso</Dudoso>. El nombre `getGamesPyPage` es una errata del código de clase.
+- `observe: 'response'` hace que `HttpClient` devuelva la respuesta entera (con las cabeceras), no solo el cuerpo.
+
+En el backend **nunca** se hizo búsqueda, filtro ni paginación con Prisma. Con tu API, eso lo tienes que programar tú.
+
+## Cómo funciona <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Todo lo que sigue (validar los *query params*, `where` dinámico, `skip` y `take`, el total y `$transaction` con un array) no se ha dado en clase. Sigue la estructura del repositorio del profesor: `src/modules/productos/` con routes, controller, service y schema.
+</NoDadoEnClase>
+
+Angular manda los criterios en la URL:
+
+```text
+GET /api/productos?q=teclado&categoriaId=1&orden=precio&dir=asc&page=2&limit=10
+```
+
+<Flujo
+  titulo="Una petición del listado"
+  nodos={["Angular", "Controlador", "Zod", "Servicio", "Prisma"]}
+>
+  <Mensaje de="Angular" a="Controlador" titulo="GET /api/productos?q=...&page=2">
+    Angular solo manda los criterios. No descarga todos los productos.
+  </Mensaje>
+  <Mensaje de="Controlador" a="Zod" titulo="safeParse(req.query)">
+    Todo lo que llega en la URL es texto. Zod comprueba que los valores son válidos y convierte `"2"` en `2`.
+  </Mensaje>
+  <Mensaje de="Zod" a="Controlador" tipo="respuesta" titulo="resultado.data o 400">
+    Si algo está mal (por ejemplo, `limit=500`), el controlador responde `400` y no se consulta la base.
+  </Mensaje>
+  <Mensaje de="Controlador" a="Servicio" titulo="listarProductos(filtro)">
+    El servicio recibe un objeto ya validado, con `page`, `limit`, `orden` y `dir` siempre rellenos.
+  </Mensaje>
+  <Mensaje de="Servicio" a="Prisma" titulo="count + findMany">
+    Monta el `where` con los criterios que hayan llegado y lanza las dos consultas a la vez.
+  </Mensaje>
+  <Mensaje de="Prisma" a="Servicio" tipo="respuesta" titulo="[total, items]">
+    El total de los que cumplen el filtro y los de la página pedida.
+  </Mensaje>
+  <Mensaje de="Controlador" a="Angular" tipo="respuesta" titulo="200 OK">
+    `{ items, total, page, limit, totalPages }`: Angular pinta la página y los botones.
+  </Mensaje>
+</Flujo>
+
+## Pruébalo
+
+Cambia los criterios y mira, a la vez, la URL que mandaría Angular, lo que valida Zod, la consulta de Prisma (o el SQL aproximado), qué filas de la tabla se descartan con el `where`, cuáles se saltan con `skip` y cuáles se devuelven con `take`, y el JSON de la respuesta. Prueba también a pedir más de 50 por página, la página 0 o a ordenar por `passwordHash`: Zod lo para con un `400`.
+
+<SimuladorListado />
+
+Lo que hay que ver en el simulador:
+
+- **El `where` solo lleva los criterios que han llegado.** Sin búsqueda ni categoría, el `where` queda vacío y cuenta todos.
+- **El total cuenta con el mismo `where`**: es el número de productos que cumplen el filtro, no el de la tabla.
+- **`skip = (page - 1) * limit`**. Página 2 de 5 en 5: se saltan 5 y se cogen 5.
+- Una página más allá del final no es un error: devuelve `items` vacío. En Angular sale el estado "vacío".
+- La búsqueda es un `ILIKE` de Postgres: no distingue mayúsculas, pero **sí tildes**. "raton" no encuentra "Ratón".
+
+## 1. El schema de Zod
+
+```ts title="src/modules/productos/productos.schema.ts"
+import { z } from 'zod';
+
+export const listarProductosSchema = z.object({
+  q: z.string().trim().optional(),
+  categoriaId: z.coerce.number().int().positive().optional(),
+  orden: z.enum(['nombre', 'precio', 'createdAt']).default('createdAt'),
+  dir: z.enum(['asc', 'desc']).default('desc'),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+});
+
+export type ListarProductosQuery = z.infer<typeof listarProductosSchema>;
+```
+
+- **Todo lo que llega en la URL es texto.** `z.coerce.number()` convierte `"2"` en `2` (y `"abc"` en `NaN`, que no pasa la validación).
+- **`.default(...)`** pone un valor si no viene. Así el servicio nunca recibe `undefined` en `page`, `limit`, `orden` ni `dir`.
+- **`z.enum` para el orden.** Si alguien manda `orden=passwordHash`, responde `400`. Nunca ordenes por un campo que venga sin comprobar.
+- **`.max(50)`** para que nadie pida un millón de filas de golpe.
+- **`z.infer`** saca el tipo de TypeScript del schema, igual que `RegisterInput` en el `users.schema.ts` de clase.
+
+## 2. El servicio
+
+<Recorrido
+  titulo="src/modules/productos/productos.service.ts"
+  lenguaje="ts"
+  codigo={`import { Prisma } from '@prisma/client';
+import { prisma } from '../../config/db.js';
+import type { ListarProductosQuery } from './productos.schema.js';
+
+export async function listarProductos(filtro: ListarProductosQuery) {
+  const where: Prisma.ProductoWhereInput = {};
+  if (filtro.q) {
+    where.nombre = { contains: filtro.q, mode: 'insensitive' };
+  }
+  if (filtro.categoriaId) {
+    where.categoriaId = filtro.categoriaId;
+  }
+
+  const orderBy: Prisma.ProductoOrderByWithRelationInput = { [filtro.orden]: filtro.dir };
+
+  const [total, items] = await prisma.$transaction([
+    prisma.producto.count({ where }),
+    prisma.producto.findMany({
+      where,
+      orderBy,
+      skip: (filtro.page - 1) * filtro.limit,
+      take: filtro.limit,
+      select: {
+        id: true,
+        nombre: true,
+        precio: true,
+        stock: true,
+        categoria: { select: { id: true, nombre: true } },
+      },
+    }),
+  ]);
+
+  return {
+    items,
+    total,
+    page: filtro.page,
+    limit: filtro.limit,
+    totalPages: Math.ceil(total / filtro.limit),
+  };
+}`}
+>
+  <Paso lineas="1-3" titulo="Imports">
+    `Prisma` (con mayúscula) trae los **tipos** que genera Prisma para tu modelo. El `prisma` (minúscula) es el cliente único de `config/db.ts`, como en clase.
+  </Paso>
+  <Paso lineas="6" titulo="Un where vacío">
+    `Prisma.ProductoWhereInput` es el tipo del `where` de `producto`. Empieza vacío: sin criterios, cuenta y devuelve todos.
+  </Paso>
+  <Paso lineas="7-9" titulo="Búsqueda">
+    `contains` con `mode: 'insensitive'` es un `ILIKE '%teclado%'` de Postgres: encuentra "Teclado mecánico" aunque se escriba en minúsculas.
+  </Paso>
+  <Paso lineas="10-12" titulo="Filtro">
+    Solo se añade si ha llegado. El `where` se construye poco a poco con los criterios que vengan.
+  </Paso>
+  <Paso lineas="14" titulo="Orden con clave calculada">
+    `{ [filtro.orden]: filtro.dir }`: si `orden` vale `"precio"` y `dir` vale `"asc"`, queda `{ precio: 'asc' }`. Es seguro porque Zod solo deja pasar los tres campos del `enum`.
+  </Paso>
+  <Paso lineas="16-17" titulo="Dos consultas a la vez">
+    `prisma.$transaction([...])` con un **array** lanza las dos consultas juntas, en una misma transacción, y devuelve los resultados en el mismo orden. Ojo: con el nivel de aislamiento por defecto de Postgres (`READ COMMITTED`), si alguien inserta un producto justo entre las dos, el total podría no cuadrar por uno. Para que vean exactamente los mismos datos se pasa `{ isolationLevel: 'RepeatableRead' }` como segundo argumento; en un listado, no suele merecer la pena.
+  </Paso>
+  <Paso lineas="17" titulo="El total, con el mismo where">
+    `count({ where })` cuenta solo lo que cumple los filtros. Si contaras sin `where`, Angular calcularía páginas que no existen.
+  </Paso>
+  <Paso lineas="21-22" titulo="Paginación">
+    `skip` es cuántas filas se saltan y `take` cuántas se cogen. Página 2 de 10 en 10: `skip = 10`, `take = 10`. Es el `OFFSET` y el `LIMIT` de SQL.
+  </Paso>
+  <Paso lineas="23-29" titulo="Selección de campos">
+    `select` dice qué columnas vuelven. No se mandan `descripcion` ni `createdAt`, y de la categoría solo `id` y `nombre`. Cumple el requisito de "selección de campos".
+  </Paso>
+  <Paso lineas="33-39" titulo="La respuesta">
+    La página (`items`) y lo que Angular necesita para los botones: `total`, `page`, `limit` y `totalPages`. Con 0 resultados, `totalPages` es 0.
+  </Paso>
+</Recorrido>
+
+## 3. El controlador
+
+```ts title="src/modules/productos/productos.controller.ts"
+import type { Request, Response } from 'express';
+import { z } from 'zod';
+import { listarProductosSchema } from './productos.schema.js';
+import { listarProductos } from './productos.service.js';
+
+export async function listarProductosCtrl(req: Request, res: Response) {
+  const resultado = listarProductosSchema.safeParse(req.query);
+  if (!resultado.success) {
+    return res.status(400).json({ error: z.treeifyError(resultado.error) });
+  }
+  res.json(await listarProductos(resultado.data));
+}
+```
+
+- **`safeParse`** no lanza excepciones: devuelve `success` y `data` o `error`, igual que en el `validate` de clase.
+- **`z.treeifyError`** es la forma de Zod 4 de ordenar los errores (sustituye al `.flatten()` obsoleto, como se vio el 27/10).
+- **No hace falta `try/catch`**: en Express 5, si una función `async` lanza un error, llega solo al `errorHandler`.
+- Las respuestas de error de clase usan la clave `message` (y `validate` usa `errors`); aquí se usa `error`. Elige una para toda tu API y úsala igual en Angular.
+
+### ¿Por qué no se usa el middleware validate de clase?
+
+<DeClase fecha="27/10" proyecto="node-server-26-27" nota="validate.ts, versión de clase para Zod 4" />
+
+```ts title="src/middleware/validate.ts (de clase)"
+export const validate = (schema: ZodType) => (req: Request, res: Response, next: NextFunction) => {
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ errors: z.treeifyError(parsed.error) });
+  }
+  req.body = parsed.data;
+  next();
+};
+```
+
+El de clase valida el **`body`** y lo sustituye por los datos validados (`req.body = parsed.data`). Con los *query params* no se puede hacer lo mismo: **en Express 5, `req.query` no se puede sobrescribir** (es de solo lectura, y `req.query = ...` da un error). Por eso se valida en el controlador y se pasa `resultado.data` al servicio.
+
+## 4. La ruta
+
+```ts title="src/modules/productos/productos.routes.ts"
+import { Router } from 'express';
+import { listarProductosCtrl } from './productos.controller.js';
+
+const router = Router();
+router.get('/', listarProductosCtrl);
+
+export default router;
+```
+
+Y en `app.ts`, como el `usersRoutes` de clase:
+
+```ts title="src/app.ts"
+app.use('/api/productos', productosRoutes);
+```
+
+## 5. La respuesta
+
+<Terminal titulo="bash">
+{`$ curl "http://localhost:3000/api/productos?q=teclado&limit=10"
+{"items":[{"id":1,"nombre":"Teclado mecánico","precio":"59.9","stock":12,"categoria":{"id":1,"nombre":"Periféricos"}}],"total":1,"page":1,"limit":10,"totalPages":1}
+$ curl "http://localhost:3000/api/productos?orden=passwordHash"
+{"error":{"errors":[],"properties":{"orden":{"errors":["Invalid option: expected one of \\"nombre\\"|\\"precio\\"|\\"createdAt\\""]}}}}`}
+</Terminal>
+
+Ordenada y con formato, la primera queda así:
+
+```json title="200 OK"
+{
+  "items": [
+    { "id": 1, "nombre": "Teclado mecánico", "precio": "59.9", "stock": 12, "categoria": { "id": 1, "nombre": "Periféricos" } }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 10,
+  "totalPages": 1
+}
+```
+
+El texto exacto de los mensajes de Zod depende de la versión; lo que importa es que sale un `400` con el campo que falla.
+
+<Callout title="La otra mitad está en Angular">
+  En Angular, el servicio monta la URL con `HttpParams` (que es **inmutable**: `params = params.set(...)`), se salta los criterios vacíos, recibe una `Pagina<T>` con la misma forma que esta respuesta y, al buscar, **vuelve a la página 1**. Está en [Listado con filtros, paginación y token](/docs/2-dam/acceso-a-datos/angular-avanzado/listado-filtros-y-token), dentro de Angular avanzado.
+</Callout>
+
+<Callout type="success" title="Para la defensa">
+  Abre F12 → Red en el navegador, cambia el filtro en tu web y enseña la petición: los criterios viajan en la URL y la respuesta trae solo una página y el total.
+</Callout>
+
+## Practica
+
+<CompletarCodigo
+  titulo="Paginación"
+  enunciado="Completa la consulta para la página `page` de tamaño `limit`, contando con el mismo filtro."
+  lenguaje="typescript"
+  codigo={`const [total, items] = await prisma.$transaction([
+  prisma.producto.[[count]]({ where }),
+  prisma.producto.findMany({
+    where,
+    orderBy,
+    [[skip]]: ([[page - 1|page-1]]) * limit,
+    [[take]]: limit,
+  }),
+]);
+const totalPages = Math.[[ceil]](total / limit);`}
+/>
+
+<Quiz titulo="Test: listado paginado" descripcion="7 preguntas">
+  <Pregunta tipo="texto" enunciado="Con `page = 3` y `limit = 10`, ¿cuánto vale `skip`?" respuesta="20" explicacion="`skip = (page - 1) * limit = 2 * 10 = 20`: se saltan las 20 primeras y se cogen de la 21 a la 30." />
+  <Pregunta tipo="texto" enunciado="Hay 23 productos que cumplen el filtro y `limit = 10`. ¿Cuánto vale `totalPages`?" respuesta="3" explicacion="`Math.ceil(23 / 10) = Math.ceil(2.3) = 3`. La última página tiene 3 productos." />
+  <Pregunta enunciado="¿Por qué el `count` lleva el mismo `where` que el `findMany`?" explicacion="El total tiene que ser el de los que cumplen el filtro. Si cuentas todos, Angular calcula más páginas de las que hay.">
+    <Opcion>Porque Prisma lo exige</Opcion>
+    <Opcion correcta>Para contar solo los que cumplen los filtros, no toda la tabla</Opcion>
+    <Opcion>Para que la consulta sea más rápida</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué hace `z.coerce.number()` con el parámetro `page=2` de la URL?" explicacion="En la URL todo es texto. `coerce` lo convierte a número antes de validar `int()` y `min(1)`.">
+    <Opcion>Lo deja como el texto `"2"`</Opcion>
+    <Opcion correcta>Lo convierte en el número `2`</Opcion>
+    <Opcion>Da error porque no es un número</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué `orden` es un `z.enum` y no un `z.string()`?" explicacion="Para que solo se pueda ordenar por campos permitidos. Con un string cualquiera, alguien podría ordenar por `passwordHash` o por un campo que no existe.">
+    <Opcion>Porque Prisma no acepta strings</Opcion>
+    <Opcion correcta>Para no ordenar por un campo que venga sin comprobar</Opcion>
+    <Opcion>Para que el orden por defecto sea `asc`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="En Express 5 se puede validar `req.query` con un middleware como el `validate` de clase, cambiando `req.body` por `req.query` (también en `req.query = parsed.data`)." respuesta={false} explicacion="En Express 5 `req.query` no se puede sobrescribir. Por eso se valida en el controlador y se pasa `resultado.data` al servicio." />
+  <Pregunta enunciado="Buscas `q=raton` y en la base está «Ratón inalámbrico». ¿Lo encuentra `contains` con `mode: 'insensitive'`?" explicacion="`ILIKE` no distingue mayúsculas, pero la `o` y la `ó` son letras distintas. Busca «ratón» o normaliza el texto si necesitas ignorar tildes.">
+    <Opcion>Sí, porque no distingue mayúsculas ni tildes</Opcion>
+    <Opcion correcta>No: no distingue mayúsculas, pero sí tildes</Opcion>
+    <Opcion>No, porque `contains` busca la palabra exacta</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: listado paginado">
+  <Tarjeta frente="¿Quién filtra, ordena y pagina?">El backend, con Prisma. Angular solo manda los criterios en la URL y pinta lo que vuelve.</Tarjeta>
+  <Tarjeta frente="`skip` y `take`">`skip` = filas que se saltan (`(page - 1) * limit`); `take` = filas que se cogen (`limit`). Son `OFFSET` y `LIMIT`.</Tarjeta>
+  <Tarjeta frente="`contains` + `mode: 'insensitive'`">Un `ILIKE '%texto%'` de Postgres: busca sin distinguir mayúsculas.</Tarjeta>
+  <Tarjeta frente="`prisma.$transaction([a, b])`">Lanza las consultas juntas, en una misma transacción, y devuelve los resultados en el mismo orden: `[total, items]`.</Tarjeta>
+  <Tarjeta frente="¿Qué devuelve el listado?">`{ items, total, page, limit, totalPages }`.</Tarjeta>
+  <Tarjeta frente="`.default()` en Zod">Pone un valor si el parámetro no viene, así el servicio nunca recibe `undefined`.</Tarjeta>
+  <Tarjeta frente="¿Por qué validar en el controlador y no con `validate`?">Porque en Express 5 `req.query` no se puede sobrescribir.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Filtro por precio máximo" dificultad="facil">
+  Añade al listado un filtro `precioMax`: si llega, solo se devuelven los productos con precio menor o igual. Cambia el schema y el servicio.
+
+  <Pista>En el schema, igual que `categoriaId` pero con `positive()` y sin `int()`, porque puede tener decimales.</Pista>
+  <Pista>En el servicio, el operador es `lte`.</Pista>
+
+  <Solucion>
+
+```ts title="productos.schema.ts"
+precioMax: z.coerce.number().positive().optional(),
+```
+
+```ts title="productos.service.ts"
+if (filtro.precioMax !== undefined) {
+  where.precio = { lte: filtro.precioMax };
+}
+```
+
+Con `?precioMax=50` llega `50` (número) y el `where` queda `{ precio: { lte: 50 } }`. Se combina con los demás criterios: todos tienen que cumplirse.
+
+</Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Solo los que tienen stock" dificultad="media">
+  Añade un parámetro `disponibles`: con `?disponibles=true` solo salen los productos con `stock` mayor que 0, y con `false` o sin él, todos. Ojo con cómo conviertes el texto a booleano.
+
+  <Pista>`z.coerce.boolean()` no sirve: convierte con `Boolean(valor)`, y `Boolean("false")` es `true` porque cualquier texto no vacío lo es.</Pista>
+  <Pista>Acepta solo `"true"` o `"false"` con un `z.enum` y transfórmalo.</Pista>
+
+  <Solucion>
+
+```ts title="productos.schema.ts"
+disponibles: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+```
+
+```ts title="productos.service.ts"
+if (filtro.disponibles) {
+  where.stock = { gt: 0 };
+}
+```
+
+- `?disponibles=true` → `true` → filtra.
+- `?disponibles=false` → `false` → no filtra.
+- `?disponibles=si` → `400`, porque no está en el `enum`.
+
+Zod 4 también trae `z.stringbool()`, que hace esta conversión por ti (y acepta además `1`/`0`, `yes`/`no`, `on`/`off`…): `disponibles: z.stringbool().optional()`.
+
+</Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

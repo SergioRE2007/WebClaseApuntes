@@ -1,0 +1,377 @@
+---
+title: Maquetar con Flexbox
+description: "Flexbox para maquetar componentes de Angular: contenedor y elementos, los dos ejes, justify-content, align-items, gap, flex: grow shrink basis, Flexbox anidado y :host como contenedor."
+icon: LayoutPanelLeft
+---
+
+import { FlexboxPlayground } from '@/components/temas/angular/flexbox-playground';
+
+**Flexbox** es el sistema de CSS para colocar elementos en **una dirección** (en fila o en columna) y repartir el espacio entre ellos. Con Angular encaja muy bien, porque cada componente es una etiqueta (`<app-lampara>`) que se puede colocar como cualquier caja. En la clase de la lámpara se maquetó todo con Flexbox, siguiendo la Guía6 del [repositorio de guías](https://github.com/hokahey007/guides-angular).
+
+<DeClase fecha="14/10" proyecto="proj-lamp" nota="con la Guía6_Flexbox" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué es el contenedor flex y qué son sus elementos.
+  - El eje principal y el secundario, y qué mueve `justify-content` y qué mueve `align-items`.
+  - Leer `flex: 0 0 30%` y `flex: 1`.
+  - Meter un Flexbox dentro de otro y usar `:host` como contenedor.
+  - Por qué hace falta una altura (`100vh`) para repartir el alto.
+</Callout>
+
+## La maqueta de la lámpara
+
+```text title="Lo que se quería conseguir"
+┌──────────────────────────────┐  ← app-root (:host), 100vh
+│ .cab (30 % del alto)         │
+│   Estado conexión: ...       │
+│   [ ENCHUFAR ]               │
+├──────────────────────────────┤
+│                              │
+│ app-lampara (el resto)       │
+│                              │
+└──────────────────────────────┘
+```
+
+```css title="src/app/app.component.css (estado final del bloque 1)"
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.cab {
+  background-color: blue;
+  flex: 0 0 30%;
+}
+
+app-lampara {
+  background-color: chartreuse;
+  flex: 1;
+}
+```
+
+Tres reglas y ya tienes una cabecera fija y una zona que se estira hasta el final de la ventana. Cárgala en el playground (botón "Lámpara") y cambia los valores para ver qué hace cada uno:
+
+<FlexboxPlayground preset="lampara" />
+
+Lo que puedes probar en la demo:
+
+- Con **"Lámpara"**, `.cab` ocupa el 30 % del alto y `app-lampara` el resto. Cambia `flex-direction` a `row` y lo mismo pasa a ser un 30 % del **ancho**: un lateral.
+- Con **"Cabecera"**, `justify-content: space-between` manda el logo a un lado y el menú al otro, y `align-items: center` los centra en vertical.
+- Con **"Tarjetas"**, `flex: 1 1 120px` y `flex-wrap: wrap` hacen que las tarjetas salten de línea cuando no caben.
+- Pulsa una caja y cambia su `flex`: el CSS de abajo se actualiza.
+
+## Contenedor y elementos
+
+- El **contenedor flex** es el elemento que tiene `display: flex`.
+- Sus **elementos flex** (*flex items*) son sus **hijos directos**. Solo los hijos directos: los nietos no.
+- Un mismo elemento puede ser a la vez elemento flex (de su padre) y contenedor flex (de sus hijos).
+
+En la lámpara, `:host` (la etiqueta `<app-root>`) es el contenedor, y `.cab` y `<app-lampara>` son sus elementos.
+
+## Los dos ejes
+
+| Propiedad | Qué hace |
+| --- | --- |
+| `flex-direction: row` | Los elementos van en **fila** (por defecto). El eje principal es el horizontal. |
+| `flex-direction: column` | Los elementos van en **columna**. El eje principal es el vertical. |
+| `justify-content` | Reparte los elementos en el **eje principal**: `flex-start`, `center`, `flex-end`, `space-between`, `space-around`, `space-evenly`. |
+| `align-items` | Los coloca en el **eje secundario**: `stretch` (por defecto, se estiran), `flex-start`, `center`, `flex-end`. |
+| `gap` | Separación **entre** elementos (no en los bordes). Mejor que poner `margin` a cada uno. |
+| `flex-wrap: wrap` | Deja que los elementos salten a otra línea si no caben. Por defecto (`nowrap`) se aprietan en una. |
+
+La trampa: `justify-content` y `align-items` **cambian de dirección** con `flex-direction`. En una columna, `justify-content: center` centra en **vertical**.
+
+```css title="Una cabecera típica (Guía6)"
+.header {
+  display: flex;
+  justify-content: space-between; /* logo a la izquierda, menú a la derecha */
+  align-items: center;            /* centrados en vertical */
+}
+
+nav {
+  display: flex;
+  gap: 1rem;                      /* separa los enlaces */
+}
+```
+
+## `flex: grow shrink basis`
+
+Cada elemento flex tiene tres propiedades, que casi siempre se escriben juntas en `flex`:
+
+| Propiedad | Pregunta que responde |
+| --- | --- |
+| `flex-grow` | Si sobra espacio, ¿cuánto crece? (`0` = nada; `1`, `2`… = su parte del espacio sobrante) |
+| `flex-shrink` | Si falta espacio, ¿puede encogerse? (`0` = no; `1` = sí) |
+| `flex-basis` | ¿De qué tamaño parte? (`250px`, `30%`, `auto`…) |
+
+| Valor | Cómo se lee | Para qué |
+| --- | --- | --- |
+| `flex: 0 0 30%` | No crece, no encoge, parte del 30 % | Una cabecera o un lateral de tamaño fijo (`.cab` en clase). |
+| `flex: 0 0 250px` | No crece, no encoge, 250px | Un lateral fijo (la Guía6). |
+| `flex: 1` | Equivale a `1 1 0%`: se reparte el espacio que sobra | La zona principal (`app-lampara` en clase). |
+| `flex: 1 1 250px` | Parte de 250px y puede crecer y encoger | Tarjetas adaptables, con `flex-wrap: wrap`. |
+| sin `flex` | Por defecto, `0 1 auto`: mide lo que su contenido | |
+
+Si dos elementos tienen `flex: 1`, se reparten el espacio a partes iguales; con `flex: 2` y `flex: 1`, el primero se lleva el doble.
+
+En clase se probaron varios valores en directo (`flex: 30%`, `flex: 0 0 250px` en la vista Mobile S de 320px…) y se volvió a `flex: 0 0 30%`.
+
+## Flexbox dentro de Flexbox
+
+<DeClase fecha="14/10" nota="bloque 2" />
+
+En el bloque 2, la cabecera también pasó a ser un contenedor en columna, con el texto del estado arriba y el botón debajo:
+
+```css title="src/app/app.component.css (bloque 2)"
+.cab {
+  display: flex;
+  flex-direction: column;
+  background-color: blue;
+  flex: 0 0 30%;   /* [dudoso] al final, activo o comentado: ver la nota de abajo */
+}
+
+.estado { flex: 0 0 60%; }   /* luego 80 %, y al final se comentó */
+.boton  { flex: 1; }
+
+span   { color: white; }      /* para leer el texto sobre el azul */
+button { margin: 1rem; }      /* antes padding: 1rem */
+```
+
+```text title="El árbol de contenedores"
+:host (app-root)       display: flex, column, 100vh
+├── .cab               elemento de :host y contenedor (column)
+│   ├── .estado
+│   └── .boton
+└── app-lampara        flex: 1
+```
+
+- `.cab` es **elemento flex** de `:host` (tiene `flex: 0 0 30%`) y **contenedor flex** de `.estado` y `.boton`.
+- Al final del bloque se comentaron con `/* */` los `flex` de `.estado` y `.boton` para ver qué hacía cada uno. Comentar reglas y mirar el resultado es una buena forma de depurar una maqueta.
+- No se ve con seguridad cómo quedó el `flex` de `.cab` al final: en unas capturas está activo y en otras comentado <Dudoso nota="El resumen del curso tampoco lo aclara: no se ve si `flex: 0 0 30%` quedó activo o comentado." />.
+
+### padding frente a margin
+
+En el botón se probó primero `padding: 1rem` y luego `margin: 1rem`:
+
+- **`padding`**: relleno **interior**. El botón se hace más grande.
+- **`margin`**: separación **exterior**. El botón queda igual y se separa de lo que tiene alrededor.
+
+## `:host` y las etiquetas de los componentes
+
+Como cada componente es una etiqueta del DOM, en una maqueta con componentes los **elementos flex son las etiquetas de los componentes**, no lo que tienen dentro. De ahí salen dos reglas:
+
+1. Para que un componente sea un contenedor flex, se lo dices **en su propio CSS con `:host`**: `:host { display: flex; }` (es lo que se hizo con `app-root`).
+2. Para decir cuánto espacio ocupa un hijo, hay dos opciones: desde el padre, con el selector de su etiqueta (`app-lampara { flex: 1; }`, como en clase), o desde el propio hijo, con `:host { flex: 1; }`.
+
+<Comparar titulo="Un lateral que no ocupa el 30 % (Guía7)">
+  <Lado tipo="evitar" titulo="No funciona">
+
+```css
+/* aside.component.css */
+aside {
+  flex: 0 0 30%;
+}
+```
+
+El elemento flex del layout es `<app-aside>`, no el `<aside>` que tiene dentro. La regla no hace nada.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Funciona">
+
+```css
+/* aside.component.css */
+:host {
+  flex: 0 0 30%;
+}
+```
+
+`:host` es `<app-aside>`, el hijo directo del contenedor flex.
+
+  </Lado>
+</Comparar>
+
+Este caso viene en la Guia7 (componentizar un layout con Flexbox) del [repositorio de guías](https://github.com/hokahey007/guides-angular). La pregunta que hay que hacerse siempre: *¿quién tiene `display: flex` y quiénes son sus hijos directos?* En DevTools (Elements) lo ves enseguida.
+
+## La altura: `height` frente a `min-height`
+
+Para repartir el **alto** hace falta que el contenedor tenga una altura. Por eso `:host` lleva `100vh` (el 100 % del alto de la ventana).
+
+- `height: 100vh`: el contenedor mide exactamente la ventana. El 30 % de `.cab` se calcula sobre esa altura.
+- `min-height: 100vh`: mide al menos la ventana y puede crecer si el contenido no cabe. El alto ya no está fijado, así que un `flex-basis` en `%` puede no comportarse como esperas.
+
+En clase se alternó entre los dos y se quedó **`height: 100vh`**. El autocompletado enseñó también `dvh`, `svh` y `lvh`, variantes de `vh` pensadas para el móvil, donde las barras del navegador aparecen y desaparecen.
+
+## Diseño adaptable
+
+La Guía6 (consultada en clase) termina con un layout que en el móvil pasa de fila a columna con una *media query*:
+
+```css title="Lateral y contenido (la idea de la Guía6)"
+.body {
+  display: flex;
+}
+
+.sidebar {
+  flex: 0 0 250px;
+}
+
+.content {
+  flex: 1;
+}
+
+@media (max-width: 768px) {
+  .body {
+    flex-direction: column;   /* el lateral se pone encima del contenido */
+  }
+
+  .sidebar {
+    flex-basis: auto;         /* en columna, 250px serían de alto: que mida lo que su contenido */
+  }
+}
+```
+
+Para comprobarlo, el **modo responsive** de DevTools (en clase, 400 × 543 y Mobile S de 320px).
+
+### `min-width: 0` <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Viene en la Guia7 de las guías, pero no salió en las clases grabadas.
+</NoDadoEnClase>
+
+Un elemento flex no se encoge por debajo del ancho mínimo de su contenido. Si dentro de la zona principal hay una URL muy larga, una tabla o un bloque de código, puede desbordar el layout. Se arregla con `min-width: 0` en el elemento que tiene que ocupar el resto:
+
+```css title="main.component.css"
+:host {
+  flex: 1;
+  min-width: 0;
+}
+```
+
+## Practica
+
+<Quiz titulo="Test: Flexbox">
+  <Pregunta enunciado="En un contenedor con `flex-direction: column`, ¿qué hace `justify-content: center`?" explicacion="En columna, el eje principal es el vertical, y `justify-content` trabaja sobre el eje principal.">
+    <Opcion>Centra los elementos en horizontal</Opcion>
+    <Opcion correcta>Centra los elementos en vertical</Opcion>
+    <Opcion>No hace nada en columna</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué significa `flex: 0 0 30%`?" explicacion="`flex-grow: 0`, `flex-shrink: 0` y `flex-basis: 30%`.">
+    <Opcion correcta>No crece, no encoge y parte del 30 % del contenedor</Opcion>
+    <Opcion>Crece hasta el 30 % y luego encoge</Opcion>
+    <Opcion>Ocupa el 30 % del espacio que sobra</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Dos elementos tienen `flex: 1` y `flex: 2`. ¿Cómo se reparten el espacio?" explicacion="El espacio se reparte en proporción a `flex-grow`: 1 parte y 2 partes.">
+    <Opcion>A partes iguales</Opcion>
+    <Opcion correcta>El segundo se lleva el doble que el primero</Opcion>
+    <Opcion>El segundo ocupa el 2 % y el primero el resto</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Si el padre tiene `display: flex`, los `<aside>` que hay dentro de `<app-aside>` son elementos flex del padre." respuesta={false} explicacion="Solo los hijos directos son elementos flex. El hijo directo es `<app-aside>`; su `flex` se pone con `:host` en su CSS o con `app-aside` en el del padre." />
+  <Pregunta enunciado="¿Qué propiedad usarías para separar los enlaces de un menú sin poner `margin` a cada uno?" explicacion="`gap` pone la separación entre los elementos del contenedor.">
+    <Opcion>`padding`</Opcion>
+    <Opcion correcta>`gap`</Opcion>
+    <Opcion>`justify-content`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué `:host` lleva `height: 100vh` en la lámpara?" explicacion="Para que el contenedor tenga un alto definido y se pueda repartir: el 30 % para `.cab` y el resto para `app-lampara`.">
+    <Opcion>Para que el texto sea más grande</Opcion>
+    <Opcion correcta>Para que tenga un alto definido que repartir entre `.cab` y `app-lampara`</Opcion>
+    <Opcion>Porque `display: flex` no funciona sin él</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`margin` agranda el botón y `padding` lo separa de lo que tiene alrededor." respuesta={false} explicacion="Es al revés: `padding` es relleno interior (agranda el botón) y `margin` es separación exterior." />
+</Quiz>
+
+<Flashcards titulo="Repaso: Flexbox">
+  <Tarjeta frente="Elementos flex">Los hijos **directos** del elemento con `display: flex`.</Tarjeta>
+  <Tarjeta frente="`justify-content` frente a `align-items`">`justify-content` reparte en el eje principal; `align-items` coloca en el secundario.</Tarjeta>
+  <Tarjeta frente="`flex: 1`">`1 1 0%`: ocupa el espacio que sobra (repartido con los demás `flex: 1`).</Tarjeta>
+  <Tarjeta frente="`flex: 0 0 250px`">Tamaño fijo de 250px: ni crece ni encoge. Típico de un lateral.</Tarjeta>
+  <Tarjeta frente="`flex: 1 1 250px` + `flex-wrap: wrap`">Tarjetas que parten de 250px, se estiran y saltan de línea.</Tarjeta>
+  <Tarjeta frente="`:host { display: flex }`">Convierte la etiqueta del propio componente en contenedor flex.</Tarjeta>
+  <Tarjeta frente="`height` frente a `min-height` con `100vh`">`height` fija el alto a la ventana; `min-height` deja crecer. Para repartir el alto en %, `height`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Layout de tres zonas" dificultad="media">
+  Maqueta `AppComponent` con una cabecera arriba de 80px, un pie abajo de 50px y, en medio, un lateral fijo de 200px a la izquierda y el contenido ocupando el resto. Todo tiene que llenar la ventana. Usa `header`, `.body` (con `aside` y `main` dentro) y `footer`.
+
+  <Pista>Son dos niveles de Flexbox: `:host` en columna (cabecera, cuerpo, pie) y `.body` en fila (lateral, contenido).</Pista>
+  <Pista>El cuerpo es elemento de `:host` (con `flex: 1`) y contenedor de `aside` y `main`.</Pista>
+
+  <Solucion>
+
+```html title="app.component.html"
+<header>Mi aplicación</header>
+<div class="body">
+  <aside>Menú</aside>
+  <main>Contenido</main>
+</div>
+<footer>Pie</footer>
+```
+
+```css title="app.component.css"
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+header { flex: 0 0 80px; }
+footer { flex: 0 0 50px; }
+
+.body {
+  flex: 1;          /* elemento de :host: ocupa el alto que sobra */
+  display: flex;    /* y contenedor de aside y main, en fila */
+}
+
+aside { flex: 0 0 200px; }
+main  { flex: 1; min-width: 0; }
+```
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="El lateral en componentes" dificultad="dificil">
+  Pasa el ejercicio anterior a componentes: `AppComponent` pinta `<app-cabecera>`, `<app-cuerpo>` y `<app-pie>`, y `CuerpoComponent` pinta `<app-lateral>` y `<app-contenido>`. Escribe solo el CSS necesario en cada componente para que se vea igual.
+
+  <Pista>Cada componente que sea contenedor lo dice con `:host { display: flex; }` en su propio CSS.</Pista>
+  <Pista>El tamaño de cada hijo lo puedes poner con `:host` en el CSS del hijo, o con el selector de su etiqueta en el CSS del padre.</Pista>
+
+  <Solucion>
+
+```css title="app.component.css"
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+app-cabecera { flex: 0 0 80px; }
+app-pie      { flex: 0 0 50px; }
+app-cuerpo   { flex: 1; }
+```
+
+```css title="cuerpo.component.css"
+:host {
+  display: flex;   /* contenedor de app-lateral y app-contenido */
+}
+```
+
+```css title="lateral.component.css"
+:host {
+  flex: 0 0 200px;
+}
+```
+
+```css title="contenido.component.css"
+:host {
+  flex: 1;
+  min-width: 0;
+}
+```
+
+Ojo: si pusieras `flex: 0 0 200px` a un `aside` que esté **dentro** de la plantilla de `LateralComponent`, no funcionaría, porque el elemento flex es `<app-lateral>`.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

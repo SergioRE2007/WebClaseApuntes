@@ -1,0 +1,372 @@
+---
+title: "Flow y stateIn: datos que avisan cuando cambian"
+description: "De funciones suspend que responden una vez a un Flow que puede emitir muchas: flow { emit() }, propiedades Flow en interfaces y cómo el ViewModel lo convierte en estado con map y stateIn."
+icon: Waves
+---
+
+import { SimuladorStateIn } from '@/components/temas/datos/simulador-statein';
+
+Hasta el 09/11 la PokeApp pedía los datos **una vez**: el ViewModel llamaba a una función `suspend` que devolvía la lista y la guardaba en un `MutableStateFlow`. Ese día la capa de datos pasa a exponer un **`Flow`**, un valor que puede ir cambiando y **avisa cada vez que cambia**, y el ViewModel construye su estado a partir de él con `map` y `stateIn`. Es el paso previo para que Room, que devuelve `Flow`, actualice la pantalla sola.
+
+<DeClase fecha="09/11" proyecto="PokeApp2627" nota="bloque 1; commit feat: change ds and repo to flow emition" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - La diferencia entre una función `suspend` que devuelve una lista y un `Flow` de listas.
+  - Crear un `Flow` con `flow { emit(...) }` y exponerlo como propiedad de una interfaz.
+  - Convertir un `Flow` en el `StateFlow` del ViewModel con `map` y `stateIn`.
+  - Qué hacen `viewModelScope`, `SharingStarted.WhileSubscribed(5_000L)` e `initialValue`.
+</Callout>
+
+## `suspend fun` frente a `Flow`
+
+<Comparar columnas titulo="Pedir una vez o escuchar">
+  <Lado titulo="Función suspend">
+
+```kotlin
+suspend fun readAllPokemon():
+    List<Pokemon>
+```
+
+Da **una respuesta** y termina. Si los datos cambian después, nadie se entera.
+
+  </Lado>
+  <Lado titulo="Flow">
+
+```kotlin
+val pokemons:
+    Flow<List<Pokemon>>
+```
+
+Es un **flujo** que puede emitir muchas veces. Quien lo recoge recibe cada valor nuevo.
+
+  </Lado>
+</Comparar>
+
+Si vienes de Java, un `Flow` se parece a un `Stream` en que es **perezoso** (no hace nada hasta que alguien lo recoge), pero sus valores llegan con el tiempo, como en un `Observable` de RxJava o en los de Angular.
+
+## Un `Flow` en el DataSource y en el repositorio
+
+Primero se añade la propiedad a la **interfaz** del DataSource. Una interfaz de Kotlin puede declarar propiedades, no solo funciones:
+
+```kotlin title="features/pokemon/data/remote/PokemonDataSource.kt"
+interface PokemonDataSource {
+    val pokemons: Flow<List<Pokemon>>
+    suspend fun readAllPokemon(): List<Pokemon>
+    suspend fun readPokemonByName(name: String): Pokemon?
+    suspend fun readPokemonById(id: Int): Pokemon?
+}
+```
+
+En la implementación se escribe con `override val`. El IDE genera primero un `get() { TODO() }`; el profesor lo borra y usa el constructor **`flow { }`** (import `kotlinx.coroutines.flow.flow`):
+
+```kotlin title="features/pokemon/data/remote/PokemonRemoteDataSource.kt (fragmento)"
+override val pokemons: Flow<List<Pokemon>> = flow {
+    emit(readAllPokemon())
+}
+```
+
+- El bloque de `flow { }` es código `suspend`: dentro se puede llamar a `readAllPokemon()`.
+- `emit(valor)` manda un valor a quien esté recogiendo el `Flow`.
+- Es un Flow **frío**: el bloque no se ejecuta al crearlo, sino **cada vez que alguien lo recoge**. Aquí, cada vez que se recoge, se vuelve a llamar a la API.
+- En la primera versión (minuto 05:35) el bloque era `val pokemons = readAllPokemon()` seguido de `emit(...)`. Al final queda `emit(readAllPokemon())`. El `value =` que se ve en algunas capturas es la pista de parámetro del IDE, no código.
+
+El repositorio hace lo mismo y, de momento, **delega**:
+
+```kotlin title="features/pokemon/data/repository/PokemonRepositoryImpl.kt (fragmento)"
+interface PokemonRepository {
+    val pokemons: Flow<List<Pokemon>>
+    suspend fun readAllPokemon(): List<Pokemon>
+    suspend fun readPokemonById(id: Int): Pokemon?
+}
+
+class PokemonRepositoryImpl @Inject constructor(
+    private val _remoteDataSource: PokemonDataSource
+) : PokemonRepository {
+    override val pokemons: Flow<List<Pokemon>> = _remoteDataSource.pokemons
+    ...
+}
+```
+
+## Del `Flow` al estado del ViewModel
+
+La pantalla necesita un **`StateFlow`**: un `Flow` que siempre tiene un valor actual, que es lo que lee `collectAsStateWithLifecycle()`. `stateIn` convierte uno en otro.
+
+<Recorrido
+  titulo="ui/PokemonListViewModel.kt"
+  lenguaje="kotlin"
+  codigo={`@HiltViewModel
+class PokemonListViewModel @Inject constructor(
+    private val _repository: PokemonRepository
+) : ViewModel() {
+
+    val state: StateFlow<PokemonListScreenState> = _repository.pokemons
+        .map<List<Pokemon>, PokemonListScreenState> { PokemonListScreenState.Loaded(pokemons = it) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000L),
+            initialValue = PokemonListScreenState.Loading
+        )
+}
+
+sealed class PokemonListScreenState {
+    object Initial : PokemonListScreenState()
+    object Loading : PokemonListScreenState()
+    class Loaded(val pokemons: List<Pokemon>) : PokemonListScreenState()
+}`}
+>
+  <Paso lineas="6" titulo="El punto de partida">
+    `_repository.pokemons` es un `Flow<List<Pokemon>>`. El estado ya no se guarda en un `MutableStateFlow`: se **deriva** de lo que da el repositorio.
+  </Paso>
+  <Paso lineas="7" titulo="map: de datos a estado">
+    `map` transforma cada lista que llega en un `PokemonListScreenState.Loaded`. Los genéricos van explícitos, `map<List<Pokemon>, PokemonListScreenState>`, para que el resultado sea un `Flow<PokemonListScreenState>` y no un `Flow<Loaded>`.
+  </Paso>
+  <Paso lineas="8-9" titulo="stateIn y su ámbito">
+    `stateIn` convierte el `Flow` en `StateFlow`. Recoge el flujo de arriba dentro de `viewModelScope`, así que todo se cancela cuando el ViewModel se destruye. En clase se probó `GlobalScope` y se descartó.
+  </Paso>
+  <Paso lineas="10" titulo="Cuándo escucha">
+    `WhileSubscribed(5_000L)`: el flujo de arriba está activo mientras alguien recoge `state` y **5 segundos más** después de que se vaya el último. Así un giro de pantalla no vuelve a pedir los datos.
+  </Paso>
+  <Paso lineas="11" titulo="El primer valor">
+    `initialValue = Loading` es lo que ve la pantalla hasta que llega la primera lista.
+  </Paso>
+  <Paso lineas="15-19" titulo="Los estados">
+    `object` para los estados sin datos y `class` para el que lleva la lista. Con este ViewModel, `Initial` ya no se usa: se empieza en `Loading`.
+  </Paso>
+</Recorrido>
+
+- Con esto **ya no hacen falta** ni `MutableStateFlow` ni `init { viewModelScope.launch { ... } }`.
+- El tooltip de `WhileSubscribed` enseña sus valores por defecto: `stopTimeoutMillis = 0` y `replayExpirationMillis = Long.MAX_VALUE` (el último valor se guarda para siempre, aunque se pare el flujo de arriba).
+- En las capturas la lambda sale como `Loaded(it)` en unas y `Loaded(pokemons = it)` en otras. Las dos valen.
+
+### Antes y después
+
+<Comparar titulo="El estado de la lista">
+  <Lado titulo="Antes: MutableStateFlow + init">
+
+```kotlin
+private val _state: MutableStateFlow<PokemonListScreenState> =
+    MutableStateFlow(PokemonListScreenState.Initial)
+val state: StateFlow<PokemonListScreenState>
+    get() = _state.asStateFlow()
+
+init {
+    viewModelScope.launch {
+        _state.value = PokemonListScreenState.Loading
+        val pokemons = _repository.readAllPokemon()
+        _state.value = PokemonListScreenState.Loaded(pokemons)
+    }
+}
+```
+
+El ViewModel **pide** los datos una vez y los guarda él.
+
+  </Lado>
+  <Lado titulo="Después: map + stateIn">
+
+```kotlin
+val state: StateFlow<PokemonListScreenState> = _repository.pokemons
+    .map<List<Pokemon>, PokemonListScreenState> { PokemonListScreenState.Loaded(pokemons = it) }
+    .stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000L),
+        initialValue = PokemonListScreenState.Loading
+    )
+```
+
+El ViewModel **escucha** al repositorio: si el `Flow` emite otra lista, el estado cambia solo.
+
+  </Lado>
+</Comparar>
+
+En clase la versión anterior se deja comentada con `/** ... */` para compararlas. El cierre `*/` no se ve en ninguna captura <Dudoso nota="Se supone que se cerró, porque desaparecen los 8 errores." />.
+
+## Pruébalo: `WhileSubscribed` y el giro de pantalla
+
+La demo imita el `PokemonListViewModel` de arriba con un `flow { emit(readAllPokemon()) }` como fuente. Cuenta cuántas veces se llama a la API. Gira el móvil con las dos opciones y manda la app a segundo plano un rato.
+
+<SimuladorStateIn />
+
+Lo que enseña:
+
+- Al **abrir la pantalla**, `collectAsStateWithLifecycle()` empieza a recoger `state`, `stateIn` arranca el flujo de arriba y se hace la petición. Mientras, `state` vale `Loading`.
+- Al **girar el móvil**, la Activity se destruye y se vuelve a crear, pero el ViewModel sobrevive. Durante un instante nadie recoge `state`. Con 5 s de margen, el flujo sigue vivo y **no se repite la petición**; con `WhileSubscribed()` (0 ms), se para y se vuelve a pedir.
+- En **segundo plano**, `collectAsStateWithLifecycle()` deja de recoger (por debajo del estado `STARTED`). Pasados 5 s se para el flujo de arriba; `state` conserva el último valor, y al volver se arranca otra vez.
+
+## En la pantalla no cambia nada
+
+La pantalla sigue leyendo el estado igual que antes:
+
+```kotlin title="ui/PokemonListScreen.kt (fragmento)"
+val state by viewModel.state.collectAsStateWithLifecycle()
+when (state) {
+    PokemonListScreenState.Initial -> PokemonListScreen(modifier = modifier, toDetail = toDetail)
+    is PokemonListScreenState.Loaded -> PokemonListScreen(
+        modifier = modifier,
+        list = (state as PokemonListScreenState.Loaded).pokemons,
+        toDetail = toDetail
+    )
+    PokemonListScreenState.Loading -> PokemonListScreen(
+        modifier = modifier, isLoading = true, toDetail = toDetail
+    )
+}
+```
+
+<Callout type="error" title="Salió en clase: Cannot access 'val state'">
+  La propiedad nueva se llamó primero `uiState` y era `private`. Al renombrarla a `state`, la pantalla no compilaba: *Cannot access 'val state'*. Lo que lee la pantalla tiene que ser **público**.
+</Callout>
+
+## El mismo patrón en los ajustes
+
+<DeClase fecha="18/11" proyecto="ToDoOfflineFirst" rama="datastore" />
+
+El 18/11 se repite la receta con el modo oscuro: el repositorio da un `Flow<Boolean>` y el ViewModel lo convierte en una `data class` de estado.
+
+```kotlin title="SettingsViewModel.kt (fragmento)"
+val uiState: StateFlow<SettingsUiState> = settingsRepository.settings
+    .map<Boolean, SettingsUiState> { SettingsUiState(it) }
+    .stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000L),
+        initialValue = SettingsUiState()
+    )
+```
+
+Está completo en [DataStore](/docs/2-dam/kotlin/datos/datastore). El estado de detalle, que también usa `map` y `stateIn`, está en [Offline-first](/docs/2-dam/kotlin/datos/offline-first).
+
+## Practica
+
+<CompletarCodigo
+  titulo="Del Flow al StateFlow"
+  enunciado="Completa el ViewModel para que su estado salga del Flow del repositorio."
+  lenguaje="kotlin"
+  codigo={`val state: StateFlow<PokemonListScreenState> = _repository.pokemons
+    .[[map]]<List<Pokemon>, PokemonListScreenState> { PokemonListScreenState.Loaded(pokemons = it) }
+    .[[stateIn]](
+        scope = [[viewModelScope]],
+        started = SharingStarted.[[WhileSubscribed]](stopTimeoutMillis = 5_000L),
+        [[initialValue]] = PokemonListScreenState.Loading
+    )`}
+/>
+
+<Quiz titulo="Test: Flow y stateIn">
+  <Pregunta enunciado="¿Qué diferencia hay entre `suspend fun readAllPokemon(): List<Pokemon>` y `val pokemons: Flow<List<Pokemon>>`?" explicacion="La función da una respuesta y termina. El `Flow` puede emitir muchas veces, y quien lo recoge recibe cada valor nuevo.">
+    <Opcion>Ninguna, son dos formas de escribir lo mismo</Opcion>
+    <Opcion correcta>La función responde una vez; el `Flow` puede emitir varias</Opcion>
+    <Opcion>El `Flow` es más rápido</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cuándo se ejecuta el bloque de `flow { emit(readAllPokemon()) }`?" explicacion="Es un Flow frío: el bloque se ejecuta cada vez que alguien lo recoge, no al crearlo.">
+    <Opcion>Al crear la propiedad</Opcion>
+    <Opcion correcta>Cada vez que alguien recoge el `Flow`</Opcion>
+    <Opcion>Una sola vez al arrancar la app</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En `stateIn`, ¿para qué sirve `initialValue`?" explicacion="Un `StateFlow` siempre tiene valor. Hasta que llega el primero del flujo de arriba, vale `initialValue`.">
+    <Opcion correcta>Es lo que ve la pantalla hasta que llega el primer valor</Opcion>
+    <Opcion>Es el valor que se emite cuando hay un error</Opcion>
+    <Opcion>Es el número de reintentos</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué hace `SharingStarted.WhileSubscribed(5_000L)`?" explicacion="El flujo de arriba sigue activo 5 s después de que se vaya el último suscriptor. Así sobrevive a un giro de pantalla sin volver a pedir los datos.">
+    <Opcion>Espera 5 s antes de la primera petición</Opcion>
+    <Opcion correcta>Mantiene el flujo de arriba 5 s después de que se vaya el último suscriptor</Opcion>
+    <Opcion>Repite la petición cada 5 s</Opcion>
+    <Opcion>Cancela la petición si tarda más de 5 s</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Con `map` + `stateIn` sigue haciendo falta un `init { viewModelScope.launch { ... } }` para cargar la lista." respuesta={false} explicacion="`stateIn` recoge el flujo de arriba él solo cuando alguien recoge `state`. El `init` sobra." />
+  <Pregunta enunciado="¿Por qué en clase se escribe `map<List<Pokemon>, PokemonListScreenState>` con los genéricos?" explicacion="Para que el resultado sea un `Flow<PokemonListScreenState>` y no un `Flow<Loaded>`, que es lo que devuelve la lambda.">
+    <Opcion>Porque `map` siempre los necesita</Opcion>
+    <Opcion correcta>Para que el resultado sea `Flow<PokemonListScreenState>` y no `Flow<Loaded>`</Opcion>
+    <Opcion>Para que sea más rápido</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Al renombrar `uiState` a `state` salió *Cannot access 'val state'*. ¿Por qué?" explicacion="La propiedad era `private` y la pantalla no podía leerla. Se hizo pública.">
+    <Opcion>Porque `state` es una palabra reservada</Opcion>
+    <Opcion correcta>Porque la propiedad era `private`</Opcion>
+    <Opcion>Porque faltaba `@HiltViewModel`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: Flow y stateIn">
+  <Tarjeta frente="`Flow`">Un valor que cambia con el tiempo y avisa cada vez que cambia. No hace nada hasta que alguien lo recoge.</Tarjeta>
+  <Tarjeta frente="`flow { emit(x) }`">Crea un Flow frío. El bloque es `suspend` y se ejecuta cada vez que alguien lo recoge.</Tarjeta>
+  <Tarjeta frente="`StateFlow`">Un `Flow` que siempre tiene un valor actual. Es lo que el ViewModel enseña a la pantalla.</Tarjeta>
+  <Tarjeta frente="`stateIn(scope, started, initialValue)`">Convierte un `Flow` en `StateFlow`: en qué ámbito se recoge, cuándo se escucha y qué valor tiene al principio.</Tarjeta>
+  <Tarjeta frente="`WhileSubscribed(5_000L)`">Escucha mientras haya alguien recogiendo y 5 s más. Sobrevive al giro de pantalla.</Tarjeta>
+  <Tarjeta frente="Valores por defecto de `WhileSubscribed`">`stopTimeoutMillis = 0` y `replayExpirationMillis = Long.MAX_VALUE`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Un Flow con dos emisiones" dificultad="facil">
+  Escribe una propiedad `val mensajes: Flow<String>` que emita `"Cargando…"`, espere 1 segundo y emita `"Listo"`.
+
+  <Pista>Dentro de `flow { }` puedes llamar a funciones `suspend`, como `delay`.</Pista>
+
+  <Solucion>
+
+```kotlin
+val mensajes: Flow<String> = flow {
+    emit("Cargando…")
+    delay(1_000L)
+    emit("Listo")
+}
+```
+
+  Quien lo recoja recibirá los dos valores, uno detrás de otro. Una función `suspend` no podría "devolver dos veces": esa es la diferencia con un `Flow`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Pasa un ViewModel a stateIn" dificultad="media">
+  Reescribe este ViewModel para que su estado salga del `Flow` del repositorio con `map` y `stateIn`, como el `PokemonListViewModel` del 09/11. El repositorio tiene `val tasks: Flow<List<Task>>`.
+
+```kotlin
+@HiltViewModel
+class TaskListViewModel @Inject constructor(
+    private val _repository: TaskRepository
+) : ViewModel() {
+    private val _state = MutableStateFlow<TaskListScreenState>(TaskListScreenState.Loading)
+    val state: StateFlow<TaskListScreenState> get() = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            _state.value = TaskListScreenState.Success(_repository.readAll())
+        }
+    }
+}
+```
+
+  <Pista>Parte de `_repository.tasks` y transforma cada lista en `TaskListScreenState.Success`.</Pista>
+  <Pista>Pon los genéricos de `map` para que el tipo sea el de la clase sellada.</Pista>
+
+  <Solucion>
+
+```kotlin
+@HiltViewModel
+class TaskListViewModel @Inject constructor(
+    private val _repository: TaskRepository
+) : ViewModel() {
+    val state: StateFlow<TaskListScreenState> = _repository.tasks
+        .map<List<Task>, TaskListScreenState> { TaskListScreenState.Success(it) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000L),
+            initialValue = TaskListScreenState.Loading
+        )
+}
+```
+
+  Desaparecen `_state`, `asStateFlow()` y el `init`. Si el `Flow` del repositorio emite al crear una tarea, la lista se actualiza sola.
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Flow">Flujo de valores que llegan con el tiempo. Se recoge con `collect` o, en Compose, a través de un `StateFlow`.</Termino>
+  <Termino nombre="Flow frío">Su bloque se ejecuta cada vez que alguien lo recoge. `flow { }` crea uno.</Termino>
+  <Termino nombre="emit">Manda un valor desde dentro de `flow { }`.</Termino>
+  <Termino nombre="map">Transforma cada valor del `Flow` en otro.</Termino>
+  <Termino nombre="stateIn">Convierte un `Flow` en `StateFlow` con un ámbito, una política de inicio y un valor inicial.</Termino>
+  <Termino nombre="WhileSubscribed">Política de `stateIn`: escucha mientras haya suscriptores y un tiempo extra.</Termino>
+</Glosario>
+
+<MarcarCompletado />

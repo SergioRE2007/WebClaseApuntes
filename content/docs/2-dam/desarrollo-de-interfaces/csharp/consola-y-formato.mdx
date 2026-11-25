@@ -1,0 +1,431 @@
+---
+title: Consola, tipos y formato de salida
+description: Leer y escribir por consola, convertir texto a número, concatenar e interpolar, el formato compuesto con especificadores, la cultura, los tipos y las constantes (clase del 05/11).
+icon: Terminal
+---
+
+import { FormatoCompuesto } from '@/components/temas/csharp/formato-compuesto';
+
+La primera clase de C# fue un repaso de la **UD2 "Introducción a C#"**. El profesor iba alternando el PDF con Visual Studio, donde escribía y ejecutaba el proyecto de consola Clase1. Esta página reúne la parte de **entrada, salida y formato**. La de arrays, condiciones, bucles y métodos está en [Arrays, control y métodos](/docs/2-dam/desarrollo-de-interfaces/csharp/arrays-y-control).
+
+<DeClase fecha="05/11" proyecto="Clase1" nota="PDF de la UD2, págs. 11-12 y 19-20" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - La diferencia entre `Console.Write` y `Console.WriteLine`, y cómo leer con `Console.ReadLine()`.
+  - Pasar texto a número con `Convert.ToInt32`.
+  - Concatenar con `+` e interpolar con `$`.
+  - El **formato compuesto** `{índice,alineación:especificador}` y los especificadores `C`, `D`, `E`, `F`, `G`, `N`, `P`, `R` y `X`.
+  - Por qué sale `3,14 ?` en vez de `3,14 €` y cómo elegir otra moneda con `CultureInfo`.
+  - Los tipos básicos y las constantes con `const`.
+</Callout>
+
+## El código de la clase, paso a paso
+
+Este es el `Program.cs` que se escribió en clase. Recórrelo paso a paso:
+
+<Recorrido
+  titulo="Program.cs (05/11)"
+  lenguaje="csharp"
+  codigo={`// See https://aka.ms/new-console-template for more information
+Console.WriteLine("Hello, World DAM2!");
+int num1 = 10;
+int num2 = 20;
+int suma = num1 + num2;
+
+double numeroPi = 3.1416;
+Console.WriteLine("El numero Pi es {0:P}", numeroPi);
+Console.WriteLine("La suma de " + num1 + " y " + num2 + " es: " + suma);
+
+int num3;
+int num4;
+Console.Write("Introduce el primer número: ");
+string num3String = Console.ReadLine();
+num3 = Convert.ToInt32(num3String);
+Console.Write("Introduce el segundo número:");
+num4 = Convert.ToInt32(Console.ReadLine());
+
+string resultado2 = $"Esto es un string que contiene {num3String} este texto va detrás";
+Console.WriteLine("La suma de " + num3 + " y " + num4 + " es: " + (num3 + num4));`}
+>
+  <Paso lineas="1-2" titulo="La plantilla">
+    El comentario y el "Hello, World" los pone la plantilla de consola. El profesor lo cambió a "Hello, World DAM2!".
+  </Paso>
+  <Paso lineas="3-5" titulo="Variables">
+    Se declaran igual que en Java: tipo, nombre y valor.
+  </Paso>
+  <Paso lineas="7-8" titulo="Formato compuesto">
+    `{0:P}` es un **marcador**: "pon aquí el argumento 0 con formato de porcentaje". Sale `314,16 %`, porque `P` multiplica por 100.
+  </Paso>
+  <Paso lineas="9" titulo="Concatenación">
+    Con `+`, como en Java. Sale `La suma de 10 y 20 es: 30`.
+  </Paso>
+  <Paso lineas="13-14" titulo="Pedir y leer un dato">
+    `Console.Write` no salta de línea, así que el cursor se queda detrás del mensaje. `Console.ReadLine()` lee lo que escribe el usuario hasta que pulsa Intro y lo devuelve como texto. Esta línea da el aviso **CS8600**, porque `ReadLine()` devuelve `string?`.
+  </Paso>
+  <Paso lineas="15" titulo="De texto a número">
+    `Convert.ToInt32` convierte el texto en un `int`, como `Integer.parseInt` en Java.
+  </Paso>
+  <Paso lineas="16-17" titulo="Todo en una línea">
+    También se puede leer y convertir a la vez, sin guardar el texto en una variable.
+  </Paso>
+  <Paso lineas="19" titulo="Interpolación">
+    Con `$` delante de las comillas, lo que va entre llaves se sustituye por su valor.
+  </Paso>
+  <Paso lineas="20" titulo="Sumar dentro de una concatenación">
+    La suma va **entre paréntesis**. Sin ellos, `"..." + num3 + num4` pegaría los dos números como texto.
+  </Paso>
+</Recorrido>
+
+- El valor de Pi se lee como <Dudoso nota="En otras capturas tiene muchos más decimales, que no se leen.">`3.1416`</Dudoso>.
+
+## Escribir: `Write` y `WriteLine`
+
+- `Console.WriteLine(...)` escribe y **salta de línea**. Es el `System.out.println` de Java.
+- `Console.Write(...)` escribe y **se queda en la misma línea**. Se usa para pedir datos, para que el usuario escriba justo detrás del mensaje.
+
+IntelliSense enseña todas las sobrecargas de los dos métodos: aceptan un `string`, un número, un `bool`… y también un texto con marcadores seguido de los valores, que es el **formato compuesto** que ves más abajo.
+
+## Leer: `ReadLine` y `Convert`
+
+`Console.ReadLine()` devuelve siempre **texto**. Para operar con él hay que convertirlo:
+
+```csharp title="Program.cs"
+Console.Write("Introduce el primer número: ");
+string num3String = Console.ReadLine(); // aviso CS8600
+int num3 = Convert.ToInt32(num3String);
+```
+
+En la hoja 2 sale también `Convert.ToString`, que convierte un valor en texto (en el ejercicio del abecedario con los códigos ASCII).
+
+<Callout type="warn" title="Aviso CS8600 al leer">
+  En .NET 8, `Console.ReadLine()` devuelve `string?` (texto que **puede ser null**), y guardarlo en un `string` da el aviso CS8600. Es un aviso, no un error: el programa compila. En clase se deja así. Si quieres quitarlo, declara la variable como `string?` <NoDadoEnClase inline />.
+</Callout>
+
+## Concatenar e interpolar
+
+<Comparar titulo="Dos formas de montar un texto">
+  <Lado titulo="Concatenación con +">
+
+```csharp
+Console.WriteLine("La suma de " + num3 + " y " + num4 + " es: " + (num3 + num4));
+```
+
+Si hay que **sumar** dentro, la suma va entre paréntesis.
+
+  </Lado>
+  <Lado titulo="Interpolación con $">
+
+```csharp
+string resultado2 = $"Esto es un string que contiene {num3String} este texto va detrás";
+```
+
+Lo que va entre llaves se sustituye por su valor. Puedes poner expresiones: `{num3 + num4}`.
+
+  </Lado>
+</Comparar>
+
+¿Por qué los paréntesis? Porque `+` se evalúa de izquierda a derecha. En cuanto a la izquierda hay un texto, el siguiente `+` pega en vez de sumar:
+
+<Terminal titulo="Qué texto sale">
+{`"La suma es: " + 10 + 20    ->  La suma es: 1020
+"La suma es: " + (10 + 20)  ->  La suma es: 30`}
+</Terminal>
+
+En los enunciados de Moodle varias notas piden usar la interpolación con `$` en vez de concatenar (ejercicio 10 de la hoja 1 y ejercicio 7 de eventos).
+
+## El formato compuesto
+
+En vez de concatenar, `Console.WriteLine` acepta un texto con **marcadores** entre llaves y después los valores. Cada marcador tiene hasta tres partes:
+
+```text
+{índice,alineación:especificador}
+```
+
+| Parte | Qué es | Ejemplo |
+| --- | --- | --- |
+| índice | Qué argumento va ahí, empezando en 0 | `{0}`, `{1}` |
+| alineación (opcional) | Ancho mínimo. Positivo, pegado a la derecha; negativo, a la izquierda | `{0,5}`, `{0,-10}` |
+| especificador (opcional) | Cómo se escribe el valor, con una letra y, si quieres, un número de precisión | `{0:P}`, `{0:F3}` |
+
+Estas son las tres versiones que se probaron en clase con `numeroPi = 3.1416` y `num2 = 20`:
+
+| Código | Salida en clase |
+| --- | --- |
+| `Console.WriteLine("El numero Pi es {0:P}", numeroPi);` | `El numero Pi es 314,16 %` |
+| `Console.WriteLine("El numero Pi es {0,5:C}", numeroPi);` | `El numero Pi es 3,14 ?` |
+| `Console.WriteLine("El numero Pi es {0:F} {1:P}", numeroPi, num2);` | `El numero Pi es 3,14 2.000,00 %` |
+
+- La `?` de `3,14 ?` es <Dudoso nota="Casi seguro es el símbolo € que la consola no sabe pintar, pero en esa captura podría ser la salida del .exe anterior, porque justo salen los errores MSB3027.">el €</Dudoso> que la consola de Windows no sabe pintar.
+- En la tercera, el primer valor (`3,14`) <Dudoso nota="No se lee en la captura. Por el código ({0:F}) debería ser 3,14.">no se lee bien</Dudoso>.
+- `{0,5:C}` pide **al menos 5 caracteres**, pero `3,14 €` ya tiene 6, así que no se añade relleno. La alineación nunca recorta.
+- Con el `int` 20, `P` da `2.000,00 %`: multiplica por 100 y pone dos decimales.
+
+### Pruébalo tú
+
+Elige un valor, un especificador, una precisión y una alineación, y mira qué escribiría `Console.WriteLine`. Los puntos grises son los espacios de relleno de la alineación. La demo sigue las reglas de .NET 8 para las culturas es-ES y en-US.
+
+<FormatoCompuesto />
+
+### Especificadores numéricos
+
+La lista es la de la página 19 del PDF y la de Microsoft Learn ("Cadenas con formato numérico estándar"), que se consultó en clase. Los ejemplos de la última columna son nuestros (no salieron en clase, salvo el de `P` con 3.1416) y están calculados con la cultura es-ES.
+
+| Letra | Nombre | Qué hace | Ejemplo |
+| --- | --- | --- | --- |
+| `C` | Moneda (*currency*) | Símbolo de moneda y 2 decimales | `{0:C}` con `1234.56` da `1.234,56 €` |
+| `D` | Decimal | Solo enteros. La precisión es el mínimo de cifras | `{0:D4}` con `20` da `0020` |
+| `E` | Científico | Mantisa con 6 decimales y exponente | `{0:E}` con `3.1416` da `3,141600E+000` |
+| `F` | Punto fijo | 2 decimales, sin separador de miles | `{0:F}` con `3.1416` da `3,14` |
+| `G` | General | La forma más corta. **Es el que se usa si no pones nada** | `{0:G}` con `3.1416` da `3,1416` |
+| `N` | Número | Separador de miles y 2 decimales | `{0:N}` con `1234.56` da `1.234,56` |
+| `P` | Porcentaje | **Multiplica por 100** y añade % | `{0:P}` con `3.1416` da `314,16 %` |
+| `R` | Ida y vuelta (*round-trip*) | Un texto que, al volver a leerlo, da exactamente el mismo número | `{0:R}` con `3.1416` da `3,1416` |
+| `X` | Hexadecimal | Solo enteros | `{0:X}` con `255` da `FF` |
+
+El número que va detrás de la letra es la **precisión**: `{0:F3}` da tres decimales y `{0:D5}`, cinco cifras como mínimo. Si usas `D` o `X` con un `double`, el programa lanza una `FormatException`.
+
+### Especificadores de fecha y de enumeraciones
+
+En la misma página del PDF hay especificadores para **fechas** (`DateTime`) y para **enumeraciones**. En clase solo se leyeron por encima:
+
+| Fecha | Qué escribe |
+| --- | --- |
+| `d` / `D` | Fecha corta / fecha larga |
+| `t` / `T` | Hora corta / hora larga |
+| `f` / `F` | Fecha larga con hora corta / con hora larga |
+| `g` / `G` | Fecha corta con hora corta / con hora larga. `G` es el de por defecto |
+| `M` | Día y mes |
+| `R` | Formato RFC 1123 |
+| `s` | Fecha y hora ordenable |
+| `u` / `U` | Ordenable universal / completa universal |
+| `Y` | Mes y año |
+
+Para enumeraciones: `G` escribe el nombre, `F` los nombres de varios *flags* combinados, `D` el valor numérico y `X` el valor en hexadecimal.
+
+El ejemplo del PDF (pág. 19) escribe varios valores con un solo `WriteLine`:
+
+```csharp title="Ejemplo del PDF de la UD2 (pág. 19)"
+Console.WriteLine(
+    "(C) Currency: . . . {0:C}\n" +
+    "(E) Scientific: . . {1:E}\n" +
+    "(P) Percent:. . . . {1:P}\n" +
+    "(X) Hexadecimal:. . {0:X}\n",
+    -123, -123.45f);
+```
+
+Fíjate en que el mismo argumento se puede usar varias veces (`{0}` sale en `C` y en `X`) y en que el orden de los marcadores no tiene por qué ser el de los argumentos. El sufijo `f` de `-123.45f` hace que sea un `float`.
+
+## La cultura del equipo
+
+<DeClase fecha="05/11" nota="salió de una búsqueda en Google que se enseñó en clase, no del PDF" />
+
+El resultado del formato **depende de la configuración regional** del ordenador. En un equipo en español sale coma decimal (`3,14`), punto de miles (`2.000`) y el símbolo €. Para elegir otra, el profesor buscó en Google *"c# formateo writeline indicar cual es la moneda"* y enseñó la respuesta, que usa `CultureInfo`:
+
+```csharp title="Program.cs"
+using System;
+using System.Globalization;
+
+decimal precio = 1234.56m;
+Console.WriteLine(precio.ToString("C"));      // cultura del sistema
+Console.WriteLine($"{precio:C}");
+
+CultureInfo culturaES = new CultureInfo("es-ES");
+Console.WriteLine(precio.ToString("C", culturaES));   // 1.234,56 €
+CultureInfo culturaUS = new CultureInfo("en-US");
+Console.WriteLine(precio.ToString("C", culturaUS));   // $1,234.56
+```
+
+- `ToString("C")` acepta el mismo especificador que el marcador `{0:C}`.
+- En la interpolación también se puede poner: `$"{precio:C}"`.
+- `CultureInfo` está en `System.Globalization`, que hay que importar con `using`.
+- Ojo con la consola de Windows: aunque el texto lleve €, la ventana puede pintarlo como `?`.
+
+## Tipos y constantes
+
+<DeClase fecha="05/11" nota="PDF de la UD2, págs. 11-12" />
+
+En clase se usan `int`, `double`, `string` y `decimal`. En la tabla del PDF salen también `long`, `float`, `bool` y `char`:
+
+| Tipo | Para qué | Literal |
+| --- | --- | --- |
+| `int` | Enteros (alias de `System.Int32`) | `10` |
+| `long` | Enteros grandes | `10L` |
+| `float` | Decimales de precisión simple | `3.14f` |
+| `double` | Decimales (el que se usa por defecto) | `3.1416` |
+| `decimal` | Decimales exactos, el que se usó para el precio | `1234.56m` |
+| `bool` | `true` / `false` (en consola sale `True` / `False`) | `true` |
+| `char` | Un carácter | `'A'` |
+| `string` | Texto (alias de `System.String`) | `"Hola"` |
+
+Al pasar el ratón por `int`, Visual Studio enseña `System.Int32`: `int` es solo un nombre corto.
+
+Las **constantes** se declaran con `const` y no se pueden cambiar:
+
+```csharp title="Constantes (PDF, págs. 11-12)"
+const int miNumero = 15;
+miNumero = 13;   // error de compilación
+```
+
+## Ejercicios de la hoja 1
+
+<DeClase fecha="05/11" nota="hoja Ejercicio 1_Básicos secuenciales, 4 páginas" />
+
+Estos son los enunciados que se enseñaron en clase (resumidos):
+
+1. Pedir dos números y mostrar la suma, la resta, la multiplicación, la división y el módulo. El ejemplo usa 8 y 3.
+2. Un bar: pedir el número de hamburguesas, papas y bebidas, con los precios en constantes. El ejemplo dice algo como <Dudoso nota="Leído a medias en la captura.">"Cantidad a pagar: 56,25€"</Dudoso>.
+3. Pedir un número y calcular su valor absoluto, su cubo, su raíz cuadrada, su seno, su coseno, el máximo y el mínimo.
+4. Perímetro de un cuadrado.
+5. Suma y producto de 4 números.
+6. Promedio.
+7. Coste de un artículo (precio por cantidad).
+8. Nota final del módulo con porcentajes (examen 50 %, trabajo final 20 %…).
+9. Porcentaje de participación de cada socio en una empresa, con **un solo** `Console.WriteLine` que use texto y llaves de sustitución.
+10. Comprobar si un `string` empieza por "www". La nota pide interpolación con `$`.
+
+### El ejercicio 1, resuelto en clase
+
+En clase se resolvió el primero como **función local** (lo explicamos en [Visual Studio y el proyecto Clase1](/docs/2-dam/desarrollo-de-interfaces/csharp/visual-studio-y-proyecto#funciones-locales)):
+
+```csharp title="Program.cs (05/11)"
+void Ejercicio1 ()
+{
+    Console.Write("Introduce número 1: ");
+    int num1 = Convert.ToInt32(Console.ReadLine());
+    Console.Write("Introduce número 2: ");
+    int num2 = Convert.ToInt32(Console.ReadLine());
+    Console.WriteLine("La suma de " + num1 + " y " + num2 + " es: " + (num1 + num2));
+    Console.WriteLine("La resta de " + num1 + " y " + num2 + " es: " + (num1 - num2));
+    Console.WriteLine("La multiplicación es: " + (num1 * num2));
+    Console.WriteLine("El módulo es: " + (num1 % num2));
+}
+
+Ejercicio1();
+```
+
+<Terminal titulo="Consola de depuración de Microsoft Visual Studio">
+{`Introduce número 1: 2
+Introduce número 2: 4
+La suma de 2 y 4 es: 6
+La resta de 2 y 4 es: -2
+La multiplicación es: 8
+El módulo es: 2`}
+</Terminal>
+
+- Falta la **división** que pide el enunciado. <Dudoso nota="En algún momento la quinta línea ponía 'cociente' con /, y al final quedó el módulo. No se ve que se añadiera la división.">No se ve que se añadiera</Dudoso>.
+
+<NoSeVio titulo="Soluciones de los ejercicios 2 a 10">
+  En clase solo se resolvió el ejercicio 1. No hay soluciones del profesor del resto de la hoja.
+</NoSeVio>
+
+## Practica
+
+<CompletarCodigo
+  titulo="Leer y mostrar con interpolación"
+  enunciado="Pide la edad sin saltar de línea, conviértela a número y muestra la del año que viene con interpolación."
+  lenguaje="csharp"
+  codigo={`Console.[[Write]]("Introduce tu edad: ");
+int edad = Convert.[[ToInt32]](Console.ReadLine());
+Console.WriteLine([[$]]"El año que viene tendrás {edad + 1} años");`}
+/>
+
+<Quiz titulo="Test: consola y formato">
+  <Pregunta enunciado="¿Cuál de los dos métodos se queda en la misma línea después de escribir?" explicacion="`Write` no salta de línea; por eso se usa para pedir datos.">
+    <Opcion correcta>`Console.Write`</Opcion>
+    <Opcion>`Console.WriteLine`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué devuelve `Console.ReadLine()` en .NET 8?" explicacion="Devuelve texto que puede ser null (`string?`). Hay que convertirlo para operar.">
+    <Opcion>`int`</Opcion>
+    <Opcion correcta>`string?`</Opcion>
+    <Opcion>`char`</Opcion>
+    <Opcion>`object`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado='¿Qué escribe `Console.WriteLine("La suma es: " + 2 + 3);`?' respuesta={["La suma es: 23"]} explicacion="Como a la izquierda hay un texto, cada `+` pega en vez de sumar. Para sumar: `(2 + 3)`." />
+  <Pregunta tipo="texto" enunciado='En un equipo en español, ¿qué escribe `Console.WriteLine("{0:P}", 0.25);`?' respuesta={["25,00 %", "25,00%"]} explicacion="`P` multiplica por 100 y pone dos decimales: `25,00 %`." />
+  <Pregunta enunciado="¿Qué especificador se usa si no pones ninguno?" explicacion="Sin especificador se aplica `G`, el formato general.">
+    <Opcion>`F`</Opcion>
+    <Opcion>`N`</Opcion>
+    <Opcion correcta>`G`</Opcion>
+    <Opcion>`D`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En `{0,5:C}`, ¿qué significa el 5?" explicacion="El número tras la coma es la alineación: el ancho mínimo. Positivo pega a la derecha.">
+    <Opcion>Cinco decimales</Opcion>
+    <Opcion correcta>Un ancho mínimo de 5 caracteres, alineado a la derecha</Opcion>
+    <Opcion>El argumento número 5</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado='`Console.WriteLine("{0:D}", 3.1416);` escribe `3`.' respuesta={false} explicacion="`D` solo vale para enteros. Con un `double` el programa lanza `FormatException`." />
+  <Pregunta tipo="vf" enunciado="Si declaras `const int miNumero = 15;`, luego puedes hacer `miNumero = 13;`." respuesta={false} explicacion="Una constante no se puede reasignar: da error de compilación." />
+</Quiz>
+
+<Flashcards titulo="Repaso: formato de salida">
+  <Tarjeta frente="Partes de un marcador">`{índice,alineación:especificador}`. Solo el índice es obligatorio.</Tarjeta>
+  <Tarjeta frente="`{0:P}` con 3.1416">`314,16 %`: multiplica por 100.</Tarjeta>
+  <Tarjeta frente="`C`, `F` y `N`">Moneda; punto fijo sin miles; número con separador de miles. Los tres con 2 decimales por defecto.</Tarjeta>
+  <Tarjeta frente="¿Por qué sale `3,14 ?`?">Casi seguro porque el formato `C` pone €, pero la consola de Windows no sabe pintarlo (en clase no se llegó a comprobar).</Tarjeta>
+  <Tarjeta frente="Elegir la moneda de otro país">`precio.ToString("C", new CultureInfo("en-US"))`, con `using System.Globalization;`.</Tarjeta>
+  <Tarjeta frente="Sufijo de un `decimal`">`m`: `1234.56m`. El de un `float` es `f`.</Tarjeta>
+  <Tarjeta frente="Interpolación">`$"Hola {nombre}"`: lo que va entre llaves se sustituye por su valor.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Hoja 1, ejercicio 1, con la división" dificultad="facil">
+  Completa la función `Ejercicio1` de clase para que también muestre la **división**. Pruébala con 8 y 3, como en el enunciado. ¿Qué sale y por qué?
+
+  <Pista>Añade una línea como la de la multiplicación, con `/`.</Pista>
+  <Pista>Dividir dos `int` en C# da un `int`, igual que en Java.</Pista>
+
+  <Solucion>
+
+Solución propia (en clase no se llegó a añadir):
+
+```csharp title="Program.cs"
+void Ejercicio1()
+{
+    Console.Write("Introduce número 1: ");
+    int num1 = Convert.ToInt32(Console.ReadLine());
+    Console.Write("Introduce número 2: ");
+    int num2 = Convert.ToInt32(Console.ReadLine());
+    Console.WriteLine("La suma de " + num1 + " y " + num2 + " es: " + (num1 + num2));
+    Console.WriteLine("La resta de " + num1 + " y " + num2 + " es: " + (num1 - num2));
+    Console.WriteLine("La multiplicación es: " + (num1 * num2));
+    Console.WriteLine("La división es: " + (num1 / num2));
+    Console.WriteLine("El módulo es: " + (num1 % num2));
+}
+
+Ejercicio1();
+```
+
+Con 8 y 3: suma 11, resta 5, multiplicación 24, división **2** y módulo 2. La división de dos `int` descarta los decimales. Si quieres `2,6666666666666665`, convierte uno de los dos: `(double)num1 / num2`. Si el segundo número es 0, la división entera lanza `DivideByZeroException`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Socios con un solo WriteLine" dificultad="media">
+  Versión propia del ejercicio 9: pide lo que ha aportado cada uno de **tres** socios y muestra el porcentaje de cada uno con **un solo** `Console.WriteLine` y marcadores. Con 1000, 3000 y 6000 tiene que salir 10,00 %, 30,00 % y 60,00 %.
+
+  <Pista>El porcentaje de un socio es su aportación entre el total. El especificador `P` ya multiplica por 100.</Pista>
+  <Pista>Usa `\n` dentro del texto para saltar de línea sin otro `WriteLine`.</Pista>
+
+  <Solucion>
+
+Solución propia:
+
+```csharp title="Program.cs"
+Console.Write("Aportación del socio 1: ");
+double s1 = Convert.ToDouble(Console.ReadLine());
+Console.Write("Aportación del socio 2: ");
+double s2 = Convert.ToDouble(Console.ReadLine());
+Console.Write("Aportación del socio 3: ");
+double s3 = Convert.ToDouble(Console.ReadLine());
+
+double total = s1 + s2 + s3;
+Console.WriteLine("Socio 1: {0:P}\nSocio 2: {1:P}\nSocio 3: {2:P}", s1 / total, s2 / total, s3 / total);
+```
+
+Ojo: `Convert.ToDouble` usa la cultura del equipo, así que en español los decimales se escriben con coma (`1500,5`).
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

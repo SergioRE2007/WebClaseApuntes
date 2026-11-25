@@ -1,0 +1,90 @@
+---
+title: Backend con Node, Express y Prisma
+description: Lo que se ha dado en clase de backend con Node.js, Express 5, TypeScript, Prisma 6, PostgreSQL y Zod 4, ordenado para estudiarlo de principio a fin.
+icon: Server
+---
+
+Este bloque recoge **todo lo que se ha dado en clase de backend con Node**: una API REST hecha con Express 5 y TypeScript que guarda los datos en PostgreSQL a través de Prisma 6 y valida lo que le llega con Zod 4. Si te perdiste alguna clase, puedes estudiarlo solo con estas páginas, en el orden de la lista.
+
+<DeClase fecha="20/10, 27/10, 28/10, 03/11, 18/11" nota="algunos bloques son vídeos" />
+
+Si vienes de Java, piensa en esto como un Spring Boot en pequeño: Express hace de servidor y de `@RestController`, Prisma hace de JPA/Hibernate y Zod hace de Bean Validation (`@NotNull`, `@Email`…). La diferencia es que aquí todo es TypeScript y casi nada es "mágico": cada pieza se conecta a mano en `app.ts`.
+
+## Los dos proyectos de clase
+
+En clase salen dos proyectos distintos. Conviene no mezclarlos, porque no siempre se escriben igual:
+
+| Proyecto | Qué es | Cuándo |
+| --- | --- | --- |
+| `node-server` | El que el profesor monta **en directo** desde cero: npm, TypeScript, nodemon, dotenv y un Express mínimo. | 20/10 |
+| `node-server-26-27` | Su **repositorio de referencia**, ya terminado. Va por versiones (tags de Git de la v0.1.0 a la v1.1.3) y el profesor lo recorre versión a versión. Los commits son de noviembre de 2025: el repositorio viene del curso anterior. | 20/10, 27/10, 03/11 |
+
+Cuando una página dice "en directo" habla de `node-server`; cuando dice "la referencia", de `node-server-26-27`.
+
+## Qué trae cada versión de la referencia
+
+El repositorio de referencia avanza por hitos. Esta tabla te sirve de mapa: cada página de este bloque explica una o varias versiones.
+
+| Versión | Contenido | Dónde se explica |
+| --- | --- | --- |
+| v0.1.0 | Proyecto base: npm, TypeScript y carpetas | [Node, npm y TypeScript](/docs/2-dam/apis/backend/node-npm-typescript) |
+| v0.2.0 | Express básico: `env`, `error`, `app`, `index`, middlewares y `/health` | [Servidor con Express 5](/docs/2-dam/apis/backend/servidor-express) |
+| v0.3.0 | PostgreSQL con Docker y Prisma (schema, migraciones, cliente) | [PostgreSQL](/docs/2-dam/apis/backend/postgres-docker-supabase) y [Prisma](/docs/2-dam/apis/backend/prisma) |
+| v0.4.0 | Validación con Zod y CRUD de usuarios | [CRUD de usuarios](/docs/2-dam/apis/backend/crud-usuarios) y [Zod](/docs/2-dam/apis/backend/validacion-zod) |
+| v0.5.0 | Módulo de auth: registro, login, bcrypt y JWT | [Autenticación](/docs/2-dam/apis/backend/autenticacion) |
+| v0.6.0 | Middleware de autenticación (JWT, rutas protegidas, `/me`) | Solo se conoce por los tests y el README |
+| v0.7.0 | Actualizar el perfil y cambiar la contraseña | Solo se conoce por los tests y el README |
+| v0.8.0 | Rate limiting y logs con Winston | [Logs, rate limiting y tests](/docs/2-dam/apis/backend/logs-rate-limiting-tests) |
+| v0.9.0 | Tests con Jest y Supertest | [Logs, rate limiting y tests](/docs/2-dam/apis/backend/logs-rate-limiting-tests) |
+| v1.0.0 | Producción con Docker y documentación con Swagger | [Docker y Swagger](/docs/2-dam/apis/backend/docker-swagger) |
+| v1.0.1 | Swagger completo | [Docker y Swagger](/docs/2-dam/apis/backend/docker-swagger) |
+| v1.0.2 | `ts-node` cambiado por `tsx` (ES Modules) | [Node, npm y TypeScript](/docs/2-dam/apis/backend/node-npm-typescript) |
+| v1.1.0 – v1.1.3 | Subida de archivos con Cloudinary, arreglos y Swagger con todos los endpoints | Solo se ven el modelo `Media` y las variables de entorno |
+
+Además hay una rama `vercel-deployment` que no se llegó a abrir.
+
+## Páginas del bloque
+
+<Cards>
+  <Card icon="Package" title="Node, npm y TypeScript" href="/docs/2-dam/apis/backend/node-npm-typescript" description="Montar el proyecto: dependencias, npx, tsconfig, ES Modules y nodemon." />
+  <Card icon="Server" title="Servidor con Express 5" href="/docs/2-dam/apis/backend/servidor-express" description="app.ts e index.ts, variables de entorno, middlewares, errores y cierre ordenado." />
+  <Card icon="Database" title="PostgreSQL con Docker y Supabase" href="/docs/2-dam/apis/backend/postgres-docker-supabase" description="docker-compose de desarrollo, la cadena de conexión, el pooler y las comillas de Postgres." />
+  <Card icon="Layers" title="Prisma 6" href="/docs/2-dam/apis/backend/prisma" description="schema.prisma, cliente, migraciones, drift y db pull." />
+  <Card icon="Route" title="CRUD de usuarios" href="/docs/2-dam/apis/backend/crud-usuarios" description="Rutas, controlador y servicio; select sin passwordHash; P2025 y P2002." />
+  <Card icon="ShieldCheck" title="Validación con Zod 4" href="/docs/2-dam/apis/backend/validacion-zod" description="Schemas, safeParse, el middleware validate y los cambios de Zod 4." />
+  <Card icon="KeyRound" title="Autenticación" href="/docs/2-dam/apis/backend/autenticacion" description="Registro y login con bcrypt y JWT." />
+  <Card icon="Send" title="Probar APIs" href="/docs/2-dam/apis/backend/probar-apis" description="Postman, Fake Store API y JSON Server." />
+  <Card icon="ScrollText" title="Logs, rate limiting y tests" href="/docs/2-dam/apis/backend/logs-rate-limiting-tests" description="Winston, express-rate-limit, Jest y Supertest." />
+  <Card icon="Container" title="Docker y Swagger" href="/docs/2-dam/apis/backend/docker-swagger" description="Dockerfile multietapa, compose de producción y /api-docs." />
+</Cards>
+
+## Fechas de clase
+
+| Fecha | Qué se vio |
+| --- | --- |
+| 20/10 | Montar `node-server` desde cero (npm, TypeScript, nodemon, dotenv, Express) y primer vistazo a la referencia: `env.ts`, `app.ts`, `error.ts`, `db.ts`, `schema.prisma` y `docker-compose.yml`. |
+| 27/10 | La referencia en la v0.4.0 (estructura por módulos, CRUD de usuarios, `validate` y Zod 4) y en la v0.5.0 (auth). |
+| 28/10 | Vídeos: probar la Fake Store API con Postman y montar JSON Server (son las herramientas de las actividades de Angular). |
+| 03/11 | Supabase, migraciones de Prisma, drift y `db pull`; v0.8.0 (Winston y rate limiting), v0.9.0 (tests) y v1.0.0 (Docker y Swagger). |
+| 18/11 | Vídeo: solo se comprueba que `localhost:3000/games` responde antes de arrancar Angular. No se ve código de backend. |
+
+## Versiones que usa el proyecto
+
+No las cambies aunque haya otras más nuevas: el código de estas páginas es el de estas versiones.
+
+| Pieza | Versión |
+| --- | --- |
+| Express | 5 (`^5.1.0` en la referencia, `^5.3.0` en directo) |
+| Prisma | 6 (`@prisma/client ^6.18.0`, cliente generado 6.19.0) |
+| Zod | 4 (`4.1.12` instalada) |
+| PostgreSQL | 16 (imagen de Docker) |
+| TypeScript | `^5.9.3` en la referencia, `^7.0.2` en directo |
+| Node.js | v22.20.0 con nvm (el portátil del profesor) |
+
+## Lo que no está en este bloque
+
+- **Angular**, que consume estas APIs, va en [Acceso a Datos](/docs/2-dam/acceso-a-datos).
+- **Git** (ramas, tags, Git Graph), que se dio dentro de estas mismas clases, va en [Proyecto Intermodular](/docs/2-dam/proyecto-intermodular).
+- Lo que piden los requisitos y **no se ha dado** (seed, búsqueda y paginación con Prisma, transacciones, proteger rutas con el token, CORS con lista de orígenes…) está aparte, en [Backend para el proyecto](/docs/2-dam/apis/backend-proyecto), siempre marcado como no dado en clase.
+
+<MarcarCompletado />

@@ -1,0 +1,16 @@
+{
+  "title": "Angular: signals, rutas y formularios",
+  "icon": "Route",
+  "pages": [
+    "index",
+    "proj-game",
+    "signals",
+    "crud-padre-hijo",
+    "formularios-reactivos",
+    "rutas",
+    "rutas-parametros-guards",
+    "rxjs-y-errores",
+    "listado-filtros-y-token",
+    "errores-tipicos-angular"
+  ]
+}

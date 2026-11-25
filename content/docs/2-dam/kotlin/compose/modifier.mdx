@@ -1,0 +1,281 @@
+---
+title: Modifier y por qué importa el orden
+description: "Qué es un Modifier, los más usados en clase (fillMaxSize, size, padding, background, clickable, clip...), por qué el orden de la cadena cambia el resultado y cómo pasar el modifier desde fuera."
+icon: SlidersHorizontal
+---
+
+import { OrdenModifier } from '@/components/temas/compose/orden-modifier';
+
+Casi todos los composables aceptan un parámetro **`modifier`**. Con él cambias el **tamaño**, los **márgenes**, el **fondo**, la **forma**, o haces que algo **se pueda pulsar**, sin que el composable tenga que tener un parámetro para cada cosa. Es el equivalente a los atributos de estilo y de layout del XML, pero escrito en Kotlin y encadenado.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué es un `Modifier` y cómo se encadenan.
+  - Los modificadores que salieron en clase y para qué sirve cada uno.
+  - Por qué **el orden importa**: no es lo mismo `padding` y luego `background` que al revés.
+  - Cómo hacer que un elemento responda al toque con `clickable`.
+  - Pasar el `modifier` desde fuera y guardarlo en una variable.
+</Callout>
+
+## Una cadena de modificadores
+
+Un `Modifier` se empieza con `Modifier` y se le van **encadenando** funciones con puntos. Cada una devuelve un `Modifier` nuevo con un paso más:
+
+```kotlin
+Text(
+    text = "Hola",
+    modifier = Modifier
+        .fillMaxWidth()
+        .padding(16.dp)
+        .background(Color.White)
+        .clickable { }
+)
+```
+
+<DeClase fecha="07/10" proyecto="TipCalculator" nota="Modifier, en todas las clases; este ejemplo concreto es de la chuleta" />
+
+Cada línea con su punto delante es un paso. Lo habitual es escribir uno por línea para que se lean bien.
+
+## Los más usados
+
+| Modificador | Qué hace | Dónde salió |
+| --- | --- | --- |
+| `fillMaxSize()` | Ocupa todo el espacio disponible (ancho y alto). | `Scaffold(modifier = Modifier.fillMaxSize())`, 07/10 |
+| `fillMaxWidth()` | Ocupa todo el ancho. | El botón Calcular y los campos de texto, 07/10 |
+| `size(40.dp)` | Tamaño fijo (ancho y alto iguales). | La imagen de cada pokémon, 09/11 |
+| `height(60.dp)` | Alto fijo. | Cada fila de la lista de pokémon, 09/11 |
+| `padding(8.dp)` | Espacio alrededor. También `padding(all = 8.dp)`, `padding(horizontal = 8.dp)` o `padding(start = 10.dp, top = 10.dp, ...)`. | 07/10 y 09/11 |
+| `background(color)` | Pinta el fondo. | <NoDadoEnClase inline /> (está en la chuleta) |
+| `clickable { }` | Hace algo al pulsarlo. | `TaskCard`, 09/10; `PokemonListItem`, 09/11 |
+| `clip(CircleShape)` | Recorta la forma (aquí, un círculo). | La imagen de cada pokémon, 09/11 |
+| `padding(innerPadding)` y `consumeWindowInsets(innerPadding)` | Respetar el hueco de las barras de un `Scaffold`. | 07/10, 09/10, 23/10 |
+
+`16.dp` es una medida en **dp** (píxeles independientes de la densidad): 16 dp ocupan lo mismo a la vista en un móvil normal que en uno con muchísima resolución. Las medidas de la interfaz van siempre en `dp` (y los tamaños de letra, en `sp`).
+
+## El orden importa
+
+<NoDadoEnClase>
+  En clase no se explicó el orden de los modificadores (la chuleta de Compose solo dice que importa). Las reglas y la demo son la explicación estándar; el ejemplo de la imagen de cada pokémon, más abajo, sí es código de clase.
+</NoDadoEnClase>
+
+Esto es lo más importante de la página. **Cada modificador envuelve a los que vienen detrás**: el primero de la cadena es la capa de fuera y el último, la de dentro, pegada al contenido. Por eso cambiar el orden cambia el resultado.
+
+<Comparar columnas titulo="Mismos modificadores, distinto orden">
+  <Lado titulo="Fondo y luego padding">
+
+```kotlin
+Modifier
+    .background(Color.LightGray)
+    .padding(16.dp)
+```
+
+El fondo pinta **toda** la caja; el padding deja hueco **dentro** del fondo (como el `padding` de CSS).
+
+  </Lado>
+  <Lado titulo="Padding y luego fondo">
+
+```kotlin
+Modifier
+    .padding(16.dp)
+    .background(Color.LightGray)
+```
+
+Primero se deja el hueco y luego se pinta: el fondo **no** cubre el padding (como un `margin` de CSS).
+
+  </Lado>
+</Comparar>
+
+Muévelos tú. Activa, desactiva y reordena los modificadores, y pulsa la caja para ver qué zona responde al toque:
+
+<OrdenModifier />
+
+Las reglas que enseña la demo:
+
+1. **`background` antes de `padding`**: el fondo incluye el margen. **`padding` antes de `background`**: el margen queda fuera del fondo.
+2. **`clip` solo recorta lo que viene detrás**. `clip(...)` y luego `background(...)` da un fondo con esquinas redondeadas; al revés, el fondo ya está pintado y no se recorta.
+3. **`clickable` responde en el tamaño que tiene en ese punto de la cadena**. Si va después del `padding`, tocar en el margen no hace nada; si va antes, el margen también responde. Si va antes del `clip`, la onda del toque sale cuadrada.
+4. Lo mismo pasa con el tamaño: `size(40.dp).padding(10.dp)` deja menos sitio para el contenido (los 40 dp incluyen el padding), mientras que `padding(10.dp).size(40.dp)` ocupa 60 dp en total.
+
+Un ejemplo de clase donde se nota, la imagen de cada pokémon (09/11):
+
+```kotlin title="PokemonListScreen.kt"
+AsyncImage(
+    modifier = Modifier.size(40.dp).clip(CircleShape)
+        .padding(start = 10.dp, top = 10.dp, end = 12.dp),
+    model = imageUrl,
+    contentDescription = name
+)
+```
+
+- El valor de `bottom` del `padding` no se leía en las capturas <Dudoso nota="El final de la línea del padding de AsyncImage es ilegible." />.
+- Con este orden, la imagen mide 40 dp, se recorta en círculo y **después** se le quita el padding por dentro, así que la foto queda más pequeña que el círculo y desplazada. Si lo que se quería era separar la imagen del texto, el padding iría **antes** del `size`.
+
+## `clickable`
+
+<DeClase fecha="09/10" proyecto="ToDoApp" />
+
+```kotlin title="TaskCard"
+Card(
+    modifier = Modifier.clickable(enabled = true, onClick = toDetail)
+) { /* ... */ }
+```
+
+- `onClick` es **obligatorio**. El 09/10 salieron los errores de no pasarlo, y el IDE enseñó las **dos versiones** de `clickable`: una sencilla y otra que además recibe `interactionSource` e `indication` (para cambiar el efecto visual del toque).
+- `enabled = false` hace que deje de responder.
+- Según la documentación que consultó el profesor, una `Card` sola **no responde a toques**: por eso se le pone `Modifier.clickable`.
+- El 09/11, la fila de cada pokémon usaba el `modifier` que le llegaba: `modifier.clickable(onClick = toDetail)`.
+
+## Pasar el `modifier` desde fuera
+
+La convención (ver [Composables y layouts](/docs/2-dam/kotlin/compose/composables-y-layouts#la-convención-modifier-modifier--modifier)) es que cada composable reciba `modifier: Modifier = Modifier` y lo use **en su elemento de más fuera**, encadenándole lo suyo. Así, quien lo llama puede añadir cosas:
+
+<Comparar titulo="El parámetro modifier en la raíz">
+  <Lado titulo="09/10: se ignora el parámetro">
+
+```kotlin
+@Composable
+fun TaskListScreen(
+    modifier: Modifier = Modifier.Companion,
+    toCreate: () -> Unit,
+) {
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        // ...
+    ) { /* ... */ }
+}
+```
+
+Recibe `modifier`, pero el `Scaffold` usa un `Modifier` nuevo. Lo que le pase quien llama se pierde.
+
+  </Lado>
+  <Lado titulo="23/10: se usa el parámetro">
+
+```kotlin
+@Composable
+fun TaskListScreen(
+    modifier: Modifier = Modifier,
+    toCreate: () -> Unit,
+) {
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        // ...
+    ) { /* ... */ }
+}
+```
+
+Empieza por `modifier` (en minúscula, el parámetro) y le encadena `fillMaxSize()`.
+
+  </Lado>
+</Comparar>
+
+- Fíjate en la diferencia entre **`Modifier`** (la clase, un modificador vacío) y **`modifier`** (el parámetro que te han pasado).
+- `Modifier.Companion` y `Modifier` son lo mismo (ver [`object` y el Companion](/docs/2-dam/kotlin/compose/kotlin-clases-y-funciones#object)).
+- Lo normal es usar el `modifier` del parámetro **solo una vez**, en la raíz. Los hijos llevan su propio `Modifier`.
+
+## Guardar un `Modifier` en una variable
+
+<DeClase fecha="07/10" proyecto="TipCalculator" />
+
+Un `Modifier` es un valor como otro cualquiera: se puede guardar en un `val` y reutilizar. En la TipCalculator, todos los campos de texto compartían el mismo:
+
+```kotlin title="TipCalculatorScreen.kt"
+Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+    val columnModifier = Modifier
+        .consumeWindowInsets(innerPadding)
+        .padding(innerPadding)
+    Column(modifier = columnModifier) {
+        val textFieldsModifier = Modifier
+            .fillMaxWidth()
+            .padding(all = 8.dp)
+        TextField(
+            modifier = textFieldsModifier,
+            value = totalAmount,
+            // ...
+        )
+    }
+}
+```
+
+- El resto de parámetros del `TextField` no se ven en las capturas <Dudoso nota="El resto de parámetros del TextField del 07/10 no es visible." />.
+- En la ToDoApp se hizo lo mismo dentro del `Scaffold`, pero llamando a la variable **`modifier`**: `val modifier = Modifier.consumeWindowInsets(innerPadding).padding(innerPadding)`. Ojo: dentro de esa lambda, ese `modifier` **tapa** al parámetro `modifier` de la función, que deja de estar accesible ahí. Funciona, pero un nombre distinto (`contentModifier`) se lee mejor.
+- El final de esa línea sale cortado en varias capturas <Dudoso nota="El final de la línea consumeWindowInsets(...).padding(...) aparece cortado en varias capturas." />. Por qué van juntos `consumeWindowInsets` y `padding` lo verás en [Material 3](/docs/2-dam/kotlin/compose/material-3#scaffold).
+
+## Practica
+
+<CompletarCodigo
+  titulo="Un botón con fondo redondeado"
+  enunciado="Queremos un margen exterior de 8 dp sin fondo, y un fondo gris claro con esquinas redondeadas que responda al toque en toda su superficie."
+  lenguaje="kotlin"
+  codigo={`Text(
+    text = "Aceptar",
+    modifier = Modifier
+        .[[padding]](8.dp)
+        .[[clip]](RoundedCornerShape(12.dp))
+        .[[background]](Color.LightGray)
+        .clickable { onAceptar() }
+        .padding(16.dp)
+)`}
+/>
+
+<Quiz titulo="Test: Modifier" descripcion="6 preguntas">
+  <Pregunta enunciado="Con `Modifier.padding(16.dp).background(Color.Red)`, ¿el fondo rojo cubre el padding?" explicacion="El padding va primero (más fuera): deja el hueco y el fondo se pinta solo dentro. Se comporta como un `margin` de CSS.">
+    <Opcion>Sí, el fondo siempre cubre toda la caja.</Opcion>
+    <Opcion correcta>No: el padding queda fuera del fondo.</Opcion>
+    <Opcion>Solo si el texto es más pequeño que el padding.</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Quieres que una tarjeta responda al toque también en su margen. ¿Dónde pones `clickable`?" explicacion="`clickable` responde en el tamaño que tiene en ese punto de la cadena. Antes del `padding`, el margen todavía forma parte de su zona.">
+    <Opcion correcta>Antes del `padding`.</Opcion>
+    <Opcion>Después del `padding`.</Opcion>
+    <Opcion>Da igual, siempre responde en toda la tarjeta.</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`Modifier.background(Color.Gray).clip(CircleShape)` pinta un círculo gris." respuesta={false} explicacion="El fondo se pinta antes del `clip`, así que no se recorta: sale un rectángulo gris. Para un círculo, `clip(CircleShape)` va antes que `background`." />
+  <Pregunta enunciado="¿Cuál es la diferencia entre `Modifier` y `modifier` en `Scaffold(modifier = modifier.fillMaxSize())`?" explicacion="`modifier` es el parámetro que ha recibido la función (lo que le han pasado desde fuera); `Modifier` sería un modificador vacío y se perdería lo que te pasaron.">
+    <Opcion>Ninguna, Kotlin no distingue mayúsculas.</Opcion>
+    <Opcion correcta>`modifier` es el parámetro recibido; `Modifier` es un modificador vacío nuevo.</Opcion>
+    <Opcion>`Modifier` es para pantallas y `modifier` para componentes pequeños.</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué ocupa en total `Modifier.padding(10.dp).size(40.dp)`?" explicacion="El padding va por fuera: 40 dp de contenido más 10 dp por cada lado, 60 dp en total.">
+    <Opcion>40 dp</Opcion>
+    <Opcion>50 dp</Opcion>
+    <Opcion correcta>60 dp</Opcion>
+    <Opcion>20 dp</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="En `clickable`, el parámetro `onClick` es obligatorio." respuesta={true} explicacion="Salió el 09/10: sin `onClick` no compila." />
+</Quiz>
+
+<Flashcards titulo="Repaso: Modifier">
+  <Tarjeta frente="¿Qué es un `Modifier`?">Una cadena de pasos que cambian el tamaño, el margen, el fondo, la forma o el comportamiento de un composable.</Tarjeta>
+  <Tarjeta frente="¿En qué orden se aplican?">De fuera hacia dentro: el primero de la cadena envuelve a todos los demás.</Tarjeta>
+  <Tarjeta frente="`background` y luego `padding`">El fondo cubre también el margen (como el `padding` de CSS).</Tarjeta>
+  <Tarjeta frente="`padding` y luego `background`">El margen queda fuera del fondo (como un `margin` de CSS).</Tarjeta>
+  <Tarjeta frente="¿Qué recorta `clip`?">Solo lo que viene detrás en la cadena.</Tarjeta>
+  <Tarjeta frente="`modifier` frente a `Modifier`">`modifier` es el parámetro que te pasan; úsalo en la raíz. `Modifier` es uno vacío.</Tarjeta>
+  <Tarjeta frente="¿Qué es `dp`?">Píxeles independientes de la densidad: la unidad de medida de la interfaz.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Avatar redondo que se puede pulsar" dificultad="media">
+  Escribe la cadena de modificadores de un `Box` de 64 dp que sea un círculo con fondo gris claro, con 4 dp de separación del resto de elementos (sin fondo) y que responda al toque solo dentro del círculo, con la onda redondeada.
+
+  <Pista>El margen exterior sin fondo va el primero.</Pista>
+  <Pista>Para que el fondo y la onda salgan redondos, el `clip` va antes que `background` y que `clickable`.</Pista>
+
+  <Solucion>
+
+```kotlin
+Box(
+    modifier = Modifier
+        .padding(4.dp)
+        .size(64.dp)
+        .clip(CircleShape)
+        .background(Color.LightGray)
+        .clickable { onPulsar() }
+)
+```
+
+  El `padding(4.dp)` va fuera de todo (sin fondo ni clic). Después, 64 dp de tamaño, recorte en círculo y, ya recortados, el fondo y la zona de toque.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

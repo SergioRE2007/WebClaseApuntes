@@ -1,0 +1,417 @@
+---
+title: "Comunicación padre e hijo: input() y output()"
+description: "Cómo se pasan datos del componente padre al hijo con input() e input.required(), cómo avisa el hijo al padre con output() y emit(), qué es $event y para qué sirve ngOnChanges."
+icon: Workflow
+---
+
+Un componente hijo que siempre pinta lo mismo sirve de poco. Para que sea **reutilizable**, el padre tiene que poder darle datos y el hijo tiene que poder avisar al padre cuando pasa algo. Angular lo hace con dos funciones:
+
+| Sentido | En el hijo | En la plantilla del padre |
+| --- | --- | --- |
+| Padre → hijo | `dato = input<T>()` | `[dato]="valor"` (property binding) |
+| Hijo → padre | `aviso = output<T>()` y `this.aviso.emit(valor)` | `(aviso)="metodo($event)"` (event binding) |
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Declarar entradas con `input()` e `input.required()` y leerlas.
+  - Emitir eventos propios con `output()` y recibirlos en el padre con `$event`.
+  - Reaccionar a un cambio de entrada con `ngOnChanges`.
+  - Reconocer la sintaxis antigua con `@Input()` y `@Output()`.
+</Callout>
+
+<DeClase fecha="12/11" proyecto="proj-game" nota="el enunciado de la lámpara (14/10) ya lo anticipaba, pero allí no se llegó a hacer" />
+
+## Padre → hijo: `input()`
+
+<Callout type="warn" title="Los ejemplos de la lámpara no son código de clase">
+  En la lámpara de clase (14/10) el padre no le pasó nada al hijo y el hijo no llegó a mandar su estado: `estadoLampara` quedó declarada y sin usar. Los ejemplos de `input()` y `output()` con la lámpara de este apartado y del siguiente son una forma de terminarla, escrita para estos apuntes. Lo que sí se escribió en clase es el CRUD de videojuegos del 12/11, que tienes más abajo.
+</Callout>
+
+En el hijo se declara una propiedad con `input()`. El padre le da valor con un property binding usando **el mismo nombre**:
+
+<Tabs items={['Hijo', 'Padre']}>
+  <Tab value="Hijo">
+
+```ts title="lampara.component.ts"
+import { Component, input } from '@angular/core';
+
+@Component({
+  selector: 'app-lampara',
+  templateUrl: './lampara.component.html'
+})
+export class LamparaComponent {
+  enchufada = input(false);          // InputSignal<boolean>, por defecto false
+}
+```
+
+```html title="lampara.component.html"
+@if (enchufada()) {
+  <p>Con corriente</p>
+} @else {
+  <p>Sin corriente</p>
+}
+```
+
+  </Tab>
+  <Tab value="Padre">
+
+```html title="app.component.html"
+<app-lampara [enchufada]="enchufado"></app-lampara>
+```
+
+Cada vez que cambia `enchufado` en el padre, al hijo le llega el valor nuevo.
+
+  </Tab>
+</Tabs>
+
+- `input()` devuelve un **signal de solo lectura**: se lee **llamándolo**, `enchufada()`, también en la plantilla. El hijo no puede cambiarlo: el dato es del padre.
+- El tipo se deduce del valor por defecto (`input(false)` es `boolean`) o se escribe: `input<Product>()`. Sin valor por defecto, el tipo incluye `undefined`.
+- **`input.required<T>()`**: el padre está **obligado** a pasarlo. Si no lo hace, error de compilación. No lleva valor por defecto.
+
+## Hijo → padre: `output()`
+
+En el hijo se declara un `output()` y se llama a `.emit(valor)` cuando quieras avisar. En el padre se escucha como cualquier evento, y **`$event` es el valor emitido**:
+
+<Tabs items={['Hijo', 'Padre']}>
+  <Tab value="Hijo">
+
+```ts title="lampara.component.ts"
+import { Component, input, output } from '@angular/core';
+
+@Component({
+  selector: 'app-lampara',
+  templateUrl: './lampara.component.html'
+})
+export class LamparaComponent {
+  enchufada = input(false);
+  estadoCambiado = output<boolean>();
+
+  protected encendida = false;
+
+  protected pulsar(): void {
+    this.encendida = !this.encendida;
+    this.estadoCambiado.emit(this.encendida);
+  }
+}
+```
+
+```html title="lampara.component.html"
+<button (click)="pulsar()" [disabled]="!enchufada()">Interruptor</button>
+```
+
+  </Tab>
+  <Tab value="Padre">
+
+```html title="app.component.html"
+<p>Último estado recibido: {{ estadoLampara ? 'ENCENDIDA' : 'APAGADA' }}</p>
+
+<app-lampara
+  [enchufada]="enchufado"
+  (estadoCambiado)="estadoLampara = $event">
+</app-lampara>
+```
+
+`$event` es el `boolean` que ha emitido el hijo.
+
+  </Tab>
+</Tabs>
+
+El ejercicio del final completa la lámpara entera.
+
+## El caso de clase: el CRUD de videojuegos
+
+<DeClase fecha="12/11" proyecto="proj-game" />
+
+El 12/11 se usó para que el listado (el padre, `AppComponent`) le pase al formulario (el hijo, `CrudComponent`) el juego que hay que editar, y para que el formulario avise al padre cuando ha guardado. Recortado a lo que tiene que ver con la comunicación:
+
+```ts title="crud.component.ts (recortado)"
+import { Component, input, OnChanges, output, SimpleChanges } from '@angular/core';
+
+export class CrudComponent implements OnChanges {
+  edit = false;
+  editGame = input.required<Game | undefined>();
+  actualizaGames = output<Game>();
+  game: Game = { title: '', genre: '', platform: '', price: 0, stock: 0 };
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['editGame']?.currentValue) {
+      this.game = { ...changes['editGame'].currentValue };
+      this.edit = true;
+    }
+  }
+}
+```
+
+```html title="app.component.html (padre, recortado)"
+@for (game of this.games; track game.id) {
+  {{ game | json }}
+  <button type="button" (click)="this.editGame = game">Editar</button><br/>
+}
+
+<app-crud [editGame]="this.editGame" (actualizaGames)="onActualizaGames($event)"></app-crud>
+```
+
+- En la llamada `onActualizaGames($event)`, el <Dudoso nota="El resumen de clase dice que el `$event` es una suposición: no se lee bien en la captura.">`$event`</Dudoso> no se lee con seguridad.
+- `input.required<Game | undefined>()`: el padre tiene que pasarlo siempre, aunque al principio sea `undefined` (todavía no se ha pulsado "Editar").
+- Al guardar, el hijo hace `this.actualizaGames.emit(gameUpdated)` con el juego que devuelve la API.
+
+<Flujo
+  titulo="Editar un juego: del listado al formulario y vuelta"
+  nodos={["Usuario", "Padre (listado)", "Hijo (formulario)"]}
+>
+  <Mensaje de="Usuario" a="Padre (listado)" titulo="Pulsa Editar">
+    `(click)="this.editGame = game"` guarda en el padre el juego de esa fila.
+  </Mensaje>
+  <Mensaje de="Padre (listado)" a="Hijo (formulario)" titulo="[editGame]">
+    El property binding le pasa el juego nuevo al `input.required` del hijo.
+  </Mensaje>
+  <Mensaje de="Hijo (formulario)" a="Hijo (formulario)" titulo="ngOnChanges">
+    Ha cambiado una entrada: el hijo copia el juego en su `game` (con *spread*) y pasa a modo edición.
+  </Mensaje>
+  <Mensaje de="Usuario" a="Hijo (formulario)" titulo="Cambia datos y guarda">
+    El formulario actualiza `game` y, al guardar, el servicio hace el `PUT`.
+  </Mensaje>
+  <Mensaje de="Hijo (formulario)" a="Padre (listado)" tipo="respuesta" titulo="actualizaGames.emit(gameUpdated)">
+    El hijo avisa con el juego que ha devuelto la API. En el padre, `$event` es ese juego.
+  </Mensaje>
+  <Mensaje de="Padre (listado)" a="Padre (listado)" titulo="onActualizaGames($event)">
+    El padre actualiza su listado.
+  </Mensaje>
+</Flujo>
+
+<NoSeVio titulo="El .ts del padre">
+  No se ve el código de `AppComponent` en `proj-game`: ni `onActualizaGames`, ni `loadGames`, ni la paginación. El formulario y el resto del proyecto van en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado).
+</NoSeVio>
+
+## `ngOnChanges`: reaccionar a un cambio de entrada
+
+<DeClase fecha="12/11" proyecto="proj-game" />
+
+`ngOnChanges(changes: SimpleChanges)` se ejecuta cada vez que el padre cambia alguna entrada del hijo (y una vez antes de `ngOnInit`, si hay entradas enlazadas). `changes` es un objeto con una clave por cada entrada que ha cambiado:
+
+| Expresión | Qué es |
+| --- | --- |
+| `changes['editGame']` | El cambio de esa entrada, o `undefined` si no ha cambiado. |
+| `changes['editGame'].currentValue` | El valor nuevo. |
+| `changes['editGame'].previousValue` | El valor de antes. |
+| `changes['editGame'].isFirstChange()` | `true` la primera vez. |
+
+Se escribe `changes['editGame']` con corchetes porque `SimpleChanges` es un objeto con claves que no se conocen de antemano (una *index signature*), igual que los errores de los formularios.
+
+### ¿Por qué la copia con `{ ... }`?
+
+Los objetos se pasan **por referencia**, como en Java. Si el hijo hiciera `this.game = changes['editGame'].currentValue`, `game` sería **el mismo objeto** que está en la lista del padre: al escribir en el formulario cambiaría también el listado, aunque luego no se guardara. Con `{ ...currentValue }` (el *spread* de JavaScript) se crea una copia y el original no se toca hasta que se guarda.
+
+## La sintaxis antigua: `@Input()` y `@Output()` <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Está en la Guía10 (input y output mediante decoradores) del [repositorio de guías](https://github.com/hokahey007/guides-angular), pero en clase se usaron las funciones `input()` y `output()`.
+</NoDadoEnClase>
+
+`input()` y `output()` llegaron en Angular 17.1 y 17.3, así que en proyectos anteriores (y en mucho código y tutoriales de hoy) verás decoradores y `EventEmitter`. Funcionan igual de cara al padre (`[nombre]` y `(seleccionado)`), pero en el hijo se leen como propiedades normales, sin paréntesis:
+
+<Comparar titulo="El mismo hijo con las dos sintaxis">
+  <Lado titulo="Decoradores (antigua)">
+
+```ts
+import { Component, EventEmitter, Input, Output } from '@angular/core';
+
+export class AlumnoComponent {
+  @Input() nombre = '';
+  @Output() seleccionado = new EventEmitter<string>();
+
+  seleccionar(): void {
+    this.seleccionado.emit(this.nombre);
+  }
+}
+```
+
+En la plantilla del hijo: `{{ nombre }}`.
+
+  </Lado>
+  <Lado titulo="Funciones (la de clase)">
+
+```ts
+import { Component, input, output } from '@angular/core';
+
+export class AlumnoComponent {
+  nombre = input('');
+  seleccionado = output<string>();
+
+  seleccionar(): void {
+    this.seleccionado.emit(this.nombre());
+  }
+}
+```
+
+En la plantilla del hijo: `{{ nombre() }}`.
+
+  </Lado>
+</Comparar>
+
+## Practica
+
+<CompletarCodigo
+  titulo="Una tarjeta que avisa"
+  enunciado="El hijo recibe un producto obligatorio y avisa al padre con el producto al pulsar Añadir."
+  lenguaje="typescript"
+  codigo={`export class TarjetaComponent {
+  product = [[input.required]]<Product>();
+  added = [[output]]<Product>();
+
+  addToCart(): void {
+    this.added.[[emit]](this.[[product()]]);
+  }
+}`}
+/>
+
+<Quiz titulo="Test: input() y output()">
+  <Pregunta enunciado="En el hijo hay `precio = input(0);`. ¿Cómo se lee en su plantilla?" explicacion="`input()` devuelve un signal: se lee llamándolo.">
+    <Opcion>`{{ precio }}`</Opcion>
+    <Opcion correcta>`{{ precio() }}`</Opcion>
+    <Opcion>`{{ this.precio.value }}`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cómo le pasa el padre el valor `oferta` a esa entrada?" explicacion="Property binding con el nombre de la entrada: `[precio]`.">
+    <Opcion correcta>`<app-tarjeta [precio]="oferta">`</Opcion>
+    <Opcion>`<app-tarjeta (precio)="oferta">`</Opcion>
+    <Opcion>`<app-tarjeta precio()="oferta">`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado='El hijo hace `this.added.emit(producto)`. En el padre, `(added)="onAdded($event)"`. ¿Qué es `$event`?' explicacion="En un `output()`, `$event` es el valor que se le ha pasado a `emit`.">
+    <Opcion>El evento `click` del navegador</Opcion>
+    <Opcion correcta>El `producto` que ha emitido el hijo</Opcion>
+    <Opcion>El componente hijo</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Con `input.required<Game>()`, si el padre no pasa el dato, sale un error de compilación." respuesta={true} explicacion="Por eso se llama *required*: el padre está obligado a enlazarlo." />
+  <Pregunta tipo="vf" enunciado="El hijo puede cambiar el valor de una entrada `input()` con `.set()`." respuesta={false} explicacion="Las entradas son de solo lectura: el dato es del padre. Si el hijo quiere cambiar algo, avisa con un `output()` y el padre decide." />
+  <Pregunta enunciado="¿Para qué se hace `this.game = { ...changes['editGame'].currentValue }` en vez de asignar el objeto directamente?" explicacion="El *spread* crea una copia: así el formulario no modifica el objeto del listado del padre mientras se edita.">
+    <Opcion>Porque `currentValue` es de solo lectura</Opcion>
+    <Opcion correcta>Para trabajar con una copia y no tocar el objeto del padre hasta guardar</Opcion>
+    <Opcion>Porque si no, `ngOnChanges` no se vuelve a llamar</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: comunicación entre componentes">
+  <Tarjeta frente="`input<T>()`">Entrada del hijo. El padre la enlaza con `[nombre]="valor"`. Se lee con `nombre()`.</Tarjeta>
+  <Tarjeta frente="`input.required<T>()`">Entrada obligatoria: sin ella, error de compilación.</Tarjeta>
+  <Tarjeta frente="`output<T>()`">Evento propio del hijo. Se lanza con `.emit(valor)`; el padre escucha con `(nombre)="metodo($event)"`.</Tarjeta>
+  <Tarjeta frente="`$event` en un output">El valor que el hijo ha pasado a `emit`.</Tarjeta>
+  <Tarjeta frente="`ngOnChanges(changes)`">Se ejecuta cuando cambia una entrada. `changes['x'].currentValue` es el valor nuevo.</Tarjeta>
+  <Tarjeta frente="`@Input()` / `@Output()` + `EventEmitter`">La sintaxis antigua con decoradores. Hace lo mismo; en el hijo se lee sin paréntesis.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Termina la lámpara" dificultad="media">
+  Completa la Act Eval 4. El padre tiene el botón "Enchufar lámpara" / "Desenchufar", el texto del estado de conexión y "Último estado recibido: ...". El hijo pinta la bombilla con "ENCENDIDA" o "APAGADA" y tiene un interruptor que solo funciona si la lámpara está enchufada. Cada vez que se pulsa el interruptor, el hijo le manda al padre su estado.
+
+  <Pista>El padre le pasa `enchufado` al hijo con un `input()`. El hijo avisa con un `output<boolean>()`.</Pista>
+  <Pista>La bombilla solo luce si está enchufada **y** encendida: `enchufada() && encendida`.</Pista>
+
+  <Solucion>
+
+<NoDadoEnClase>Es una forma de terminar la actividad; en clase la lámpara se quedó sin la comunicación entre componentes.</NoDadoEnClase>
+
+```ts title="lampara.component.ts"
+import { Component, input, output } from '@angular/core';
+
+@Component({
+  selector: 'app-lampara',
+  templateUrl: './lampara.component.html',
+  styleUrl: './lampara.component.css'
+})
+export class LamparaComponent {
+  enchufada = input(false);
+  estadoCambiado = output<boolean>();
+
+  protected encendida = false;
+
+  protected pulsar(): void {
+    this.encendida = !this.encendida;
+    this.estadoCambiado.emit(this.encendida);
+  }
+}
+```
+
+```html title="lampara.component.html"
+@let luce = enchufada() && encendida;
+
+<div class="bombilla" [class.luce]="luce">
+  {{ luce ? 'ENCENDIDA' : 'APAGADA' }}
+</div>
+<button (click)="pulsar()" [disabled]="!enchufada()">Interruptor</button>
+```
+
+```ts title="app.component.ts"
+export class AppComponent {
+  enchufado = false;
+  estadoLampara = false;
+}
+```
+
+```html title="app.component.html"
+<div class="cab">
+  <span>Estado de conexión: {{ enchufado ? 'ENCHUFADA' : 'DESENCHUFADA' }}</span>
+  <button (click)="enchufado = !enchufado">
+    @if (enchufado) { Desenchufar } @else { Enchufar lámpara }
+  </button>
+  <span>Último estado recibido: {{ estadoLampara ? 'ENCENDIDA' : 'APAGADA' }}</span>
+</div>
+
+<app-lampara [enchufada]="enchufado" (estadoCambiado)="estadoLampara = $event"></app-lampara>
+```
+
+El padre no sabe nada de cómo funciona la bombilla: solo le pasa si hay corriente y escucha lo que le cuenta el hijo.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Lista y detalle" dificultad="dificil">
+  `AppComponent` tiene una lista de productos. Al pulsar uno, se guarda en `seleccionado` y se le pasa a `<app-detalle>`, que muestra su título y precio y tiene un botón "Quitar selección". Al pulsarlo, el detalle avisa al padre y el padre pone `seleccionado` a `undefined`.
+
+  <Pista>La entrada del detalle puede ser `undefined`: `producto = input<Product>()`. En la plantilla, comprueba con `@if (producto(); as p)`.</Pista>
+  <Pista>El aviso no necesita llevar datos: `output<void>()` y `emit()` sin argumentos.</Pista>
+
+  <Solucion>
+
+```ts title="detalle.component.ts"
+import { Component, input, output } from '@angular/core';
+import { Product } from '../../models/product';
+
+@Component({
+  selector: 'app-detalle',
+  templateUrl: './detalle.component.html'
+})
+export class DetalleComponent {
+  producto = input<Product>();
+  cerrar = output<void>();
+}
+```
+
+```html title="detalle.component.html"
+@if (producto(); as p) {
+  <h3>{{ p.title }}</h3>
+  <p>{{ p.price }} €</p>
+  <button (click)="cerrar.emit()">Quitar selección</button>
+} @else {
+  <p>Elige un producto</p>
+}
+```
+
+```html title="app.component.html"
+@for (product of products; track product.id) {
+  <button (click)="seleccionado = product">{{ product.title }}</button>
+}
+
+<app-detalle [producto]="seleccionado" (cerrar)="seleccionado = undefined"></app-detalle>
+```
+
+```ts title="app.component.ts (lo que importa)"
+products: Product[] = [];
+seleccionado: Product | undefined;
+```
+
+`@if (producto(); as p)` guarda el valor en `p` para no llamar al signal cada vez. No salió en clase, pero es parte de la sintaxis de `@if` <NoDadoEnClase inline />.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

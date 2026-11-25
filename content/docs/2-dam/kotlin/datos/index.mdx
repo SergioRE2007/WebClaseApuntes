@@ -1,0 +1,80 @@
+---
+title: "Datos en Android: corrutinas, Retrofit, Room y DataStore"
+description: "Cómo saca y guarda datos una app Android en clase: corrutinas, Flow, Retrofit contra PokeAPI, Room 3 y DataStore. Clases del 23/10 al 18/11."
+icon: Database
+---
+
+Este bloque reúne todo lo que se dio en clase sobre **datos** en Android: cómo esperar a la red sin congelar la pantalla, cómo pedir datos a una API con **Retrofit**, cómo guardarlos en una base local con **Room** y cómo recordar una preferencia (el modo oscuro) con **DataStore**. Todo se hizo con Kotlin, Compose y Hilt, sobre los proyectos de clase **ToDoApp**, **PokeApp2627**, **Room** y **ToDoOfflineFirst**.
+
+<Callout title="Cómo leer estas páginas">
+  Lo que se vio en clase lleva la fecha (por ejemplo, «Visto en clase el 26/10»). Lo que **no** se dio va con la etiqueta **No dado en clase**. Las lecturas que no se veían bien en las capturas llevan la marca **[dudoso]**, y lo que no se llegó a ver aparece como un hueco: no se ha rellenado con código inventado.
+</Callout>
+
+## Páginas, en orden de estudio
+
+<Cards>
+  <Card icon="Timer" title="Corrutinas" href="/docs/2-dam/kotlin/datos/corrutinas" description="suspend, viewModelScope.launch, delay y por qué no GlobalScope ni runBlocking." />
+  <Card icon="Send" title="PokeAPI y Postman" href="/docs/2-dam/kotlin/datos/pokeapi-y-postman" description="La API de ejemplo, la paginación con limit y offset y cómo probarla antes de programar." />
+  <Card icon="Globe" title="Retrofit 3 con Gson" href="/docs/2-dam/kotlin/datos/retrofit" description="Interfaz de la API, Response, DTO y toModel(), DataSource, NetworkModule y permiso de INTERNET." />
+  <Card icon="Waves" title="Flow y stateIn" href="/docs/2-dam/kotlin/datos/flow-y-statein" description="Datos que avisan cuando cambian y cómo los convierte el ViewModel en estado." />
+  <Card icon="Database" title="Room 3" href="/docs/2-dam/kotlin/datos/room" description="Gradle con KSP, @Entity, @Dao, @Database y el módulo de Hilt." />
+  <Card icon="RefreshCw" title="Offline-first" href="/docs/2-dam/kotlin/datos/offline-first" description="Repositorio con fuente remota y local, refresh() y la PokeApp leyendo de Room." />
+  <Card icon="ToggleRight" title="DataStore" href="/docs/2-dam/kotlin/datos/datastore" description="Guardar el modo oscuro con booleanPreferencesKey y llevarlo hasta un Switch." />
+</Cards>
+
+## Qué se dio y cuándo
+
+| Fecha | Proyecto | Qué se vio | Página |
+| --- | --- | --- | --- |
+| 23/10 | ToDoApp (rama `dev`) | Repositorio con funciones `suspend`, `delay`, `viewModelScope.launch`, `load()` e `init` | [Corrutinas](/docs/2-dam/kotlin/datos/corrutinas) |
+| 26/10 | PokeApp2627 | PokeAPI, Postman, GitHub de Retrofit y Gson, Git | [PokeAPI y Postman](/docs/2-dam/kotlin/datos/pokeapi-y-postman) |
+| 26/10 | PokeApp2627 | Retrofit 3 con Gson, `Response<T>`, DTO y `toModel()`, DataSource, `NetworkModule`, permiso `INTERNET` | [Retrofit](/docs/2-dam/kotlin/datos/retrofit) |
+| 09/11 (bloque 1) | PokeApp2627 | `Flow` en DataSource y repositorio, `map` + `stateIn`, por qué no `GlobalScope` | [Flow y stateIn](/docs/2-dam/kotlin/datos/flow-y-statein) |
+| 09/11 (bloque 2) | PokeApp2627 | Fuente local en memoria, repositorio offline-first, `runBlocking` en el `init` | [Offline-first](/docs/2-dam/kotlin/datos/offline-first) |
+| 13/11 | Room | Room 3 con KSP y Hilt: `@Entity`, `@Dao`, `@Database`, módulo con `@Provides` | [Room 3](/docs/2-dam/kotlin/datos/room) |
+| 16/11 | PokeApp2627 | La PokeApp leyendo de Room y el Database Inspector (un fragmento de 3 minutos) | [Offline-first](/docs/2-dam/kotlin/datos/offline-first) |
+| 18/11 | ToDoOfflineFirst (rama `datastore`) | DataStore Preferences para el modo oscuro, capas de ajustes y `SettingsViewModel` | [DataStore](/docs/2-dam/kotlin/datos/datastore) |
+
+El resto de lo que se vio esos días no es de este bloque: el ViewModel, los estados sellados, la navegación y Hilt en general están en [Arquitectura Android](/docs/2-dam/kotlin/arquitectura), y la `TopAppBar` y el tema, en [Kotlin y Compose](/docs/2-dam/kotlin/compose). La Splash Screen del 13/11 solo se menciona aquí por su `delay`.
+
+## La idea de todo el bloque
+
+Todas las clases construyen la misma cadena de capas. Cada capa solo conoce la **interfaz** de la de debajo, y Hilt las conecta.
+
+<Mermaid
+  titulo="Capas de datos de la PokeApp2627"
+  chart={`flowchart LR
+    UI["Pantalla (Compose)"] --> VM[ViewModel]
+    VM --> R[Repositorio]
+    R --> RDS[RemoteDataSource]
+    R --> LDS[LocalDataSource]
+    RDS --> API["PokeApi (Retrofit)"]
+    API --> WEB[(PokeAPI)]
+    LDS --> DAO["DAO (Room)"]
+    DAO --> DB[(Base de datos)]`}
+/>
+
+## Versiones de clase
+
+No las cambies aunque haya otras más nuevas: el código de estas páginas está pensado para ellas.
+
+| Librería | Artefacto | Versión |
+| --- | --- | --- |
+| Retrofit | `com.squareup.retrofit2:retrofit` | 3.0.0 |
+| Converter Gson | `com.squareup.retrofit2:converter-gson` | 3.0.0 |
+| Gson | `com.google.code.gson` | 2.13.1 en el log de Gradle <Dudoso nota="En la página de GitHub se leyó 2.15.0." /> |
+| Room 3 | `androidx.room3:room3-runtime` y `room3-compiler` (con `ksp`) | 3.0.3 |
+| KSP | `com.google.devtools.ksp` | 2.3.12 |
+| Hilt | `com.google.dagger:hilt-android` y `hilt-android-compiler` | 2.60.1 |
+| Lifecycle ViewModel | `androidx.lifecycle:lifecycle-viewmodel-ktx` | 2.11.0 |
+| DataStore Preferences | `androidx.datastore:datastore-preferences` | 1.3.0 <NoDadoEnClase inline /> |
+
+La versión de DataStore no se ve en las capturas del 18/11: la 1.3.0 es con la que está comprobado el código que no es de clase.
+
+<Callout type="warn" title="Room 3 no es Room 2">
+  En clase se usa **Room 3**: los paquetes son `androidx.room3.*` y algunas anotaciones (como `@Relation`) no se escriben igual. Casi todo lo que encuentres en internet es de Room 2.
+</Callout>
+
+## Lo que se quedó a medias
+
+Las relaciones entre tablas de Room (que no salieron en ninguna clase), las peticiones `POST`, `PUT` y `DELETE`, llamar a vuestra propia API desde el emulador, mandar el token en cada petición, el módulo que crea el `DataStore` y cómo llega el modo oscuro al tema no se dieron (o no se vieron enteros). Cada página lo indica en su sitio, y la forma de hacerlo está en [Para el proyecto](/docs/2-dam/kotlin/para-el-proyecto).

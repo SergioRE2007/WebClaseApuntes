@@ -1,0 +1,481 @@
+---
+title: La ToDoApp de principio a fin
+description: Repaso de todo el bloque con la app de tareas de clase. Cómo creció del 09/10 al 23/10, qué hace cada archivo, qué pasa por dentro al usarla, la deuda técnica que quedó y lo que no se llegó a ver.
+icon: ListTodo
+---
+
+La **ToDoApp** es la app con la que se dio casi todo este bloque: una lista de tareas en la que se pueden ver las tareas, crear una nueva y editar una existente. Esta página la recorre entera, de la primera carpeta al último estado sellado, para que veas cómo encajan las piezas de las páginas anteriores.
+
+<DeClase fecha="09/10, 16/10, 23/10" proyecto="ToDoApp" rama="dev" nota="paquete com.alanturing.todoapp" />
+
+## Los proyectos de clase
+
+La ToDoApp no fue el único proyecto. Este bloque usa ejemplos de todos:
+
+| Proyecto | Paquete | Fechas | Qué aporta a la arquitectura |
+| --- | --- | --- | --- |
+| TipCalculator | `com.alanturing.tipcalculator.ui` | 07/10 | El estado pasa a un ViewModel. |
+| ToDoApp (rama `dev`) | `com.alanturing.todoapp` | 09/10 a 23/10 | Capas, Hilt con `@Binds`, navegación, `StateFlow` y estados sellados. |
+| PokeApp2627 | `com.alanturing.pokeapp2627` | 26/10, 09/11, 16/11 | DataSource, `@HiltAndroidApp`, `@Provides` para Retrofit, `savedStateHandle.toRoute()`. |
+| Room | <Dudoso nota="También se lee `com.turinglan.room`.">`com.turingalan.room`</Dudoso> | 13/11 | `@Provides` con `@ApplicationContext`, `@Inject constructor()` vacío, `by viewModels()`. |
+| ToDoOfflineFirst (rama `datastore`) | <Dudoso nota="El nombre varía entre capturas.">`com.turingalan.todoofflinefirst`</Dudoso> | 18/11 | Capas completas de ajustes, grafos anidados, `popBackStack()`. |
+
+## Cómo creció la app
+
+<Steps>
+  <Step>
+
+#### Estructura y modelo
+
+  Tres paquetes de partida: `data` (datos y repositorio), `di` (inyección de dependencias, con `ApplicationModule` y `ToDoApplication`) y `ui.theme`. El modelo, tal como se repasó el 16/10:
+
+```kotlin title="data/Task.kt (16/10)"
+data class Task(
+    val id: Int,
+    var title: String,
+    var description: String,
+    val createdAt: String,
+    var isCompleted: Boolean = false,
+    var limitDate: String,
+)
+```
+
+  </Step>
+  <Step>
+
+#### Repositorio en memoria y módulo de Hilt
+
+  La interfaz `TaskRepository`, su implementación `TaskRepositoryInMemory` (con `@Inject constructor()` y dos tareas de prueba, "Dummy" y "Dummy2", creadas en el `init`) y el `ApplicationModule` con `@Binds @Singleton`. Ver [Capas](/docs/2-dam/kotlin/arquitectura/capas) y [Módulos de Hilt](/docs/2-dam/kotlin/arquitectura/hilt-modulos).
+
+  </Step>
+  <Step>
+
+#### La lista, por capas
+
+  `MainActivity` con `@AndroidEntryPoint` recibía el repositorio con `@Inject lateinit var` y se lo pasaba a `TaskListScreen`. La pantalla se construyó capa a capa: `Scaffold` vacío, `LazyColumn` con `items(key = { it.id })`, `TaskCard` (con `Card`, `Column`, `Row` y un `Switch` de solo lectura) y el botón flotante con el icono <Dudoso nota="Casi todas las capturas leen `add_24px`; otra lectura es `add_24dp`.">`add_24px`</Dudoso>.
+
+  </Step>
+  <Step>
+
+#### El parche y la navegación (09/10)
+
+  El botón de crear se probó primero con un estado local y un `if`. Después llegaron `Routes.kt`, `ToDoNavHost.kt`, los callbacks `toCreate` y `toDetail`, la tarjeta pulsable y una `TaskDetailScreen(id)` de prueba. Ver [Navegación](/docs/2-dam/kotlin/arquitectura/navegacion).
+
+  </Step>
+  <Step>
+
+#### ViewModel con Hilt (09/10)
+
+  `TaskListViewModel` con `@HiltViewModel` e `@Inject constructor`, `hilt-navigation-compose` en Gradle y `viewModel: TaskListViewModel = hiltViewModel()` en la pantalla. El repositorio dejó de ser un parámetro de la pantalla. Ver [Inyección con Hilt](/docs/2-dam/kotlin/arquitectura/hilt).
+
+  </Step>
+  <Step>
+
+#### StateFlow y el formulario (16/10)
+
+  `MutableStateFlow` en el ViewModel, `collectAsStateWithLifecycle()` en la pantalla, y `TaskCreateViewModel` con dos `TextFieldState` y `onCreate()`. Se depuró con *breakpoints*, Step Into y *Recomposition State*. Ver [ViewModel y StateFlow](/docs/2-dam/kotlin/arquitectura/viewmodel-y-stateflow).
+
+  </Step>
+  <Step>
+
+#### Corrutinas y estados sellados (23/10)
+
+  El repositorio pasó a funciones `suspend` con `delay(5_000L)`, y las pantallas a estados sellados: `TaskListScreenState` y `TaskCreateScreenState`, con `load()`, `when` exhaustivo y pantalla con estado y sin estado. Ver [Estados de pantalla](/docs/2-dam/kotlin/arquitectura/estados-de-pantalla).
+
+  </Step>
+  <Step>
+
+#### Detalle y textos traducidos (capturas del documento)
+
+  En las capturas del documento de la ToDoApp aparecen además el paquete por pantalla (`tasklist`, `taskcreate`, `taskdetail`), `TaskDetailViewModel` leyendo el id con `savedStateHandle.toRoute()` y el botón con `stringResource(R.string.save)`, con `values/strings.xml` y `values-es/strings.xml`.
+
+  </Step>
+</Steps>
+
+## Qué hace cada archivo
+
+El árbol completo está en [Capas de la app](/docs/2-dam/kotlin/arquitectura/capas). Esta tabla dice qué hace cada archivo y si se llegó a ver en clase:
+
+| Archivo | Qué hace | Se ve |
+| --- | --- | --- |
+| `di/ToDoApplication.kt` | `Application` con `@HiltAndroidApp`. | Solo en el árbol: su código no se abre. |
+| `di/ApplicationModule.kt` | Ata `TaskRepository` a `TaskRepositoryInMemory` con `@Binds @Singleton`. | Entero (09/10, 16/10). |
+| `data/Task.kt` | El modelo de una tarea. | En el repaso del 16/10. |
+| `data/repository/TaskRepository.kt` | La interfaz del repositorio. | Entera (16/10 y, con `suspend`, 23/10). |
+| `data/repository/TaskRepositoryInMemory.kt` | Las tareas en una lista en memoria. | En parte: faltan `readOne`, `complete`, `uncomplete`, `update` y la declaración de `nextId`. |
+| `MainActivity.kt` | `@AndroidEntryPoint` y `setContent { ToDoAppTheme { ToDoNavHost() } }`. | Entera (09/10). |
+| `ui/navigation/Routes.kt` | La clase sellada con las rutas. | Entera (09/10, 16/10). |
+| `ui/navigation/ToDoNavHost.kt` | El `NavHost` con un destino por pantalla. | La versión del 09/10. No se ve cómo se conectan los `toList` de crear y detalle. |
+| `ui/tasklist/TaskListViewModel.kt` | Estado de la lista y `load()`. | Entero (23/10). |
+| `ui/tasklist/TaskListScreen.kt` | La pantalla con estado y la sin estado, y `TaskCard`. | Entera (23/10). |
+| `ui/taskcreate/TaskCreateViewModel.kt` | Los `TextFieldState`, `onCreate()` y el estado `Creating` y `Created`. | Entero (23/10). |
+| `ui/taskcreate/TaskCreateScreen.kt` | El formulario y el `when` por estado. | En parte: la captura se corta. |
+| `ui/taskdetail/TaskDetailScreen.kt` | El formulario de editar y el botón "Update". | Entera (documento). |
+| `ui/taskdetail/TaskDetailViewModel.kt` | Lee el id de la ruta, carga la tarea y guarda los cambios. | Entero (documento). |
+
+## Lo que pasa cuando usas la app
+
+<Flujo
+  titulo="De abrir la app a crear una tarea"
+  nodos={["ToDoApplication", "MainActivity", "NavHost", "Pantallas", "ViewModels", "Repositorio"]}
+  intervalo={3200}
+>
+  <Mensaje de="ToDoApplication" a="ToDoApplication" titulo="@HiltAndroidApp">
+    Android crea la `Application`. Hilt monta el contenedor de la app con lo que dicen los módulos.
+  </Mensaje>
+  <Mensaje de="ToDoApplication" a="MainActivity" titulo="onCreate()">
+    Android abre `MainActivity`, que es `@AndroidEntryPoint`.
+  </Mensaje>
+  <Mensaje de="MainActivity" a="NavHost" titulo="setContent { ToDoNavHost() }">
+    La Activity pinta el tema y el `NavHost`. Ahí empieza Compose.
+  </Mensaje>
+  <Mensaje de="NavHost" a="Pantallas" titulo="startDestination = Route.TaskList">
+    El `NavHost` pinta la ruta de inicio: `TaskListScreen`.
+  </Mensaje>
+  <Mensaje de="Pantallas" a="ViewModels" titulo="hiltViewModel()">
+    La pantalla pide su ViewModel. Hilt crea `TaskListViewModel` y le pasa el `TaskRepositoryInMemory` único (`@Singleton`). En su `init`, el repositorio ya ha creado "Dummy" y "Dummy2".
+  </Mensaje>
+  <Mensaje de="ViewModels" a="Repositorio" titulo="readAll()">
+    `init { load() }`: el ViewModel publica `Loading` y llama a `readAll()` dentro de una corrutina.
+  </Mensaje>
+  <Mensaje de="Repositorio" a="ViewModels" tipo="respuesta" titulo="Dummy, Dummy2">
+    Tras el `delay`, devuelve una copia de la lista.
+  </Mensaje>
+  <Mensaje de="ViewModels" a="Pantallas" tipo="respuesta" titulo="Success(tasks)">
+    El `StateFlow` emite `Success` y la lista pinta una `TaskCard` por tarea.
+  </Mensaje>
+  <Mensaje de="Pantallas" a="NavHost" titulo="toCreate()">
+    El usuario pulsa +. La pantalla solo llama a su callback.
+  </Mensaje>
+  <Mensaje de="NavHost" a="Pantallas" titulo="navigate(Route.TaskCreate)">
+    El `NavHost` mete `TaskCreate` en la pila y pinta `TaskCreateScreen`, que pide su `TaskCreateViewModel` con el **mismo** repositorio.
+  </Mensaje>
+  <Mensaje de="Pantallas" a="ViewModels" titulo="onCreate()">
+    El usuario escribe en los dos campos y pulsa el botón. El ViewModel publica `Creating`.
+  </Mensaje>
+  <Mensaje de="ViewModels" a="Repositorio" titulo="create(...)">
+    Llama a `create` con el texto de los `TextFieldState` y la fecha provisional.
+  </Mensaje>
+  <Mensaje de="ViewModels" a="Pantallas" tipo="respuesta" titulo="Created">
+    Publica `Created` y la pantalla llama a `toList()` para volver. Cómo conecta el `NavHost` ese `toList` no se ve en clase.
+  </Mensaje>
+</Flujo>
+
+<Callout title="Por qué @Singleton importa tanto aquí">
+  Todos los ViewModels reciben **la misma** instancia de `TaskRepositoryInMemory`, así que una tarea creada en una pantalla existe para las demás. Como solo vive en memoria, **se pierde al cerrar la app**: para guardarla de verdad hace falta Room, que se vio el 13/11 en otro proyecto.
+</Callout>
+
+## La deuda técnica que quedó
+
+El propio código de clase tiene varios `TODO` y apaños que el profesor dejó marcados o que se ven al leerlo. Ninguno impide que la app funcione en clase, pero no los copies tal cual en tu proyecto:
+
+| Qué | Dónde se explica |
+| --- | --- |
+| El `StateFlow` del repositorio recibe siempre la misma lista y no emite. | [ViewModel y StateFlow](/docs/2-dam/kotlin/arquitectura/viewmodel-y-stateflow#la-lista-que-no-se-actualiza) |
+| `viewModel.load()` dentro del `when` de la pantalla, y una rama `Initial` que nunca se ejecuta. | [Estados de pantalla](/docs/2-dam/kotlin/arquitectura/estados-de-pantalla) |
+| Las ramas `Error` son `TODO()`. | [Estados de pantalla](/docs/2-dam/kotlin/arquitectura/estados-de-pantalla) |
+| `route: String` en las rutas tipadas, que sobra. | [Navegación](/docs/2-dam/kotlin/arquitectura/navegacion) |
+| El `val modifier` que tapa al parámetro `modifier` en `TaskListScreen`. | [Estados de pantalla](/docs/2-dam/kotlin/arquitectura/estados-de-pantalla) |
+| Las fechas como texto. | Aquí debajo |
+
+### Las fechas como `String`
+
+<Comparar titulo="La fecha límite de una tarea">
+  <Lado tipo="evitar">
+
+```kotlin
+data class Task(
+    // ...
+    val createdAt: String,
+    var limitDate: String,
+)
+
+_repository.create(
+    title = titleState.text.toString(),
+    description = descriptionState.text.toString(),
+    limitDate = "9999.31.12"
+)
+```
+
+El profesor lo dejó marcado: `TODO Buscar un tipo correcto para fecha` y `TODO Deuda técnica`. Además, la fecha provisional sale en dos formatos distintos: `"9999.31.12"` en el ViewModel y `"31.12.9999"` en el parche del botón. Con texto no se puede ordenar ni comparar bien.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+data class Task(
+    // ...
+    val createdAt: LocalDate,
+    val limitDate: LocalDate,
+)
+
+_repository.create(
+    title = titleState.text.toString(),
+    description = descriptionState.text.toString(),
+    limitDate = LocalDate.of(2026, 12, 31)
+)
+```
+
+<NoDadoEnClase inline /> `java.time.LocalDate` en el modelo (la firma de `create` pasa a recibir `limitDate: LocalDate`). Si los datos van a una API o a Room, en el DTO y en la base de datos se guarda como texto ISO (`"2026-12-31"`) y se convierte al leer.
+
+  </Lado>
+</Comparar>
+
+## Lo que no se llegó a ver
+
+<NoSeVio titulo="Huecos de la ToDoApp">
+  - El contenido de `ToDoApplication` (solo sale en el árbol).
+  - Dónde se declara `nextId` y las funciones `readOne`, `complete`, `uncomplete` y `update` del repositorio en memoria con `suspend`.
+  - Cómo se rellena el estado `Error` de las pantallas.
+  - Cómo conecta el `NavHost` los callbacks `toList` y cómo se vuelve a la lista después de "Save".
+  - El tramo de 24:29 a 26:26 de la clase del 23/10, que no tiene capturas de código.
+</NoSeVio>
+
+## Repaso final
+
+<Quiz titulo="Test: la ToDoApp entera" descripcion="7 preguntas">
+  <Pregunta enunciado="¿Qué es lo primero que tiene que estar en su sitio para que Hilt funcione al abrir la app?" explicacion="Android crea la `Application` antes que la Activity. Si no tiene `@HiltAndroidApp` (y no está en el manifest), Hilt no arranca y la Activity con `@AndroidEntryPoint` falla.">
+    <Opcion correcta>`ToDoApplication` con `@HiltAndroidApp`, registrada en el manifest</Opcion>
+    <Opcion>El `NavHost`</Opcion>
+    <Opcion>`TaskListViewModel`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué una tarea creada en `TaskCreateScreen` existe también para `TaskListViewModel`?" explicacion="Los dos ViewModels reciben el mismo `TaskRepositoryInMemory`, porque el `@Binds` lleva `@Singleton`. Comparten la lista.">
+    <Opcion>Porque las dos pantallas están en el mismo archivo</Opcion>
+    <Opcion correcta>Porque los dos ViewModels reciben el mismo repositorio, gracias a `@Singleton`</Opcion>
+    <Opcion>Porque el `NavHost` copia las tareas al volver</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Las tareas de la ToDoApp se conservan al cerrar y volver a abrir la app." respuesta={false} explicacion="Viven en una lista en memoria. Se pierden al cerrar el proceso. Para guardarlas hace falta Room." />
+  <Pregunta enunciado="Si quisieras que la ToDoApp guardara las tareas en Room, ¿qué tendrías que tocar como mínimo, además de escribir el repositorio nuevo?" explicacion="Las capas de arriba solo conocen la interfaz `TaskRepository`. Basta con cambiar el `@Binds` de `ApplicationModule` para que apunte a la nueva implementación (y proveer Room).">
+    <Opcion correcta>El `@Binds` de `ApplicationModule`, para que apunte a la nueva implementación</Opcion>
+    <Opcion>Todos los ViewModels</Opcion>
+    <Opcion>Todas las pantallas y el `NavHost`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué no conviene guardar la fecha límite como `String`?" explicacion="Con texto no se puede ordenar ni comparar bien (y en clase salió en dos formatos distintos). Lo estándar es `LocalDate` en el modelo.">
+    <Opcion correcta>Porque con texto no se puede ordenar ni comparar bien</Opcion>
+    <Opcion>Porque `String` no se puede guardar en un `data class`</Opcion>
+    <Opcion>Porque Hilt no sabe inyectar textos</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En la versión del documento, ¿quién lee el id de la tarea que se va a editar?" explicacion="`TaskDetailViewModel` pide `SavedStateHandle` en su constructor y hace `savedStateHandle.toRoute()` para sacar `route.id`.">
+    <Opcion>`MainActivity`</Opcion>
+    <Opcion correcta>`TaskDetailViewModel`, con `savedStateHandle.toRoute()`</Opcion>
+    <Opcion>`TaskCard`, que guarda el id</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué partes de la ToDoApp no se llegan a ver en clase?" explicacion="El código de `ToDoApplication` y el relleno del estado `Error` no salen en ninguna captura. El módulo con `@Binds` y el `collectAsStateWithLifecycle()` sí se ven.">
+    <Opcion correcta>El contenido de `ToDoApplication`</Opcion>
+    <Opcion correcta>Cómo se rellena el estado `Error`</Opcion>
+    <Opcion>El `ApplicationModule` con `@Binds`</Opcion>
+    <Opcion>Cómo recoge la pantalla el `StateFlow`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: la ToDoApp">
+  <Tarjeta frente="Orden de arranque">`ToDoApplication` (`@HiltAndroidApp`) → `MainActivity` (`@AndroidEntryPoint`) → `ToDoNavHost` → `TaskListScreen` → `hiltViewModel()`.</Tarjeta>
+  <Tarjeta frente="Las tres pantallas">`TaskListScreen` (lista), `TaskCreateScreen` (crear) y `TaskDetailScreen` (editar), cada una con su ViewModel y su paquete.</Tarjeta>
+  <Tarjeta frente="¿Quién decide qué repositorio se usa?">`ApplicationModule`, con `@Binds @Singleton`. Cambiando esa línea se cambia el repositorio de toda la app.</Tarjeta>
+  <Tarjeta frente="Estados de la pantalla de crear">`Initial` (formulario), `Creating` (cargando), `Created` (volver a la lista) y `Error` (`TODO()`).</Tarjeta>
+  <Tarjeta frente="¿Dónde viven las tareas?">En una `mutableListOf<Task>()` dentro de `TaskRepositoryInMemory`. Se pierden al cerrar la app.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Marcar una tarea como completada" dificultad="media">
+  En las capturas no se ven `complete(id)` ni `uncomplete(id)` del repositorio en memoria con `suspend`. Escríbelas para que cambien `isCompleted` de la tarea y **publiquen la lista nueva** en el `StateFlow`, de forma que quien observe `tasks` se entere. Supón que `_taskFlow` ya es `MutableStateFlow<List<Task>>` (la versión arreglada de [ViewModel y StateFlow](/docs/2-dam/kotlin/arquitectura/viewmodel-y-stateflow#la-lista-que-no-se-actualiza)).
+
+  <Pista>Las dos funciones hacen lo mismo con un `Boolean` distinto: sácalo a una función privada.</Pista>
+  <Pista>Busca la posición con `indexOfFirst { it.id == id }`, sustituye la tarea por una copia con `copy(isCompleted = ...)` y publica `_taskList.toList()`.</Pista>
+
+  <Solucion>
+
+```kotlin title="TaskRepositoryInMemory.kt (añadido)"
+override suspend fun complete(id: Int) {
+    changeCompleted(id, isCompleted = true)
+}
+
+override suspend fun uncomplete(id: Int) {
+    changeCompleted(id, isCompleted = false)
+}
+
+private fun changeCompleted(id: Int, isCompleted: Boolean) {
+    val index = _taskList.indexOfFirst { it.id == id }
+    if (index != -1) {
+        _taskList[index] = _taskList[index].copy(isCompleted = isCompleted)
+        _taskFlow.value = _taskList.toList()
+    }
+}
+```
+
+`indexOfFirst` devuelve `-1` si no hay ninguna tarea con ese id, así que no se rompe. En la depuración del 16/10 se ve un `changeCompleted` de clase que hacía `taskToChange.isCompleted = isCompleted` sobre la propia tarea (por eso `isCompleted` era `var`). Funciona igual en memoria, pero no publica nada en el `StateFlow`, así que nadie se entera del cambio.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Tu propia app, de punta a punta" dificultad="dificil">
+  Monta una app de notas mínima con toda la arquitectura del bloque: un repositorio en memoria que exponga `val notes: Flow<List<Note>>`, su módulo de Hilt, un `NoteListViewModel` que construya su estado (`Loading` o `Success(notes)`) a partir de ese `Flow`, un `NoteCreateViewModel` con un `TextFieldState`, las dos pantallas (la lista con un botón + y el formulario) y el `NavHost` con sus rutas. Al guardar una nota se vuelve a la lista y la nota tiene que aparecer.
+
+  <Pista>Para que la lista se entere de las notas nuevas, el repositorio tiene que publicar una lista nueva en un `MutableStateFlow<List<Note>>` cada vez que crea una.</Pista>
+  <Pista>En el ViewModel de la lista, usa `map` y `stateIn` sobre `repository.notes`, como en `SettingsViewModel` del 18/11.</Pista>
+  <Pista>Las pantallas reciben callbacks: `toCreate` en la lista y `onBack` en el formulario. El `NavHost` les pasa `navigate` y `popBackStack()`.</Pista>
+
+  <Solucion>
+
+```kotlin title="data/NoteRepository.kt"
+data class Note(val id: Int, val text: String)
+
+interface NoteRepository {
+    val notes: Flow<List<Note>>
+    suspend fun create(text: String): Note
+}
+
+class NoteRepositoryInMemory @Inject constructor() : NoteRepository {
+    private val _notes = MutableStateFlow<List<Note>>(emptyList())
+    override val notes: Flow<List<Note>> = _notes.asStateFlow()
+    private var nextId = 1
+
+    override suspend fun create(text: String): Note {
+        val note = Note(id = nextId, text = text)
+        nextId++
+        _notes.value = _notes.value + note
+        return note
+    }
+}
+```
+
+```kotlin title="di/AppModule.kt"
+@Module
+@InstallIn(SingletonComponent::class)
+interface AppModule {
+    @Binds
+    @Singleton
+    fun bindNoteRepository(repository: NoteRepositoryInMemory): NoteRepository
+}
+```
+
+```kotlin title="ui/notelist/NoteListViewModel.kt"
+sealed class NoteListScreenState {
+    object Loading : NoteListScreenState()
+    class Success(val notes: List<Note>) : NoteListScreenState()
+}
+
+@HiltViewModel
+class NoteListViewModel @Inject constructor(
+    repository: NoteRepository
+) : ViewModel() {
+    val state: StateFlow<NoteListScreenState> = repository.notes
+        .map<List<Note>, NoteListScreenState> { NoteListScreenState.Success(it) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000L),
+            initialValue = NoteListScreenState.Loading
+        )
+}
+```
+
+```kotlin title="ui/notelist/NoteListScreen.kt"
+@Composable
+fun NoteListScreen(
+    toCreate: () -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: NoteListViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    when (state) {
+        NoteListScreenState.Loading -> NoteListContent(toCreate = toCreate, modifier = modifier, isLoading = true)
+        is NoteListScreenState.Success -> NoteListContent(
+            toCreate = toCreate,
+            modifier = modifier,
+            isLoading = false,
+            notes = (state as NoteListScreenState.Success).notes
+        )
+    }
+}
+
+@Composable
+fun NoteListContent(
+    toCreate: () -> Unit,
+    modifier: Modifier = Modifier,
+    isLoading: Boolean = true,
+    notes: List<Note> = listOf(),
+) {
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        floatingActionButton = {
+            FloatingActionButton(onClick = toCreate) { Text("+") }
+        }
+    ) { innerPadding ->
+        LazyColumn(modifier = Modifier.padding(innerPadding)) {
+            item { if (isLoading) CircularProgressIndicator() }
+            items(items = notes, key = { it.id }) {
+                Text(it.text)
+            }
+        }
+    }
+}
+```
+
+```kotlin title="ui/notecreate/NoteCreate.kt"
+@HiltViewModel
+class NoteCreateViewModel @Inject constructor(
+    private val _repository: NoteRepository
+) : ViewModel() {
+    val textState = TextFieldState()
+
+    fun onCreate() {
+        viewModelScope.launch {
+            _repository.create(text = textState.text.toString())
+        }
+    }
+}
+
+@Composable
+fun NoteCreateScreen(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: NoteCreateViewModel = hiltViewModel(),
+) {
+    Column(modifier = modifier) {
+        OutlinedTextField(state = viewModel.textState)
+        Button(
+            onClick = {
+                viewModel.onCreate()
+                onBack()
+            }
+        ) {
+            Text("Guardar")
+        }
+    }
+}
+```
+
+```kotlin title="ui/navigation/NotesNavHost.kt"
+@Serializable
+sealed class Route {
+    @Serializable object NoteList : Route()
+    @Serializable object NoteCreate : Route()
+}
+
+@Composable
+fun NotesNavHost() {
+    val controller = rememberNavController()
+    NavHost(navController = controller, startDestination = Route.NoteList) {
+        composable<Route.NoteList> {
+            NoteListScreen(toCreate = { controller.navigate(Route.NoteCreate) })
+        }
+        composable<Route.NoteCreate> {
+            NoteCreateScreen(onBack = { controller.popBackStack() })
+        }
+    }
+}
+```
+
+Y, como siempre, `@HiltAndroidApp` en la `Application` (registrada en el manifest) y `@AndroidEntryPoint` en la Activity, que hace `setContent { NotesNavHost() }`.
+
+Detalles que conviene entender:
+
+- La lista se actualiza sola porque el repositorio publica una lista **nueva** (`_notes.value + note`) y el ViewModel de la lista está suscrito con `stateIn`. El `NoteListViewModel` sigue vivo mientras la lista está en la pila, así que no hace falta volver a cargar.
+- La función sin estado se llama `NoteListContent` en vez de repetir el nombre como en clase. Así ninguna llamada puede encajar con las dos a la vez.
+- Volver justo después de `onCreate()` funciona aquí porque `create` no espera nada: la corrutina termina antes de salir. Si guardar tardara (una API, Room), al salir de la pantalla su ViewModel se destruye y la corrutina se cancela. Entonces habría que volver cuando el estado pasara a `Created`, con `LaunchedEffect`, que no se dio en clase.
+
+</Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

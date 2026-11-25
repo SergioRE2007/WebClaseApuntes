@@ -1,0 +1,307 @@
+---
+title: Errores con su código HTTP
+description: El errorHandler y los códigos de Prisma que se vieron en clase, y cómo lanzar errores con su código desde los servicios con una clase HttpError, añadir P2003 y elegir bien entre 400, 401, 403, 404, 409 y 500.
+icon: TriangleAlert
+---
+
+Los requisitos piden que la API use **códigos HTTP adecuados** para distinguir "operaciones correctas, peticiones incorrectas, recursos inexistentes, conflictos y errores internos", y que Angular los capture y se los explique al usuario (§7). La gestión de errores **sí se dio en clase**; aquí está lo que se vio y una mejora para lanzar errores con su código desde cualquier servicio.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - El `errorHandler` y la traducción de errores de Prisma de clase.
+  - Una clase `HttpError` para lanzar errores con su código desde los servicios.
+  - Qué código usar en cada caso, y `P2003`.
+</Callout>
+
+## Lo que se vio en clase
+
+<DeClase fecha="20/10, 27/10, 03/11" proyecto="node-server-26-27" />
+
+### El manejador de errores
+
+```ts title="src/middleware/error.ts (v0.8.0, de clase)"
+import type { Request, Response, NextFunction } from 'express';
+import { logger } from '../utils/logger.js';
+
+export function errorHandler(err: any, req: Request, res: Response, _next: NextFunction) {
+  logger.error(`${req.method} ${req.path} - ${err.message}`);
+  logger.error(err.stack);
+  const status = err.status || 500;
+  res.status(status).json({ message: err.message || 'Error interno' });
+}
+```
+
+- Tiene **cuatro parámetros** `(err, req, res, next)`. Es lo que hace que Express lo trate como manejador de errores, aunque no use `next` (por eso lleva `_` delante).
+- Usa `err.status` si el error lo trae y, si no, `500`.
+- Va con `app.use(errorHandler)` **al final** de `app.ts`, después de todas las rutas. En clase se vio que el orden de los middlewares importa y que el `errorHandler` va siempre el último.
+- La versión anterior a la v0.8.0 tenía `_req` y usaba `console.error(err)` en vez del logger de Winston.
+
+### Errores de Prisma en el controlador
+
+```ts title="users.controller.ts (fragmento de clase)"
+} catch (error: any) {
+  if (error.code === 'P2025') {
+    return res.status(404).json({ message: 'Usuario no encontrado' });
+  }
+  if (error.code === 'P2002') {
+    return res.status(409).json({ message: 'El email ya está en uso' });
+  }
+  res.status(500).json({ message: error.message });
+}
+```
+
+| Código de Prisma | Cuándo salta | HTTP en clase |
+| --- | --- | --- |
+| `P2025` | `update` o `delete` de una fila que no existe | `404` |
+| `P2002` | Se repite un valor `@unique` | `409` |
+
+### Errores de negocio con un mensaje
+
+En el módulo de auth, el servicio lanza `throw new Error('Email ya registrado')` y el controlador **compara el texto** para elegir el código: `409` si es ese mensaje, `401` con "Credenciales inválidas" y `400` con el resto.
+
+Los códigos que salieron en clase: `200` (`res.json`), `201` (crear), `400` (validación o id que no es número), `401` (credenciales o falta de token), `404` (no existe), `409` (único repetido) y `500`.
+
+## Lanzar errores con su código: HttpError <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  La clase `HttpError`, traducir `P2003` y el `errorHandler` que distingue los tipos de error no se han dado en clase.
+</NoDadoEnClase>
+
+Comparar el texto del mensaje funciona, pero si cambias una coma del mensaje en el servicio, el controlador deja de reconocerlo. Es más cómodo que el propio error lleve el código. Una clase pequeña en `src/utils/httpError.ts`:
+
+```ts title="src/utils/httpError.ts"
+export class HttpError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+```
+
+`public status` en el constructor crea la propiedad y la rellena a la vez, como un `val` en el constructor de Kotlin. En Java sería un atributo `status` y un `this.status = status` en el constructor.
+
+<Comparar titulo="Quién decide el código">
+  <Lado titulo="Como en clase: el controlador traduce el mensaje">
+
+```ts
+// servicio
+throw new Error('Email ya registrado');
+
+// controlador
+catch (e: any) {
+  if (e.message === 'Email ya registrado') {
+    return res.status(409).json({ message: e.message });
+  }
+  res.status(400).json({ message: e.message });
+}
+```
+
+  </Lado>
+  <Lado titulo="Con HttpError: el servicio dice el código">
+
+```ts
+// servicio
+throw new HttpError(409, 'Email ya registrado');
+
+// controlador: nada. En Express 5 el error
+// llega solo al errorHandler.
+```
+
+  </Lado>
+</Comparar>
+
+### El errorHandler que lo entiende
+
+El de clase ya traduce `P2002` y `P2025` en los controladores. Este los centraliza en el `errorHandler` y añade `HttpError` y `P2003`:
+
+<Recorrido
+  titulo="src/middleware/error.ts"
+  lenguaje="ts"
+  codigo={`import type { NextFunction, Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
+import { HttpError } from '../utils/httpError.js';
+
+export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
+  if (err instanceof HttpError) {
+    return res.status(err.status).json({ error: err.message });
+  }
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'Ya existe' });
+    if (err.code === 'P2025') return res.status(404).json({ error: 'No encontrado' });
+    if (err.code === 'P2003') return res.status(409).json({ error: 'Tiene datos relacionados' });
+  }
+  res.status(500).json({ error: 'Error interno' });
+}`}
+>
+  <Paso lineas="5" titulo="Cuatro parámetros y err: unknown">
+    Los cuatro parámetros, como el de clase. `unknown` en vez de `any` obliga a comprobar qué es el error antes de usarlo.
+  </Paso>
+  <Paso lineas="6-8" titulo="Errores propios">
+    Si es un `HttpError`, ya trae su código y su mensaje: se responde con ellos.
+  </Paso>
+  <Paso lineas="9-13" titulo="Errores conocidos de Prisma">
+    `PrismaClientKnownRequestError` es la clase de los errores con código `P20xx`. `P2003` salta cuando falla una clave ajena: al borrar un padre con `onDelete: Restrict` que tiene hijos, o al crear un hijo con un `categoriaId` que no existe.
+  </Paso>
+  <Paso lineas="14" titulo="Todo lo demás: 500 sin detalles">
+    Cualquier otro error es culpa del servidor. Se responde `500` con un mensaje genérico: el detalle (el SQL, la ruta de un archivo…) no se manda al cliente.
+  </Paso>
+</Recorrido>
+
+- Igual que en clase, va con `app.use(errorHandler)` al final de `app.ts`.
+- Si usas el logger de Winston de clase, escribe el error con `logger.error` antes del `500`, para que quede en `logs/error.log`.
+- El de clase responde con la clave `message`; este, con `error`. **Elige una** y úsala en toda tu API (y en Angular, que es quien la lee). Si mantienes los tests de clase, que comprueban `res.body.message`, usa `message`.
+- El `errorHandler` de clase ya lee `err.status`, así que un `HttpError` también funcionaría con él. La diferencia es que el de clase manda `err.message` incluso en los `500`.
+
+<Flujo
+  titulo="Un error de negocio llega al cliente"
+  nodos={["Cliente", "Controlador", "Servicio", "errorHandler"]}
+>
+  <Mensaje de="Cliente" a="Controlador" titulo="POST /api/pedidos/1/confirmar">
+    El controlador llama al servicio. No tiene `try/catch`.
+  </Mensaje>
+  <Mensaje de="Controlador" a="Servicio" titulo="confirmarPedido(1)">
+    El servicio comprueba el pedido y el stock.
+  </Mensaje>
+  <Mensaje de="Servicio" a="Servicio" titulo="throw new HttpError(409, ...)">
+    No hay stock: el servicio lanza el error con su código.
+  </Mensaje>
+  <Mensaje de="Servicio" a="errorHandler" titulo="Express 5 lo pasa solo">
+    En Express 5, si una función `async` de una ruta lanza (o su promesa falla), el error llega al `errorHandler` sin `try/catch` ni `next(err)`.
+  </Mensaje>
+  <Mensaje de="errorHandler" a="Cliente" tipo="respuesta" titulo="409 Conflict">
+    `{ "error": "No hay stock suficiente del producto 3" }`. Angular lo lee y se lo enseña al usuario.
+  </Mensaje>
+</Flujo>
+
+## Qué código usar
+
+La mayoría salieron en clase (los de la lista de arriba). `204`, `403` y `P2003` <NoDadoEnClase inline /> no.
+
+| Código | Cuándo | Ejemplo |
+| --- | --- | --- |
+| `200` | Bien, y devuelve algo | `GET` y `PUT` o `PATCH` |
+| `201` | Creado | `POST`: `res.status(201).json(nuevo)` |
+| `204` | Bien, sin nada que devolver | `DELETE`: `res.status(204).end()` |
+| `400` | Datos mal | Falla Zod, o el id no es un número |
+| `401` | Sin token o token malo | `requireAuth`, credenciales incorrectas en el login |
+| `403` | Con token, pero sin permiso | Tocar algo de otro usuario |
+| `404` | No existe | `P2025`, o `findUnique` devuelve `null` |
+| `409` | Choca con lo que hay | `P2002` (duplicado), `P2003` (tiene hijos), sin stock |
+| `500` | Fallo del servidor | Cualquier otra cosa. No se manda el detalle al cliente |
+
+<Callout type="warn" title="401 no es lo mismo que 403">
+  `401` es "no sé quién eres" (falta el token o no vale). `403` es "sé quién eres, pero esto no es tuyo". Y un `204` no lleva cuerpo: con `res.status(204).json(...)` el JSON no llega.
+</Callout>
+
+## Para la defensa: provocar cada error <NoDadoEnClase inline />
+
+<Terminal titulo="bash">
+{`$ curl -i "http://localhost:3000/api/productos?limit=500"
+HTTP/1.1 400 Bad Request
+$ curl -i http://localhost:3000/api/productos/99999
+HTTP/1.1 404 Not Found
+$ curl -i -X POST http://localhost:3000/api/categorias -H "Content-Type: application/json" -d '{"nombre":"Periféricos"}'
+HTTP/1.1 409 Conflict`}
+</Terminal>
+
+- `-i` enseña la línea de estado y las cabeceras, además del cuerpo (aquí solo se ve la primera línea).
+- El `400`: un dato que Zod no deja pasar. El `404`: un id que no existe. El `409`: un nombre de categoría repetido (`P2002`).
+- En PowerShell, `curl` es otro comando: usa `curl.exe` o prueba lo mismo con Postman, como en clase.
+
+## Practica
+
+<Quiz titulo="Test: errores HTTP" descripcion="7 preguntas">
+  <Pregunta enunciado="Un usuario intenta registrarse con un email que ya existe. ¿Qué código devuelves?" explicacion="Choca con un dato que ya hay (un `@unique`): `409 Conflict`. En clase, el registro respondía `409` con «Email ya registrado», y `updateUserCtrl` traducía `P2002` a `409`.">
+    <Opcion>`400`</Opcion>
+    <Opcion>`404`</Opcion>
+    <Opcion correcta>`409`</Opcion>
+    <Opcion>`500`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Intentas borrar una categoría que tiene productos y la relación es `onDelete: Restrict`. ¿Qué error de Prisma salta?" explicacion="`P2003`: falla la restricción de clave ajena. Se traduce a `409`.">
+    <Opcion>`P2002`</Opcion>
+    <Opcion correcta>`P2003`</Opcion>
+    <Opcion>`P2025`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="El manejador de errores de Express puede tener solo tres parámetros si no usa `next`." respuesta={false} explicacion="Express reconoce el manejador de errores porque tiene cuatro parámetros. Con tres, lo trata como un middleware normal y los errores no le llegan." />
+  <Pregunta enunciado="¿Dónde va `app.use(errorHandler)` en `app.ts`?" explicacion="Al final, después de todas las rutas: Express pasa los errores a los manejadores de error que vienen después.">
+    <Opcion>Al principio, antes de `helmet`</Opcion>
+    <Opcion>Justo después de `express.json()`</Opcion>
+    <Opcion correcta>Al final, después de todas las rutas</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Una petición trae un token válido, pero intenta cambiar el pedido de otro usuario. ¿Qué código es el adecuado?" explicacion="El usuario está identificado (no es 401), pero no tiene permiso sobre ese recurso: `403 Forbidden`.">
+    <Opcion>`401`</Opcion>
+    <Opcion correcta>`403`</Opcion>
+    <Opcion>`404`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué hace `constructor(public status: number, message: string)` en TypeScript?" explicacion="El modificador `public` en un parámetro del constructor declara la propiedad y la asigna. `message` no lo lleva, así que solo es un parámetro que se pasa a `super`.">
+    <Opcion>Solo recibe el parámetro, sin guardarlo</Opcion>
+    <Opcion correcta>Crea la propiedad `status` y la rellena con el valor recibido</Opcion>
+    <Opcion>Crea dos propiedades públicas, `status` y `message`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="En Express 5, si un controlador `async` lanza un error y no tiene `try/catch`, el error llega al `errorHandler`." respuesta={true} explicacion="Express 5 captura las promesas rechazadas de los manejadores de ruta y las pasa al manejador de errores. En Express 4 había que hacer `next(err)` a mano." />
+</Quiz>
+
+<Flashcards titulo="Repaso: códigos HTTP">
+  <Tarjeta frente="`201` frente a `204`">`201`: se ha creado (con el recurso en el cuerpo). `204`: todo bien, sin cuerpo (típico del `DELETE`).</Tarjeta>
+  <Tarjeta frente="`400`">La petición trae datos mal: falla Zod, o el id no es un número.</Tarjeta>
+  <Tarjeta frente="`401` frente a `403`">`401`: no se sabe quién eres (sin token o token malo). `403`: se sabe, pero no tienes permiso.</Tarjeta>
+  <Tarjeta frente="`404`">No existe: `P2025` o `findUnique` que devuelve `null`.</Tarjeta>
+  <Tarjeta frente="`409`">Conflicto con lo que hay: duplicado (`P2002`), tiene hijos (`P2003`), sin stock, ya confirmado.</Tarjeta>
+  <Tarjeta frente="`500`">Fallo del servidor. Mensaje genérico, sin detalles internos.</Tarjeta>
+  <Tarjeta frente="`HttpError`">Un `Error` con `status`. El servicio lo lanza y el `errorHandler` responde con ese código.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Elige el código" dificultad="facil">
+  ¿Qué código devuelve la API en cada caso?
+
+  1. `GET /api/productos/abc`.
+  2. `POST /api/productos` con `precio: -5`.
+  3. `DELETE /api/productos/3`, y se borra.
+  4. `GET /api/pedidos/mios` sin cabecera `Authorization`.
+  5. `POST /api/pedidos/1/confirmar` de un pedido ya confirmado.
+  6. La base de datos está caída.
+
+  <Pista>Repasa la tabla: datos mal, sin token, no existe, conflicto y fallo del servidor.</Pista>
+
+  <Solucion>
+
+1. `400`: el id no es un número (en clase, "ID inválido").
+2. `400`: Zod no deja pasar un precio negativo (si el schema tiene `.positive()`, que es lo que debería tener).
+3. `204`: borrado, sin nada que devolver.
+4. `401`: falta el token.
+5. `409`: choca con el estado que tiene el pedido.
+6. `500`: no es culpa del cliente. Sin detalles en la respuesta.
+
+</Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Crear un producto de una categoría que no existe" dificultad="media">
+  Escribe el servicio `crearProducto(datos)` para que, si la `categoriaId` no existe, la API responda con un error claro en vez de un `500`. Hazlo de dos formas: dejando que salte el error de Prisma, y comprobándolo tú antes.
+
+  <Pista>Si no compruebas nada, Prisma lanza `P2003` (falla la clave ajena), y el `errorHandler` de esta página ya lo convierte en `409`.</Pista>
+  <Pista>Para comprobarlo antes, busca la categoría con `findUnique` y lanza un `HttpError` si es `null`.</Pista>
+
+  <Solucion>
+
+```ts title="productos.service.ts"
+// Forma 1: el errorHandler traduce P2003 a 409
+export function crearProducto(datos: { nombre: string; precio: number; stock: number; categoriaId: number }) {
+  return prisma.producto.create({ data: datos });
+}
+
+// Forma 2: comprobarlo antes, con un mensaje más claro
+export async function crearProductoComprobando(datos: { nombre: string; precio: number; stock: number; categoriaId: number }) {
+  const categoria = await prisma.categoria.findUnique({ where: { id: datos.categoriaId } });
+  if (!categoria) {
+    throw new HttpError(400, 'La categoría no existe');
+  }
+  return prisma.producto.create({ data: datos });
+}
+```
+
+Las dos valen. Con la primera, el mensaje del `errorHandler` ("Tiene datos relacionados") está pensado para los borrados y confunde al crear; la segunda da un mensaje que Angular puede enseñar tal cual. Puedes usar `400` o `404`: lo importante es que no sea un `500` y que el mensaje se entienda.
+
+</Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

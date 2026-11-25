@@ -1,0 +1,476 @@
+---
+title: "proj-game: JSON Server, GameService y paginación"
+description: El proyecto de videojuegos de clase desde cero. API falsa con JSON Server 0.17.4, el modelo Game, el servicio GameService y la paginación con _page, _limit y observe 'response'.
+icon: Gamepad2
+---
+
+import { SimuladorPaginacion } from '@/components/temas/angular-avanzado/simulador-paginacion';
+
+`proj-game` es el proyecto con el que se trabajó en Angular del 28/10 al 18/11. Empieza como un catálogo de juegos (Act 9), crece hasta un CRUD con formulario (Act 10) y termina migrado a formularios reactivos y desplegado en Vercel (Act 11). Aquí tienes la base: el proyecto, la API falsa, el modelo, el servicio y el listado paginado.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Crear el proyecto y montar una API REST falsa con **JSON Server**.
+  - Escribir el modelo `Game` y el servicio `GameService` con `HttpClient`.
+  - Paginar en el servidor con `?_page=` y `&_limit=`, y leer el total con `observe: 'response'`.
+  - Separar responsabilidades: el componente pinta y el servicio habla con la API.
+</Callout>
+
+## Crear el proyecto
+
+<DeClase fecha="28/10" proyecto="proj-game" nota="Act 9, Catálogo de videojuegos con Angular Service" />
+
+Se crea con el CLI respondiendo **CSS** a la hoja de estilos y **No** al SSR/SSG. Sale un proyecto *standalone* (sin `NgModule`) con `app.config.ts`, `app.routes.ts` y `app.component.*`, y git se inicializa solo.
+
+<Terminal titulo="WSL Ubuntu">
+{`$ ng new proj-game
+? Which stylesheet format would you like to use? CSS
+? Do you want to enable Server-Side Rendering (SSR) and Static Site Generation (SSG/Prerendering)? No
+$ cd proj-game
+$ code .`}
+</Terminal>
+
+Al abrirlo en VS Code sobre WSL sale el aviso de *Restricted Mode*: hay que pulsar **Trust Folder & Continue** para poder usar la terminal. El `package.json` trae los paquetes de Angular en `^19.2.0`, el CLI en `^19.2.27`, `rxjs ~7.8.0`, `zone.js ~0.15.0` y `typescript ~5.7.2`.
+
+Así queda el proyecto cuando ya tiene el CRUD (05/11 en adelante):
+
+<Files>
+  <File name="db.json" />
+  <File name="package.json" />
+  <Folder name="src" defaultOpen>
+    <Folder name="app" defaultOpen>
+      <Folder name="crud">
+        <File name="crud.component.ts" />
+        <File name="crud.component.html" />
+        <File name="crud.component.css" />
+      </Folder>
+      <Folder name="models" defaultOpen>
+        <File name="game.ts" />
+      </Folder>
+      <Folder name="services" defaultOpen>
+        <File name="game.service.ts" />
+      </Folder>
+      <File name="app.component.ts" />
+      <File name="app.component.html" />
+      <File name="app.config.ts" />
+    </Folder>
+    <File name="styles.css" />
+  </Folder>
+</Files>
+
+## JSON Server: una API REST falsa
+
+Para programar el cliente Angular antes de tener una API de verdad, la actividad usa **JSON Server**: lee un fichero `db.json` y crea una API REST completa a partir de él. **Cada clave de primer nivel es un recurso**: si el JSON tiene `"games": [...]`, tienes `/games` y `/games/:id`.
+
+<DeClase fecha="28/10, 05/11" proyecto="proj-game" />
+
+El documento de la actividad pide expresamente la **versión clásica**, la 0.17.4 (la 1.x funciona distinto):
+
+<Terminal titulo="WSL Ubuntu">
+{`$ npm install --save-dev json-server@0.17.4
+npm warn deprecated connect-pause@0.1.1
+30 vulnerabilities (2 low, 12 moderate, 14 high, 2 critical)
+$ npx json-server --watch db.json --port 3000`}
+</Terminal>
+
+<Callout type="warn" title="npm audit fix --force, no a ciegas">
+  npm sugiere `npm audit fix --force` para las vulnerabilidades. La opción `--force` puede actualizar paquetes a versiones incompatibles (por ejemplo, saltar a otra versión de JSON Server) y romper el proyecto.
+</Callout>
+
+`db.json` va en la raíz del proyecto. Así empieza el de la guía (con `stock`, que se añadió el 05/11):
+
+```json title="db.json"
+{
+  "games": [
+    { "id": 1, "title": "Pixel Runner", "genre": "Platform", "platform": "PC", "price": 14.99, "stock": 12 },
+    { "id": 2, "title": "Space Colony", "genre": "Strategy", "platform": "PC", "price": 29.99, "stock": 8 },
+    { "id": 3, "title": "Neon Racer", "genre": "Racing", "platform": "PlayStation", "price": 39.99, "stock": 5 },
+    { "id": 4, "title": "Dungeon Quest", "genre": "RPG", "platform": "PC", "price": 24.99, "stock": 15 }
+  ]
+}
+```
+
+El `db.json` de clase tenía 15 juegos sin `stock` (del 1, "Pixel Runner", al 15, "Robot Factory"). El 05/11 se le pegaron al final los 4 de la guía con ids 16 a 19 y títulos "Pixel Runner 2", "Space Colony 2"…, para tener más páginas. Así quedó un `db.json` con juegos con `stock` y sin él; no se ve que se corrija.
+
+### Lo que ofrece JSON Server
+
+| Petición | Qué hace |
+| --- | --- |
+| `GET /games` | Lista todos los juegos |
+| `GET /games/3` | El juego con `id` 3 (404 si no existe) |
+| `POST /games` | Crea un juego; JSON Server le pone el `id` |
+| `PUT /games/3` | Sustituye el juego 3 entero |
+| `DELETE /games/3` | Borra el juego 3 |
+| `GET /games?_page=2&_limit=5` | La página 2, de 5 en 5 |
+
+- `--watch` recarga la API cuando cambia `db.json`, y los `POST`/`PUT` se guardan en ese mismo fichero.
+- `--port 3000`: la API va en el 3000 y Angular en el 4200.
+- Escribiendo `s` y pulsando Intro en la terminal de JSON Server se guarda una copia (*snapshot*) de la base.
+- `GET /` devuelve 404; `GET /games` devuelve 200 (o 304 si el navegador ya lo tiene en caché, como salió el 05/11).
+
+### Scripts de package.json
+
+Escribir `json-server ...` a secas en la terminal da `command not found`: los programas instalados en el proyecto están en `node_modules/.bin`, que no está en el `PATH`. Se arranca con `npx` o con un script de `package.json`, que sí los encuentra.
+
+```json title="package.json (scripts de proj-game)"
+"scripts": {
+  "start": "ng serve",
+  "build": "ng build",
+  "watch": "ng build --watch --configuration development",
+  "test": "ng test",
+  "api": "json-server --watch db.json --port 3000",
+  "api-db-json": "json-server --watch db.json --port 3000",
+  "api-db-js": "json-server --watch db.js --port 3000",
+  "export:json": "node export-json.js"
+}
+```
+
+Los tres últimos vienen de un anuncio del profesor ("json-server carga de esquema mediante script con faker"), con dos ficheros adjuntos: `db.js` genera los juegos con faker y `export-json.js` los vuelca a `db.json`.
+
+<NoSeVio titulo="db.js y export-json.js">
+  Solo se ven los nombres de los ficheros y los scripts. No se ve el código que genera los datos con faker.
+</NoSeVio>
+
+En el vídeo del 28/10 se prueba la API con **Postman** antes de tocar Angular: una colección *GameService* y un entorno *GameServiceEnv* con la variable `{{url_base}}`. El 18/11 había juegos creados desde Postman (ids 26, 27 y 28).
+
+## Arquitectura de la actividad
+
+La guía de la Act 10 reparte el trabajo en capas. El componente **no hace peticiones**: solo pinta y gestiona la interfaz. Todo lo que habla con la API está en `GameService`.
+
+<Mermaid
+  titulo="Capas de proj-game"
+  chart={`flowchart LR
+    T["Plantilla<br/>ngModel, validación, mensajes"] --> A["AppComponent / CrudComponent<br/>estado de la interfaz"]
+    A --> S["GameService<br/>GET, POST, PUT"]
+    S --> H[HttpClient]
+    H --> J["JSON Server<br/>localhost:3000"]
+    J --> D[(db.json)]`}
+/>
+
+## El modelo Game
+
+<DeClase fecha="05/11" proyecto="proj-game" />
+
+```ts title="src/app/models/game.ts"
+export interface Game {
+  id?: number;
+  title: string;
+  genre: string;
+  platform: string;
+  price: number;
+  stock: number;
+}
+```
+
+- Es una `interface` de TypeScript: solo existe al compilar, como una interfaz de Java sin métodos. Sirve para que el editor te avise si escribes mal una propiedad.
+- El 05/11 se añadió `stock`, que el modelo del proyecto no tenía y el de la guía sí.
+- `id?` es **opcional**: su tipo pasa a ser `number | undefined`. Al crear un juego todavía no tienes `id` (lo pone JSON Server), así que el mismo modelo vale para crear y para leer.
+
+<Callout title="Otra forma que salió el 27/10">
+  En `angular-http` el modelo tenía `id` obligatorio y un segundo tipo para crear: `type NewPost = Omit<Post, 'id'>`. Son las dos formas de resolver lo mismo: un modelo con `id?` o dos tipos.
+</Callout>
+
+## GameService
+
+<DeClase fecha="12/11" proyecto="proj-game" />
+
+El servicio está en `services/game.service.ts`. Los servicios de las clases anteriores se generaron con `ng g s services/...` y llevan `@Injectable({ providedIn: 'root' })`, que hace que haya una sola instancia para toda la app (un *singleton*). De `GameService` solo se ven los métodos:
+
+<Recorrido
+  titulo="src/app/services/game.service.ts (fragmento)"
+  lenguaje="typescript"
+  codigo={`getGameById(id: number): Observable<Game> {
+  return this.http.get<Game>(\`\${this.apiUrl}/\${id}\`);
+}
+
+getGamesPyPage(pag: number, tamPage: number) {
+  return this.http.get<Game[]>(this.apiUrl + \`?_page=\${pag}&_limit=\${tamPage}\`, {
+    observe: 'response'
+  });
+}
+
+create(game: Game) {
+  return this.http.post<Game>(this.apiUrl, game);
+}
+
+update(game: Game) {
+  if (game.id) {
+    return this.http.put<Game>(this.apiUrl + \`/\${game.id}\`, game);
+  }
+  throw new Error(\`Game a actualizar sin id = \${game}\`);
+}`}
+>
+  <Paso lineas="1-3" titulo="Un juego por id">
+    `get<Game>` tipa la respuesta: devuelve un `Observable<Game>`. Sin el genérico, `HttpClient` devuelve `Observable<Object>` y pierdes el autocompletado. La URL se monta con una plantilla de texto (comillas invertidas y `${}`).
+  </Paso>
+  <Paso lineas="5-9" titulo="Una página de juegos">
+    Añade `?_page=` y `&_limit=` a la URL: la paginación la hace JSON Server. Con `observe: 'response'` no devuelve solo el array, sino la **respuesta completa** (`HttpResponse<Game[]>`), con el estado, las cabeceras y el cuerpo.
+  </Paso>
+  <Paso lineas="11-13" titulo="Crear (POST)">
+    Manda el juego sin `id` y JSON Server responde con el juego creado, ya con su `id`.
+  </Paso>
+  <Paso lineas="15-20" titulo="Actualizar (PUT)">
+    Si el juego trae `id`, hace `PUT /games/:id`. Si no, lanza un `Error`: actualizar algo que no existe no tiene sentido.
+  </Paso>
+</Recorrido>
+
+Detalles del código de clase:
+
+- `getGamesPyPage` es una errata del código de clase (quería decir *ByPage*). Si copias el código, puedes llamarlo `getGamesByPage`, pero en los apuntes se deja como estaba.
+- El final de la URL de `getGamesPyPage` sale cortado en las capturas: se lee <Dudoso nota="Se ve tamPag… y se supone que es la variable tamPage.">`&_limit=${tamPage}`</Dudoso>.
+- La ruta del import sale como `../services/game.service` en unas capturas y como `games.service` en otra.
+- `update` recibe el `Game` entero y saca el `id` de dentro. Por eso en el formulario reactivo (18/11) se le pasa `{ id: this.editGame()?.id, ...form.value }`.
+
+<NoSeVio titulo="El principio de GameService">
+  No se ven el `import`, el `@Injectable`, cómo se inyecta `HttpClient` ni el valor de `apiUrl`. Por el error de CORS del 18/11 se sabe que las peticiones iban a `http://localhost:3000/games`. El patrón de clase en otros servicios (27/10 y 28/10) es `private http = inject(HttpClient)` y `private apiUrl = '...'` dentro del servicio.
+</NoSeVio>
+
+<Callout type="info" title="provideHttpClient()">
+  Para inyectar `HttpClient`, `app.config.ts` necesita `provideHttpClient()` en `providers`. En clase no se ve escribirlo, pero era una de las preguntas finales de la Act 8: sin esa línea, la app falla al arrancar con `NullInjectorError: No provider for HttpClient`.
+</Callout>
+
+## Paginación con _page y _limit
+
+<DeClase fecha="05/11, 12/11" proyecto="proj-game" nota="el listado paginado ya estaba hecho al empezar el 05/11" />
+
+La paginación se hace **en el servidor**: Angular pide una página concreta y JSON Server devuelve solo esos juegos. Además, cuando se pagina, JSON Server 0.17 añade la cabecera `X-Total-Count` con el número total de juegos. Para leer esa cabecera hace falta `observe: 'response'`; sin él, el `subscribe` solo recibe el array y no hay forma de saber cuántas páginas hay. En clase no llega a verse el código que lee la cabecera (más abajo tienes una forma de escribirlo, marcada como no dada), pero `observe: 'response'` está ahí para eso.
+
+Prueba el simulador: cambia el tamaño, avanza páginas y quita `observe: 'response'` para ver qué se pierde. Con 19 juegos y 5 por página salen 4 páginas (`Math.ceil(19 / 5)`), y con 10 por página, 2: es lo que se vio en el navegador el 05/11 ("1 de 4" y "2 de 2").
+
+<SimuladorPaginacion />
+
+Fíjate también en la segunda casilla: si estás en la página 4 de 5 en 5 y cambias a 10 por página sin volver a la 1, pides la página 4 de 2, que viene vacía.
+
+### La plantilla del padre (de clase)
+
+```html title="src/app/app.component.html"
+<span>Buscar por ID: </span>
+<input type="string" #buscarId />
+<button (click)="onBuscarId(buscarId.value)">Buscar</button>
+
+@for (game of this.games; track game.id) {
+  {{ game | json }}
+  <button type="button" (click)="this.editGame = game">Editar</button><br/>
+}
+
+<select #tamPage (change)="onChangeTamPage(tamPage.value)">
+  <option value="5">5</option>
+  <option value="10">10</option>
+</select>
+<div>{{ this.pag }} de {{ this.totalPag }}</div>
+<button [disabled]="this.pag === 1" (click)="onAntPag()">Anterior</button>
+<button [disabled]="this.pag === this.totalPag" (click)="onSigPag()">Siguiente</button>
+
+<h1>CRUD</h1>
+<app-crud [editGame]="this.editGame" (actualizaGames)="onActualizaGames($event)"></app-crud>
+```
+
+- `#buscarId` y `#tamPage` son **referencias de plantilla**: dan acceso al elemento HTML, y `tamPage.value` es el valor del `select` (un `string`, aunque ponga "5").
+- `(click)` y `(change)` son *event binding*; `[disabled]` es *property binding*: desactiva Anterior en la página 1 y Siguiente en la última.
+- `@for (...; track game.id)`: el `track` es obligatorio y le dice a Angular cómo reconocer cada elemento al repintar.
+- `game | json` pinta el objeto entero mientras se depura. En un componente *standalone* hay que importar `JsonPipe`.
+- El buscador lleva `type="string"`, que no es un tipo válido de HTML (el navegador lo trata como `text`). Está así en el código de clase.
+- El `$event` de `(actualizaGames)` es una suposición: el argumento sale cortado en las capturas <Dudoso />.
+
+Y la cabecera de la clase, que es lo único que se ve del `.ts`:
+
+```ts title="src/app/app.component.ts (cabecera, 05/11)"
+@Component({
+  selector: 'app-root',
+  imports: [RouterOutlet, JsonPipe, CrudComponent],
+  templateUrl: './app.component.html',
+  styleUrl: './app.component.css'
+})
+export class AppComponent implements OnInit {
+  title = 'proj-game';
+  pag = 1;
+  tamanoPagina = 5;
+  totalCount = 0;
+  totalPag = 0;
+  games: Game[] = [];
+
+  constructor(private gameService: GameService){}
+
+  //HOOK - OnInit para hidratación del template ya cargado en esqueleto html
+  ngOnInit(): void {
+    this.loadGames();
+  }
+}
+```
+
+Aquí el servicio se inyecta **por constructor** (`private` es imprescindible: sin él, `gameService` no es una propiedad y sale el error TS2339), mientras que en `CrudComponent` se usa `inject()`, la forma moderna. Las dos funcionan igual. Más adelante se añade la propiedad `editGame?: Game` para el botón Editar.
+
+<NoSeVio titulo="El .ts del padre">
+  No se ven `loadGames()`, `onBuscarId()`, `onChangeTamPage()`, `onAntPag()`, `onSigPag()` ni `onActualizaGames()`, ni cómo se calcula `totalPag` a partir de la respuesta.
+</NoSeVio>
+
+### Una forma de escribir esos métodos <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Esto no se vio en clase: es una forma estándar de completar los métodos que no salen en las capturas, con los mismos nombres que usa la plantilla. Si te preguntan, di que lo has escrito tú.
+</NoDadoEnClase>
+
+```ts title="src/app/app.component.ts (métodos)"
+loadGames(): void {
+  this.gameService.getGamesPyPage(this.pag, this.tamanoPagina).subscribe(resp => {
+    this.games = resp.body ?? [];
+    this.totalCount = Number(resp.headers.get('X-Total-Count') ?? 0);
+    this.totalPag = Math.ceil(this.totalCount / this.tamanoPagina);
+  });
+}
+
+onChangeTamPage(valor: string): void {
+  this.tamanoPagina = Number(valor);
+  this.pag = 1;
+  this.loadGames();
+}
+
+onAntPag(): void {
+  if (this.pag > 1) {
+    this.pag--;
+    this.loadGames();
+  }
+}
+
+onSigPag(): void {
+  if (this.pag < this.totalPag) {
+    this.pag++;
+    this.loadGames();
+  }
+}
+
+onBuscarId(valor: string): void {
+  const id = Number(valor);
+  if (!id) {
+    this.loadGames();
+    return;
+  }
+  this.gameService.getGameById(id).subscribe(game => this.games = [game]);
+}
+
+onActualizaGames(game: Game): void {
+  console.log('Guardado', game);
+  this.editGame = undefined;
+  this.loadGames();
+}
+```
+
+- `resp.body` es `Game[] | null`, de ahí el `?? []`.
+- `resp.headers.get(...)` devuelve un `string` (o `null`): hay que convertirlo con `Number`.
+- Al cambiar el tamaño se vuelve a la página 1, por lo que has visto en el simulador.
+- `onActualizaGames` vacía `editGame` después de guardar, para que el padre no siga apuntando a un juego que ya se ha guardado. Ten en cuenta que el hijo solo se entera (`ngOnChanges`) cuando la entrada cambia de **referencia**: si pulsas Editar dos veces en el mismo objeto de la lista, la segunda vez no pasa nada. Aquí no molesta, porque `loadGames()` trae objetos nuevos.
+
+### Otros parámetros de JSON Server <NoDadoEnClase inline />
+
+JSON Server 0.17 también filtra y ordena desde la URL. En clase solo se usaron `_page` y `_limit`, pero te sirven para practicar el requisito de búsqueda y orden antes de tener tu API:
+
+| URL | Qué devuelve |
+| --- | --- |
+| `/games?genre=RPG` | Los juegos cuyo `genre` es exactamente "RPG" |
+| `/games?title_like=runner` | Los que tienen "runner" en el título (expresión regular, sin distinguir mayúsculas) |
+| `/games?q=space` | Búsqueda de texto en todos los campos |
+| `/games?_sort=price&_order=desc` | Ordenados por precio, de mayor a menor |
+| `/games?_sort=price&_order=asc&_page=1&_limit=5` | Se combinan con la paginación |
+
+En tu proyecto, la búsqueda y la paginación las tiene que hacer tu API con Prisma: lo tienes en [Listado con filtros, paginación y token](/docs/2-dam/acceso-a-datos/angular-avanzado/listado-filtros-y-token).
+
+## Practica
+
+<CompletarCodigo
+  titulo="Pedir una página con la respuesta completa"
+  enunciado="Completa el método del servicio para que devuelva la respuesta entera, con cabeceras."
+  lenguaje="typescript"
+  codigo={`getGamesPyPage(pag: number, tamPage: number) {
+  return this.http.[[get]]<Game[]>(this.apiUrl + \`?[[_page]]=\${pag}&[[_limit]]=\${tamPage}\`, {
+    observe: '[[response]]'
+  });
+}`}
+/>
+
+<Quiz titulo="Test: proj-game y JSON Server">
+  <Pregunta enunciado="¿Qué versión de JSON Server se instala en clase?" explicacion="El documento de la actividad pide la «versión clásica», `json-server@0.17.4`, instalada con `--save-dev`.">
+    <Opcion>La última 1.x</Opcion>
+    <Opcion correcta>La 0.17.4</Opcion>
+    <Opcion>La que traiga Angular 19</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Los juegos de `db.json` tienen ids seguidos desde el 1. ¿Qué juegos devuelve `GET /games?_page=2&_limit=5`?" explicacion="La página 1 son los cinco primeros (ids 1 a 5); la 2 se salta esos 5 y devuelve los ids 6 a 10. Las páginas empiezan en 1, no en 0.">
+    <Opcion>Los ids 1 a 5</Opcion>
+    <Opcion correcta>Los ids 6 a 10</Opcion>
+    <Opcion>Los ids 2 a 7</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué cambia al pasar `{ observe: 'response' }` a `http.get`?" explicacion="Devuelve un `Observable<HttpResponse<Game[]>>`: el estado, las cabeceras (como `X-Total-Count`) y el cuerpo en `body`.">
+    <Opcion>La petición se hace por POST</Opcion>
+    <Opcion correcta>Recibes la respuesta completa (estado, cabeceras y cuerpo), no solo el array</Opcion>
+    <Opcion>JSON Server pagina los resultados</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="Hay 19 juegos y se muestran 5 por página. ¿Cuántas páginas hay?" respuesta="4" explicacion="`Math.ceil(19 / 5)` = 4: tres páginas llenas y una cuarta con 4 juegos. Es el «1 de 4» que salió el 05/11." />
+  <Pregunta tipo="texto" enunciado="¿Cómo se llama la cabecera con la que JSON Server dice cuántos elementos hay en total?" respuesta={["X-Total-Count", "x-total-count"]} explicacion="JSON Server 0.17 la añade al paginar. Se lee con `resp.headers.get('X-Total-Count')`." />
+  <Pregunta tipo="vf" enunciado="Si instalas JSON Server solo en el proyecto, escribir `json-server --watch db.json` a mano en la terminal funciona igual que `npx json-server --watch db.json`." respuesta={false} explicacion="Los binarios locales están en `node_modules/.bin`, que no está en el PATH: sale `command not found`. Hay que usar `npx` o un script de `package.json`." />
+  <Pregunta enunciado="¿Por qué el modelo `Game` tiene `id?` opcional?" explicacion="Al crear un juego aún no hay `id`: lo asigna JSON Server. Con `id?` el mismo modelo vale para crear y para leer.">
+    <Opcion correcta>Porque al crear un juego todavía no tiene id: lo pone JSON Server</Opcion>
+    <Opcion>Porque JSON Server no devuelve el id</Opcion>
+    <Opcion>Porque TypeScript no permite propiedades numéricas obligatorias</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: proj-game">
+  <Tarjeta frente="¿Qué hace JSON Server con cada clave de `db.json`?">La convierte en un recurso REST: `"games"` da `/games` y `/games/:id` con GET, POST, PUT y DELETE.</Tarjeta>
+  <Tarjeta frente="`_page` y `_limit`">Parámetros de JSON Server para paginar: qué página quieres y cuántos elementos por página.</Tarjeta>
+  <Tarjeta frente="`observe: 'response'`">Hace que `HttpClient` devuelva la `HttpResponse` entera (estado, cabeceras y `body`) en vez de solo el cuerpo.</Tarjeta>
+  <Tarjeta frente="¿Cómo se calcula el total de páginas?">`Math.ceil(total / tamañoDePágina)`, con el total que llega en la cabecera `X-Total-Count`.</Tarjeta>
+  <Tarjeta frente="¿Por qué `json-server` a secas da `command not found`?">Porque está instalado en el proyecto (`node_modules/.bin`), no en el sistema. Se usa `npx` o un script de npm.</Tarjeta>
+  <Tarjeta frente="¿Quién hace las peticiones HTTP en proj-game?">Solo `GameService`. Los componentes pintan y llaman al servicio; nunca usan `HttpClient` directamente.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Completa el listado paginado" dificultad="media">
+  Con la plantilla de clase de `app.component.html` y el `GameService` de arriba, escribe en `AppComponent` los métodos `loadGames()`, `onAntPag()` y `onSigPag()` para que funcionen los botones y el texto "X de Y".
+
+  <Pista>`getGamesPyPage` devuelve una `HttpResponse`: los juegos están en `resp.body` y el total en la cabecera `X-Total-Count`.</Pista>
+  <Pista>El total de páginas es `Math.ceil(total / tamanoPagina)`. Las cabeceras llegan como texto.</Pista>
+
+  <Solucion>
+
+Esta solución no es de clase (los métodos no se ven en las capturas):
+
+```ts
+loadGames(): void {
+  this.gameService.getGamesPyPage(this.pag, this.tamanoPagina).subscribe(resp => {
+    this.games = resp.body ?? [];
+    this.totalCount = Number(resp.headers.get('X-Total-Count') ?? 0);
+    this.totalPag = Math.ceil(this.totalCount / this.tamanoPagina);
+  });
+}
+
+onAntPag(): void {
+  if (this.pag > 1) { this.pag--; this.loadGames(); }
+}
+
+onSigPag(): void {
+  if (this.pag < this.totalPag) { this.pag++; this.loadGames(); }
+}
+```
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Ordenar por precio" dificultad="facil">
+  Añade a `GameService` un método `getGamesOrdenados(pag, tamPage, orden)` que pida la página ordenada por precio, donde `orden` es `'asc'` o `'desc'`. Usa los parámetros de JSON Server 0.17.
+
+  <Pista>JSON Server ordena con `_sort=campo` y `_order=asc|desc`, y se puede combinar con `_page` y `_limit`.</Pista>
+
+  <Solucion>
+
+```ts
+getGamesOrdenados(pag: number, tamPage: number, orden: 'asc' | 'desc') {
+  return this.http.get<Game[]>(
+    `${this.apiUrl}?_sort=price&_order=${orden}&_page=${pag}&_limit=${tamPage}`,
+    { observe: 'response' }
+  );
+}
+```
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

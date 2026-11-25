@@ -1,0 +1,390 @@
+---
+title: Conectar con tu API
+description: Llamar desde el emulador a la API que corre en tu ordenador (10.0.2.2, BASE_URL, http con network_security_config) y mandar el token en cada petición con un interceptor de OkHttp.
+icon: Network
+---
+
+En clase se llamó a **PokeAPI**, que está en internet y va por `https`. Tu API corre **en tu ordenador** y va por `http`, y eso cambia varias cosas. Además, si tu API tiene login, cada petición tiene que llevar el token. Esta página va de las dos cosas.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Por qué `localhost` no funciona desde el emulador y qué poner en su lugar.
+  - Sacar la URL de la API a `build.gradle.kts` con `BuildConfig`.
+  - Permitir `http` solo para tu ordenador.
+  - Qué es un interceptor y cómo añade el token a todas las peticiones.
+</Callout>
+
+## Lo que se vio en clase
+
+<DeClase fecha="26/10" proyecto="PokeApp2627" nota="versión del 09/11" />
+
+Retrofit se creó en un módulo de Hilt con `@Provides`, con Gson para convertir el JSON:
+
+```kotlin title="NetworkModule.kt (26/10)"
+@Module
+@InstallIn(SingletonComponent::class)
+class NetworkModule {
+    @Provides
+    @Singleton
+    fun provideHttpClient(): PokeApi {
+        val retrofit: Retrofit = Retrofit.Builder()
+            .baseUrl("https://pokeapi.co/api/v2/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+        return retrofit.create(PokeApi::class.java)
+    }
+}
+
+@HiltAndroidApp
+class PokeApplication() : Application()
+```
+
+Y en el manifest, el permiso de internet y la clase `Application`:
+
+```xml title="AndroidManifest.xml (26/10)"
+<uses-permission android:name="android.permission.INTERNET" />
+
+<application android:name=".core.PokeApplication" ...>
+```
+
+- La `baseUrl` se leyó <Dudoso nota='En las capturas del 26/10 se lee `https://pokeapi.co/api/v2` sin `/` final, con `@GET("/pokemon")`. Retrofit exige el `/` final, así que se ha escrito con él.'>sin `/` final</Dudoso> el 26/10. El 09/11 las rutas ya salen sin `/` inicial (`@GET("pokemon")`).
+- `provideHttpClient()` devuelve `PokeApi`, no un cliente HTTP: el nombre engaña. Mira [Prácticas raras](/docs/2-dam/kotlin/para-el-proyecto/practicas-raras).
+- Lo de clase lo tienes entero en [Retrofit 3 con Gson: la capa remota](/docs/2-dam/kotlin/datos/retrofit).
+
+## Llamar a tu API desde el emulador <NoDadoEnClase inline />
+
+<NoDadoEnClase />
+
+Hacen falta cuatro cosas. La primera es entender qué es `localhost` para el emulador:
+
+<Mermaid
+  titulo="Qué es localhost dentro del emulador"
+  chart={`flowchart LR
+    subgraph PC["Tu ordenador"]
+      API["Tu API en el puerto 3000"]
+      subgraph EMU["Emulador"]
+        APP["Tu app"]
+      end
+    end
+    APP -- "localhost:3000 = el propio emulador (no hay nada)" --> APP
+    APP -- "10.0.2.2:3000 = tu ordenador" --> API`}
+/>
+
+<Steps>
+  <Step>
+
+#### La dirección: 10.0.2.2, no localhost
+
+  Dentro del emulador, `localhost` es **el propio emulador**. `10.0.2.2` es una dirección especial que apunta al `localhost` de tu ordenador.
+
+  En un **móvil de verdad**, pon la IP de tu ordenador en la wifi y ten los dos en la misma red. En Windows la ves con `ipconfig`:
+
+<Terminal titulo="PowerShell">
+{`PS> ipconfig
+Adaptador de LAN inalámbrica Wi-Fi:
+   Dirección IPv4. . . . . . . . . . . . . . : 192.168.1.35`}
+</Terminal>
+
+  Con esa salida, la URL sería `http://192.168.1.35:3000/` (la IP de tu ordenador será otra).
+
+  </Step>
+  <Step>
+
+#### La URL en build.gradle.kts (de app)
+
+  Así no la escribes en el código y puedes cambiarla según la versión:
+
+```kotlin title="app/build.gradle.kts"
+android {
+    defaultConfig {
+        buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:3000/\"")
+    }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+}
+```
+
+  Después de sincronizar Gradle y compilar, se usa como `BuildConfig.BASE_URL`. Las comillas escapadas (`\"…\"`) son porque el valor se copia tal cual en una clase Java generada: tiene que llevar sus propias comillas.
+
+  </Step>
+  <Step>
+
+#### Permitir http solo para tu ordenador
+
+  Desde Android 9, las apps solo pueden usar `https`. Para desarrollo, se permite `http` **solo** para tu ordenador. Crea el archivo `app/src/main/res/xml/network_security_config.xml`:
+
+```xml title="res/xml/network_security_config.xml"
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>
+```
+
+  Si pruebas con un móvil de verdad, añade también la IP de tu ordenador como otro `<domain>`.
+
+  </Step>
+  <Step>
+
+#### El manifest
+
+  Con el permiso de internet (salió el 26/10) y el archivo anterior:
+
+```xml title="AndroidManifest.xml"
+<uses-permission android:name="android.permission.INTERNET" />
+
+<application
+    android:networkSecurityConfig="@xml/network_security_config"
+    ...>
+```
+
+  </Step>
+</Steps>
+
+<Callout type="error" title="baseUrl acaba en / y las rutas no empiezan por /">
+  `BASE_URL = "http://10.0.2.2:3000/"` y `@GET("api/productos")`. Si la `baseUrl` no acaba en `/`, Retrofit lanza `baseUrl must end in /`. Si la ruta empieza por `/`, Retrofit la toma desde la raíz del servidor y se come la parte de ruta que tuviera la `baseUrl` (con `https://pokeapi.co/api/v2/` y `@GET("/pokemon")` llamaría a `https://pokeapi.co/pokemon`).
+</Callout>
+
+Cuando tu API esté desplegada con `https`, no hace falta tocar el `network_security_config`: solo cambia la URL. Puedes tener una para cada tipo de compilación:
+
+```kotlin title="app/build.gradle.kts"
+android {
+    buildTypes {
+        release {
+            buildConfigField("String", "BASE_URL", "\"https://tu-api.ejemplo.com/\"")
+        }
+    }
+}
+```
+
+## Mandar el token en cada petición <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  OkHttp y los interceptores no salieron en clase. Esta es la forma estándar.
+</NoDadoEnClase>
+
+Retrofit no hace las peticiones él mismo: por debajo usa **OkHttp**. Un **interceptor** es una clase de OkHttp por la que pasa cada petición antes de salir (y su respuesta al volver). Aquí se usa para añadir la cabecera `Authorization: Bearer <token>` a todas, en vez de ponerla a mano en cada función de la API. Es parecido a un *middleware* de Express, pero en el cliente.
+
+<Flujo
+  titulo="Una petición con dos interceptores"
+  nodos={["Repositorio", "Retrofit", "AuthInterceptor", "Logging", "API"]}
+>
+  <Mensaje de="Repositorio" a="Retrofit" titulo="api.getProductos()">
+    El repositorio llama a la función de la interfaz, como siempre. No sabe nada del token.
+  </Mensaje>
+  <Mensaje de="Retrofit" a="AuthInterceptor" titulo="chain.request()">
+    Retrofit monta la petición y OkHttp la pasa por los interceptores, en el orden en que se añadieron.
+  </Mensaje>
+  <Mensaje de="AuthInterceptor" a="AuthInterceptor" titulo="Lee el token">
+    Lee el token de DataStore. Si hay, copia la petición y le añade `Authorization: Bearer ...`.
+  </Mensaje>
+  <Mensaje de="AuthInterceptor" a="Logging" titulo="chain.proceed()">
+    `proceed` pasa la petición al siguiente interceptor.
+  </Mensaje>
+  <Mensaje de="Logging" a="API" titulo="GET api/productos">
+    `HttpLoggingInterceptor` escribe la petición en el Logcat (ya con la cabecera) y la manda.
+  </Mensaje>
+  <Mensaje de="API" a="Logging" tipo="respuesta" titulo="200 OK + JSON">
+    La respuesta vuelve por el mismo camino, al revés. El de logging también la escribe en el Logcat.
+  </Mensaje>
+  <Mensaje de="Logging" a="Repositorio" tipo="respuesta" titulo="Response">
+    Gson convierte el JSON y el repositorio recibe su `Response`.
+  </Mensaje>
+</Flujo>
+
+### El interceptor
+
+<Recorrido
+  titulo="AuthInterceptor.kt"
+  lenguaje="kotlin"
+  codigo={`class AuthInterceptor @Inject constructor(
+    private val sesion: SesionDataStore
+) : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): okhttp3.Response {
+        val token = runBlocking { sesion.token.first() }
+        val peticion = chain.request().newBuilder()
+        if (!token.isNullOrEmpty()) {
+            peticion.header("Authorization", "Bearer $token")
+        }
+        return chain.proceed(peticion.build())
+    }
+}`}
+>
+  <Paso lineas="1-3" titulo="Hilt lo crea">
+    Con `@Inject constructor`, Hilt sabe crearlo y pasarle el `SesionDataStore` de la [página de DataStore](/docs/2-dam/kotlin/para-el-proyecto/datastore).
+  </Paso>
+  <Paso lineas="4" titulo="okhttp3.Response, con el paquete">
+    Se escribe `okhttp3.Response` entero porque Retrofit también tiene una clase `Response` y se confundirían.
+  </Paso>
+  <Paso lineas="5" titulo="Leer el token">
+    `sesion.token.first()` lee el valor actual del `Flow` y deja de escuchar. Aquí **sí** vale `runBlocking`: OkHttp ejecuta el interceptor en su propio hilo, no en el de la pantalla, así que no congela nada.
+  </Paso>
+  <Paso lineas="6-9" titulo="Copiar y añadir la cabecera">
+    Las peticiones de OkHttp no se pueden cambiar: `newBuilder()` hace una copia editable. Si no hay token (antes del login), la petición sale sin cabecera.
+  </Paso>
+  <Paso lineas="10" titulo="Seguir">
+    `chain.proceed` manda la petición al siguiente interceptor (o a la red) y devuelve la respuesta.
+  </Paso>
+</Recorrido>
+
+### El NetworkModule, con OkHttp en medio
+
+<Recorrido
+  titulo="NetworkModule.kt"
+  lenguaje="kotlin"
+  codigo={`@Module
+@InstallIn(SingletonComponent::class)
+object NetworkModule {
+    @Provides
+    @Singleton
+    fun provideOkHttpClient(authInterceptor: AuthInterceptor): OkHttpClient {
+        val logging = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+        }
+        return OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
+            .addInterceptor(logging)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideRetrofit(client: OkHttpClient): Retrofit =
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.BASE_URL)
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+
+    @Provides
+    @Singleton
+    fun provideTiendaApi(retrofit: Retrofit): TiendaApi = retrofit.create(TiendaApi::class.java)
+}`}
+>
+  <Paso lineas="4-14" titulo="El cliente de OkHttp">
+    Un `@Provides` que crea el cliente con los dos interceptores. El orden importa: el de logging va después, así en el Logcat ves la petición ya con el token.
+  </Paso>
+  <Paso lineas="7-9" titulo="Ver las peticiones en el Logcat">
+    `HttpLoggingInterceptor` con `Level.BODY` escribe cada petición y respuesta con su JSON. Es lo más útil para saber por qué falla una llamada (filtra por `okhttp`).
+  </Paso>
+  <Paso lineas="16-23" titulo="Retrofit usa ese cliente">
+    La `baseUrl` sale de `BuildConfig` y `.client(client)` le dice a Retrofit que use el cliente con los interceptores.
+  </Paso>
+  <Paso lineas="25-27" titulo="La API">
+    Por último, la interfaz. Cada `@Provides` crea una sola cosa y se llama como lo que devuelve. En clase, `provideHttpClient()` lo hacía todo y devolvía la API.
+  </Paso>
+</Recorrido>
+
+<Callout type="warn" title="El log enseña el token">
+  Con `Level.BODY`, el Logcat muestra la cabecera `Authorization` y todos los datos. Para la versión que entregues, usa `level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.NONE`.
+</Callout>
+
+En el backend, el token lo comprueba un *middleware* que lee la cabecera `Authorization`. Está en [CORS y rutas protegidas](/docs/2-dam/apis/backend-proyecto/cors-y-token).
+
+## Practica
+
+<CompletarCodigo
+  titulo="La URL de tu API"
+  enunciado="Completa la línea de build.gradle.kts para que la app llame a tu API desde el emulador, en el puerto 3000."
+  lenguaje="kotlin"
+  codigo={`buildConfigField("String", "BASE_URL", "\\"http://[[10.0.2.2]]:3000[[/]]\\"")`}
+/>
+
+<Quiz titulo="Test: conectar con tu API">
+  <Pregunta enunciado="Tu API corre en tu ordenador en el puerto 3000. ¿Qué URL pones para llamarla desde el emulador?" explicacion="En el emulador, `localhost` es el propio emulador. `10.0.2.2` apunta a tu ordenador.">
+    <Opcion>`http://localhost:3000/`</Opcion>
+    <Opcion correcta>`http://10.0.2.2:3000/`</Opcion>
+    <Opcion>`http://127.0.0.1:3000/`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Sale `CLEARTEXT communication to 10.0.2.2 not permitted by network security policy`. ¿Qué falta?" explicacion="Android solo deja `https`. Hay que permitir `http` para tu ordenador con `network_security_config.xml` y enlazarlo desde el manifest.">
+    <Opcion>El permiso `INTERNET`</Opcion>
+    <Opcion correcta>Permitir `http` para `10.0.2.2` con `network_security_config.xml`</Opcion>
+    <Opcion>`buildConfig = true`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado='¿Por qué el valor de `buildConfigField` lleva comillas escapadas (`\"...\"`)?' explicacion="El valor se copia tal cual en una clase Java generada, así que tiene que incluir sus propias comillas para ser un `String`.">
+    <Opcion>Porque Gradle no admite barras</Opcion>
+    <Opcion correcta>Porque se copia tal cual en una clase Java y tiene que llevar sus comillas</Opcion>
+    <Opcion>Para que no salga en el Logcat</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="En el `AuthInterceptor`, usar `runBlocking` congela la pantalla igual que en el `init` del repositorio." respuesta={false} explicacion="OkHttp ejecuta los interceptores en sus propios hilos, no en el de la pantalla. Por eso ahí sí vale `runBlocking`." />
+  <Pregunta enunciado="¿Qué hace `chain.proceed(peticion.build())`?" explicacion="Pasa la petición al siguiente interceptor (o a la red) y devuelve la respuesta.">
+    <Opcion>Repite la petición si falla</Opcion>
+    <Opcion correcta>Pasa la petición al siguiente interceptor y devuelve la respuesta</Opcion>
+    <Opcion>Guarda el token</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Quieres ver en el Logcat el JSON que manda y recibe la app. ¿Qué usas?" explicacion="`HttpLoggingInterceptor` con `Level.BODY` escribe cada petición y respuesta completa. Filtra por `okhttp`.">
+    <Opcion correcta>`HttpLoggingInterceptor` con `Level.BODY`</Opcion>
+    <Opcion>`Log.d` en cada función de la API</Opcion>
+    <Opcion>El Database Inspector</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Pruebas con tu móvil de verdad (no el emulador). ¿Qué cambia?" explicacion="`10.0.2.2` solo existe dentro del emulador. En un móvil, la IP de tu ordenador en la wifi, los dos en la misma red, y esa IP también en el `network_security_config`.">
+    <Opcion>Nada, `10.0.2.2` funciona igual</Opcion>
+    <Opcion correcta>Usas la IP del ordenador en la wifi y los dos en la misma red</Opcion>
+    <Opcion>Hay que usar `https` obligatoriamente</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: conectar con tu API">
+  <Tarjeta frente="`10.0.2.2`">La dirección que, desde el emulador, apunta al `localhost` de tu ordenador.</Tarjeta>
+  <Tarjeta frente="`BuildConfig.BASE_URL`">Constante generada a partir del `buildConfigField` de `build.gradle.kts`. Necesita `buildConfig = true` y compilar.</Tarjeta>
+  <Tarjeta frente="`network_security_config.xml`">Permite `http` (`cleartextTrafficPermitted`) solo para los dominios que pongas, como `10.0.2.2`.</Tarjeta>
+  <Tarjeta frente="Interceptor">Clase de OkHttp por la que pasa cada petición. Sirve para añadir cabeceras (el token) o escribir en el Logcat.</Tarjeta>
+  <Tarjeta frente="`Authorization: Bearer <token>`">La cabecera con la que el backend sabe quién hace la petición.</Tarjeta>
+  <Tarjeta frente="Orden de los interceptores">El que añade el token, primero; el de logging, después, para ver la petición ya con la cabecera.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Tu app contra tu API" dificultad="media">
+  Cambia tu app para que llame a tu API en vez de a una API pública: URL en `BuildConfig`, `network_security_config`, manifest y `NetworkModule` con OkHttp. Arranca el backend, ejecuta la app en el emulador y busca la petición en el Logcat.
+
+  <Pista>Si no ves nada en el Logcat, comprueba que el filtro es `okhttp` y que el backend está arrancado (abre `http://localhost:3000/api/productos` en el navegador del ordenador).</Pista>
+  <Pista>Si sale `Unresolved reference: BuildConfig`, falta `buildConfig = true` en `buildFeatures` o compilar después de sincronizar.</Pista>
+
+  <Solucion>
+
+  La lista de comprobación, en orden:
+
+  1. `buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:3000/\"")` y `buildConfig = true`. Sincroniza y compila.
+  2. `res/xml/network_security_config.xml` con `10.0.2.2` y `localhost`.
+  3. En el manifest, `INTERNET` y `android:networkSecurityConfig="@xml/network_security_config"`.
+  4. `NetworkModule` con `provideOkHttpClient`, `provideRetrofit` (con `.baseUrl(BuildConfig.BASE_URL)` y `.client(client)`) y `provideTiendaApi`.
+  5. En la interfaz, rutas sin `/` inicial: `@GET("api/productos")`.
+
+  En el Logcat, con el filtro `okhttp`, tienes que ver `--> GET http://10.0.2.2:3000/api/productos` y después `<-- 200 OK` con el JSON.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Cerrar sesión si el token caduca" dificultad="dificil">
+  Si el backend responde `401` (token caducado o no válido), borra el token guardado para que la app vuelva a pedir el login. Hazlo en el `AuthInterceptor`, mirando la respuesta antes de devolverla.
+
+  <Pista>`chain.proceed(...)` devuelve la respuesta: guárdala en una variable y mira `respuesta.code`.</Pista>
+  <Pista>`borrarToken()` es `suspend`. Dentro del interceptor puedes usar `runBlocking`, igual que para leer.</Pista>
+
+  <Solucion>
+
+```kotlin
+override fun intercept(chain: Interceptor.Chain): okhttp3.Response {
+    val token = runBlocking { sesion.token.first() }
+    val peticion = chain.request().newBuilder()
+    if (!token.isNullOrEmpty()) {
+        peticion.header("Authorization", "Bearer $token")
+    }
+    val respuesta = chain.proceed(peticion.build())
+    if (respuesta.code == 401 && !token.isNullOrEmpty()) {
+        runBlocking { sesion.borrarToken() }
+    }
+    return respuesta
+}
+```
+
+  En OkHttp, `code` es una propiedad (`respuesta.code`), no la función `code()` del `Response` de Retrofit. Para que la app vuelva al login, la pantalla principal puede observar `sesion.token` y navegar al login cuando pase a `null`.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

@@ -1,0 +1,523 @@
+---
+title: Logs, rate limiting y tests
+description: "Las versiones v0.8.0 y v0.9.0 de la referencia: el logger de Winston, el requestLogger propio, los limitadores de express-rate-limit y los tests de integración con Jest y Supertest en ES Modules."
+icon: ScrollText
+---
+
+El 03/11 el profesor recorrió dos versiones más del repositorio de referencia con los diffs de Git. La **v0.8.0** ("Seguridad adicional") cambia `console.log` y morgan por un logger de verdad, **Winston**, y añade límites de peticiones con **express-rate-limit**. La **v0.9.0** añade **tests** con Jest y Supertest. No se escribió código desde cero: se leyó el de la referencia.
+
+<DeClase fecha="03/11" proyecto="node-server-26-27" nota="v0.8.0 (commit 486c9ecb) y v0.9.0 (commit 99fb2e12)" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Cómo se configura un logger de Winston: niveles, colores, formato y *transports*.
+  - Cómo mide el `requestLogger` lo que tarda cada petición.
+  - Los dos limitadores de peticiones de la referencia y por qué el de auth solo cuenta los fallos.
+  - Cómo se prueba la API con Supertest sin levantar el servidor, y cómo se configura Jest con ES Modules.
+</Callout>
+
+## De `console.log` a un logger
+
+Hasta la v0.7, la API escribía con `console.log` y `morgan('dev')`. En la v0.8.0 hay **un logger centralizado**: una sola instancia en `src/utils/logger.ts` que usa todo el proyecto. Las ventajas: cada mensaje lleva nivel y fecha, se puede guardar en ficheros y se puede decidir cuánto se escribe según el entorno.
+
+Se instala con `npm install express-rate-limit winston` (las dos cosas de la v0.8.0). Versiones: `winston ^3.18.3` y `express-rate-limit ^8.2.1`.
+
+<Recorrido
+  titulo="src/utils/logger.ts"
+  lenguaje="ts"
+  codigo={`import winston from 'winston';
+import { env } from '../config/env.js';
+
+const levels = { error: 0, warn: 1, info: 2, http: 3, debug: 4 };
+
+const colors = { error: 'red', warn: 'yellow', info: 'green', http: 'magenta', debug: 'blue' };
+winston.addColors(colors);
+
+const format = winston.format.combine(
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.colorize({ all: true }),
+  winston.format.printf((info) => \`\${info.timestamp} \${info.level}: \${info.message}\`)
+);
+
+const transports = [
+  new winston.transports.Console(),
+  new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+  new winston.transports.File({ filename: 'logs/all.log' }),
+];
+
+export const logger = winston.createLogger({
+  level: env.NODE_ENV === 'development' ? 'debug' : 'warn',
+  levels,
+  format,
+  transports,
+});`}
+>
+  <Paso lineas="4" titulo="Niveles con prioridad">
+    Cada nivel tiene un número: **cuanto más bajo, más grave**. `error` es 0 y `debug` es 4. Así se crean `logger.error()`, `logger.warn()`, `logger.info()`, `logger.http()` y `logger.debug()`.
+  </Paso>
+  <Paso lineas="6-7" titulo="Un color por nivel">
+    `winston.addColors` le dice a Winston de qué color pintar cada nivel en la consola.
+  </Paso>
+  <Paso lineas="9-13" titulo="El formato">
+    `combine` encadena formatos: pone la fecha, colorea y, con `printf`, monta la línea como `2026-11-03 10:15:42 info: API escuchando…`.
+  </Paso>
+  <Paso lineas="15-19" titulo="Un transport por destino">
+    Cada *transport* es un sitio donde se escribe: la consola, `logs/error.log` (solo los de nivel `error`) y `logs/all.log` (todo lo que pase el nivel del logger).
+  </Paso>
+  <Paso lineas="22" titulo="Cuánto se escribe según el entorno">
+    El logger escribe su nivel **y los más graves**. En desarrollo, `debug`: sale todo. En el resto de entornos, `warn`: solo avisos y errores.
+  </Paso>
+  <Paso lineas="21-26" titulo="Una sola instancia">
+    Se exporta `logger` y todo el proyecto importa el mismo.
+  </Paso>
+</Recorrido>
+
+La carpeta `logs/` y los `*.log` están en el `.gitignore`: los registros no se suben al repositorio. En el README, la v0.8.0 está como un manual por pasos ("Paso 1: instalar", "Paso 2: Crear logger con Winston"…).
+
+### Dónde se usa
+
+En `index.ts`, los `console.log` del arranque y del cierre pasan a `logger.info` (el código completo está en [Servidor con Express 5](/docs/2-dam/apis/backend/servidor-express#cierre-ordenado-del-servidor)). Y el manejador de errores también lo usa:
+
+```ts title="src/middleware/error.ts (v0.8.0)"
+import type { Request, Response, NextFunction } from 'express';
+import { logger } from '../utils/logger.js';
+
+export function errorHandler(err: any, req: Request, res: Response, _next: NextFunction) {
+  logger.error(`${req.method} ${req.path} - ${err.message}`);
+  logger.error(err.stack);
+  const status = err.status || 500;
+  res.status(status).json({ message: err.message || 'Error interno' });
+}
+```
+
+Antes era `console.error(err)` y el parámetro se llamaba `_req`; ahora se usa `req` para apuntar el método y la ruta, y el *stack* va al log (no al cliente).
+
+## El `requestLogger`
+
+En la v0.8.0 desaparece `morgan` de `app.ts` (sigue en el `package.json`, pero ya no se usa) y en su lugar hay un middleware propio que escribe con Winston:
+
+<Recorrido
+  titulo="src/middleware/requestLogger.ts"
+  lenguaje="ts"
+  codigo={`import type { Request, Response, NextFunction } from 'express';
+import { logger } from '../utils/logger.js';
+
+export function requestLogger(req: Request, res: Response, next: NextFunction) {
+  const start = Date.now();
+
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const message = \`\${req.method} \${req.path} \${res.statusCode} \${duration}ms\`;
+
+    if (res.statusCode >= 500) {
+      logger.error(message);
+    } else if (res.statusCode >= 400) {
+      logger.warn(message);
+    } else {
+      logger.http(message);
+    }
+  });
+
+  next();
+}`}
+>
+  <Paso lineas="5" titulo="Apuntar la hora de llegada">
+    Al llegar la petición, guarda `Date.now()`.
+  </Paso>
+  <Paso lineas="7" titulo="Esperar a que acabe la respuesta">
+    `res.on('finish', ...)` registra una función que se ejecutará **cuando la respuesta se haya enviado**, la responda quien la responda. La función recuerda `start` (es una *closure*).
+  </Paso>
+  <Paso lineas="8-9" titulo="Montar la línea">
+    Calcula lo que tardó y monta `PATCH /api/users/1 200 12ms`.
+  </Paso>
+  <Paso lineas="11-17" titulo="El nivel según el código">
+    Con un 5xx, `error`; con un 4xx, `warn`; con el resto, `http`. Así los fallos del servidor acaban también en `logs/error.log`.
+  </Paso>
+  <Paso lineas="20" titulo="next() enseguida">
+    No espera a nada: deja pasar la petición al siguiente middleware. El log se escribirá al final.
+  </Paso>
+</Recorrido>
+
+Como solo registra el `finish` y pasa, tiene que ir **antes** de las rutas: si fuera detrás, la ruta respondería primero y este middleware no llegaría a ejecutarse.
+
+## Rate limiting
+
+El <Concepto termino="Rate limiting" definicion="Limitar cuántas peticiones puede hacer un mismo cliente (normalmente por IP) en un tiempo. Frena los abusos y los intentos de adivinar contraseñas.">rate limiting</Concepto> limita cuántas peticiones puede hacer una misma IP en un tiempo. La referencia tiene dos limitadores:
+
+```ts title="src/middleware/rateLimiter.ts"
+import rateLimit from 'express-rate-limit';
+
+export const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { message: 'Demasiadas peticiones desde esta IP, intenta de nuevo en 15 minutos' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { message: 'Demasiados intentos de autenticación, intenta de nuevo en 15 minutos' },
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+```
+
+<TypeTable
+  type={{
+    windowMs: { type: 'number', description: 'La ventana de tiempo, en milisegundos. `15 * 60 * 1000` son 15 minutos.' },
+    max: { type: 'number', description: 'Peticiones permitidas por IP en esa ventana: 100 en general y 5 en auth.' },
+    message: { type: 'object', description: 'El cuerpo de la respuesta cuando se pasa el límite (con el mismo formato `{ message }` que el resto de errores). El código es 429 Too Many Requests.' },
+    skipSuccessfulRequests: { type: 'boolean', description: 'Las peticiones que salen bien no cuentan. En auth, **solo cuentan los intentos fallidos**: puedes entrar todas las veces que quieras, pero solo fallar 5.' },
+    standardHeaders: { type: 'boolean', description: 'Manda las cabeceras estándar `RateLimit-*` con lo que te queda.' },
+    legacyHeaders: { type: 'boolean', description: 'false: no manda las cabeceras antiguas `X-RateLimit-*`.' },
+  }}
+/>
+
+Un middleware se puede poner **solo en unas rutas**: en `app.use`, entre el prefijo y el router.
+
+```ts title="src/app.ts (v0.9.0)"
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import { errorHandler } from './middleware/error.js';
+import { generalLimiter, authLimiter } from './middleware/rateLimiter.js';
+import { requestLogger } from './middleware/requestLogger.js';
+import { env } from './config/env.js';
+import authRoutes from './modules/auth/auth.routes.js';
+import usersRoutes from './modules/users/users.routes.js';
+
+const app = express();
+
+app.use(helmet());
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+app.use(requestLogger);
+
+if (env.NODE_ENV !== 'test') {
+  app.use(generalLimiter);
+}
+
+app.get('/health', (_req, res) => res.json({ ok: true }));
+
+if (env.NODE_ENV !== 'test') {
+  app.use('/api/auth', authLimiter, authRoutes);
+} else {
+  app.use('/api/auth', authRoutes);
+}
+
+app.use('/api/users', usersRoutes);
+
+app.use(errorHandler);
+
+export default app;
+```
+
+- El orden queda: `helmet` → `cors` → `json` → `requestLogger` → limitador → `/health` → rutas → `errorHandler`.
+- `express.json({ limit: '10mb' })`: el body puede ocupar hasta 10 MB.
+- **En test no hay limitadores** (`NODE_ENV === 'test'`). Los tests hacen muchas peticiones seguidas desde la misma IP (incluidos varios logins fallidos) y acabarían en un 429.
+- En la v0.8.0 todavía no estaban los `if` de test; se añadieron en la v0.9.0.
+
+## Tests con Jest y Supertest
+
+**Jest** es el *framework* de tests (como JUnit) y **Supertest** manda peticiones HTTP a la app de Express **sin levantar el servidor**: `request(app).get('/api/users')`. Por eso `app.ts` exporta la app y el `listen` está en `index.ts`. Son tests de **integración**: prueban la API entera, desde la petición hasta la base, sin *mocks* a la vista.
+
+### La configuración
+
+Hacer funcionar Jest con TypeScript y ES Modules necesita tres piezas:
+
+<Tabs items={['Scripts', 'jest.config.js', 'tsconfig.json']}>
+  <Tab value="Scripts">
+
+```json title="package.json"
+"test": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest",
+"test:watch": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --watch",
+"test:coverage": "NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --coverage"
+```
+
+- `NODE_ENV=test` para que `app.ts` quite los limitadores.
+- `NODE_OPTIONS=--experimental-vm-modules` activa el soporte de ES Modules que Jest necesita.
+- `--watch` repite los tests al guardar y `--coverage` dice qué parte del código se ha probado.
+
+Antes, el script era solo `"test": "jest"`.
+
+  </Tab>
+  <Tab value="jest.config.js">
+
+```js title="jest.config.js"
+export default {
+  preset: 'ts-jest/presets/default-esm',
+  testEnvironment: 'node',
+  extensionsToTreatAsEsm: ['.ts'],
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
+  transform: {
+    '^.+\\.tsx?$': ['ts-jest', { useESM: true }],
+  },
+  roots: ['<rootDir>/src'],
+  testMatch: ['**/__tests__/**/*.test.ts', '**/?(*.)+(spec|test).ts'],
+  collectCoverageFrom: ['src/**/*.ts', '!src/**/*.d.ts', '!src/tests/**', '!src/index.ts'],
+  coverageDirectory: 'coverage',
+  verbose: true,
+};
+```
+
+- `ts-jest` en modo ESM compila los `.ts` para Jest.
+- **`moduleNameMapper`** quita el `.js` de los imports (`'./app.js'` → `'./app'`) para que Jest encuentre el `.ts`.
+- `testMatch`: los ficheros `*.test.ts` o `*.spec.ts`.
+- La cobertura no cuenta los tests ni `index.ts`.
+
+</Tab>
+  <Tab value="tsconfig.json">
+
+```json title="tsconfig.json"
+"exclude": ["node_modules", "dist", "src/tests"]
+```
+
+Los tests no se compilan con `npm run build`: no tienen que acabar en `dist`.
+
+  </Tab>
+</Tabs>
+
+Versiones: `jest ^30.2.0`, `ts-jest ^29.4.5` <Dudoso nota="Es lo que se lee, aunque las versiones mayores de jest y ts-jest no coinciden." />, `supertest ^7.1.4`, `@types/jest ^30.0.0` y `@types/supertest ^6.0.3`, todas de desarrollo.
+
+<NoDadoEnClase titulo="En Windows">
+  `NODE_ENV=test comando` es sintaxis de la terminal de Linux y macOS (y de WSL, que es lo que usan las guías de clase). En la PowerShell o el `cmd` de Windows no funciona. Si no usas WSL, el paquete `cross-env` lo resuelve: `"test": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest"`.
+</NoDadoEnClase>
+
+### Cómo son los tests
+
+<Recorrido
+  titulo="src/tests/users.test.ts (fragmento)"
+  lenguaje="ts"
+  codigo={`import request from 'supertest';
+import app from '../app';
+
+describe('Users Endpoints', () => {
+  let authToken: string;
+  let userId: number;
+
+  const testUser = {
+    email: \`testuser\${Date.now()}@example.com\`,
+    name: 'Test User',
+    password: 'password123',
+  };
+
+  beforeAll(async () => {
+    const res = await request(app).post('/api/auth/register').send(testUser);
+    authToken = res.body.token;
+    userId = res.body.user.id;
+  });
+
+  describe('GET /api/users', () => {
+    it('debe listar usuarios con autenticación', async () => {
+      const res = await request(app)
+        .get('/api/users')
+        .set('Authorization', \`Bearer \${authToken}\`);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+    });
+
+    it('debe fallar sin autenticación', async () => {
+      const res = await request(app).get('/api/users');
+      expect(res.status).toBe(401);
+      expect(res.body.message).toBe('No autorizado');
+    });
+  });
+
+  describe('GET /api/users/me', () => {
+    it('debe obtener perfil del usuario autenticado', async () => {
+      const res = await request(app)
+        .get('/api/users/me')
+        .set('Authorization', \`Bearer \${authToken}\`);
+      expect(res.status).toBe(200);
+      expect(res.body.email).toBe(testUser.email);
+      expect(res.body).not.toHaveProperty('passwordHash');
+    });
+  });
+});`}
+>
+  <Paso lineas="1-2" titulo="Supertest y la app">
+    Se importa la app, no el servidor. `request(app)` la usa directamente.
+  </Paso>
+  <Paso lineas="4" titulo="describe agrupa">
+    Un `describe` por bloque de endpoints y, dentro, uno por endpoint.
+  </Paso>
+  <Paso lineas="8-12" titulo="Un email que no se repite">
+    `Date.now()` mete los milisegundos en el email: cada vez que se ejecutan los tests, el usuario es nuevo y el registro no choca con el 409.
+  </Paso>
+  <Paso lineas="14-18" titulo="beforeAll prepara">
+    Antes de todos los tests, registra el usuario y guarda el `token` y el `id` de la respuesta.
+  </Paso>
+  <Paso lineas="21-27" titulo="Un caso bueno">
+    `it` con la descripción en español, `async/await`, y la cabecera `Authorization: Bearer <token>` con `.set`. Comprueba el código y que el cuerpo es un array.
+  </Paso>
+  <Paso lineas="29-33" titulo="Un caso malo">
+    Sin token: 401 y el mensaje exacto `No autorizado`. Hay que probar **siempre** también lo que tiene que fallar.
+  </Paso>
+  <Paso lineas="43" titulo="Un test de seguridad">
+    `not.toHaveProperty('passwordHash')`: la API no expone el hash.
+  </Paso>
+</Recorrido>
+
+- El import `'../app'` va sin `.js`, al contrario que el resto del proyecto. Funciona por el `moduleNameMapper`, pero <Dudoso nota="Puede estar mal leído en las capturas.">puede que se haya leído mal</Dudoso>.
+- Los tests usan el middleware de autenticación de la v0.6.0 (`No autorizado`, `Token inválido`), cuyo código no se vio ([Autenticación](/docs/2-dam/apis/backend/autenticacion)).
+
+Más casos que se ven en los tests:
+
+| Test | Qué comprueba |
+| --- | --- |
+| `GET /api/users` con `Bearer invalid_token` | 401 y `Token inválido` |
+| `PATCH /api/users/me` con `{ name: 'Updated Name' }` | 200 y el nombre cambiado |
+| `PATCH /api/users/me` con `{ email: 'invalid-email' }` | 400 |
+| `PATCH /api/users/me/password` | 200, `Contraseña actualizada correctamente`, y **después** un login con la contraseña nueva da 200 |
+| `GET /api/users/99999` | 404 |
+| `POST /api/auth/register` (en `auth.test.ts`) | 201, `user` y `token` en el cuerpo, el email correcto y `res.body.user` sin `passwordHash` |
+
+En total hay **8 tests de Auth y 13 de Users**.
+
+<NoSeVio titulo="Dos tests a medias">
+  No se ve el cuerpo del test "debe fallar con contraseña actual incorrecta" (se espera 400 y `Contraseña actual incorrecta`) ni el `expect` del cambio de contraseña sin autenticación (se supone 401).
+</NoSeVio>
+
+## Practica
+
+<Quiz titulo="Test: logs, rate limiting y tests" descripcion="8 preguntas">
+  <Pregunta enunciado="El logger tiene `level: 'warn'` fuera de desarrollo. ¿Qué mensajes escribe?" explicacion="Escribe su nivel y los más graves (número más bajo): `warn` (1) y `error` (0).">
+    <Opcion>Solo los `warn`</Opcion>
+    <Opcion correcta>Los `warn` y los `error`</Opcion>
+    <Opcion>Todos menos `debug`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué recoge `logs/error.log`?" explicacion="Su transport tiene `level: 'error'`: solo los mensajes de nivel error.">
+    <Opcion correcta>Solo los mensajes de nivel `error`</Opcion>
+    <Opcion>Todos los mensajes</Opcion>
+    <Opcion>Las peticiones que tardan mucho</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Para qué usa el `requestLogger` el evento `res.on('finish')`?" explicacion="Para escribir el log cuando la respuesta ya se ha enviado, con el código final y el tiempo que ha tardado.">
+    <Opcion>Para cortar la petición si tarda demasiado</Opcion>
+    <Opcion correcta>Para escribir el log cuando la respuesta ya se ha enviado, con su código y su duración</Opcion>
+    <Opcion>Para cerrar la conexión con la base</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Una respuesta 404 sale en el log con el nivel…" explicacion="El `requestLogger` usa `warn` para los 4xx, `error` para los 5xx y `http` para el resto.">
+    <Opcion>`error`</Opcion>
+    <Opcion correcta>`warn`</Opcion>
+    <Opcion>`http`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué hace `skipSuccessfulRequests: true` en el `authLimiter`?" explicacion="Las peticiones que salen bien no cuentan: el límite de 5 cada 15 minutos es solo para los intentos fallidos.">
+    <Opcion>Deja pasar sin límite a los usuarios registrados</Opcion>
+    <Opcion correcta>Solo cuentan los intentos que fallan</Opcion>
+    <Opcion>Salta el limitador en las rutas de usuarios</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="En la v0.9.0, los limitadores también están activos cuando se ejecutan los tests." respuesta={false} explicacion="Se desactivan con `if (env.NODE_ENV !== 'test')`. Si no, los tests acabarían en 429." />
+  <Pregunta enunciado="¿Por qué los tests pueden hacer `request(app)` sin arrancar el servidor?" explicacion="Porque `app.ts` exporta la app configurada y el `listen` está aparte, en `index.ts`. Supertest la usa directamente.">
+    <Opcion>Porque Jest arranca `index.ts` por su cuenta</Opcion>
+    <Opcion correcta>Porque `app.ts` exporta la app y el `listen` está en `index.ts`</Opcion>
+    <Opcion>Porque Supertest simula Express</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Para qué sirve el `moduleNameMapper` del `jest.config.js`?" explicacion="Quita la extensión `.js` de los imports relativos para que Jest encuentre los ficheros `.ts`.">
+    <Opcion>Para cambiar los nombres de los tests</Opcion>
+    <Opcion correcta>Para quitar el `.js` de los imports y que Jest encuentre los `.ts`</Opcion>
+    <Opcion>Para que Jest use CommonJS</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: logs, límites y tests">
+  <Tarjeta frente="Niveles de Winston de clase">`error` 0, `warn` 1, `info` 2, `http` 3, `debug` 4. Cuanto más bajo, más grave.</Tarjeta>
+  <Tarjeta frente="Los tres transports">Consola, `logs/error.log` (solo errores) y `logs/all.log`.</Tarjeta>
+  <Tarjeta frente="Nivel del logger según el entorno">`debug` en desarrollo (sale todo) y `warn` en el resto.</Tarjeta>
+  <Tarjeta frente="Niveles del requestLogger">5xx → `error`, 4xx → `warn`, el resto → `http`.</Tarjeta>
+  <Tarjeta frente="generalLimiter y authLimiter">100 peticiones cada 15 min por IP; 5 intentos fallidos cada 15 min en `/api/auth`.</Tarjeta>
+  <Tarjeta frente="Middleware solo para unas rutas">`app.use('/api/auth', authLimiter, authRoutes)`.</Tarjeta>
+  <Tarjeta frente="¿Por qué `Date.now()` en el email de los tests?">Para que cada ejecución registre un usuario nuevo y no choque con el 409.</Tarjeta>
+  <Tarjeta frente="Jest con ES Modules">`NODE_OPTIONS=--experimental-vm-modules`, ts-jest en modo ESM y `moduleNameMapper` que quita el `.js`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Un test para /health" dificultad="facil">
+  Escribe `src/tests/health.test.ts` con un test que compruebe que `GET /health` responde 200 y `{ ok: true }`.
+
+  <Pista>Copia la estructura de `auth.test.ts`: `describe`, `it` y `request(app)`.</Pista>
+  <Pista>Para comparar el cuerpo entero, Jest tiene `toEqual`.</Pista>
+
+  <Solucion>
+
+```ts title="src/tests/health.test.ts"
+import request from 'supertest';
+import app from '../app';
+
+describe('Health', () => {
+  it('debe responder que está vivo', async () => {
+    const res = await request(app).get('/health');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+  });
+});
+```
+
+Se ejecuta con `npm test`. Ojo: al importar `app` se carga `env.ts`, así que el `.env` tiene que tener las variables obligatorias.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Tests del login" dificultad="media">
+  Escribe dos tests para `POST /api/auth/login`: uno que entre bien con un usuario recién registrado (200 y `token` en la respuesta) y otro con la contraseña mal (401 y `Credenciales inválidas`).
+
+  <Pista>Registra el usuario en un `beforeAll`, con un email que no se repita.</Pista>
+  <Pista>`toHaveProperty('token')` comprueba que el cuerpo trae el token.</Pista>
+
+  <Solucion>
+
+```ts title="src/tests/login.test.ts"
+import request from 'supertest';
+import app from '../app';
+
+describe('POST /api/auth/login', () => {
+  const testUser = {
+    email: `login${Date.now()}@example.com`,
+    name: 'Test User',
+    password: 'password123',
+  };
+
+  beforeAll(async () => {
+    await request(app).post('/api/auth/register').send(testUser);
+  });
+
+  it('debe entrar con las credenciales correctas', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: testUser.email, password: testUser.password });
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('token');
+    expect(res.body.user).not.toHaveProperty('passwordHash');
+  });
+
+  it('debe fallar con la contraseña mal', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: testUser.email, password: 'otraClave99' });
+    expect(res.status).toBe(401);
+    expect(res.body.message).toBe('Credenciales inválidas');
+  });
+});
+```
+
+La contraseña mal tiene 11 caracteres a propósito: con menos de 8 no pasaría `loginSchema` y el test daría 400, no 401.
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Winston">Logger con niveles, formato y varios destinos (*transports*). Una instancia en `utils/logger.ts`.</Termino>
+  <Termino nombre="requestLogger">Middleware propio: mide cada petición y la escribe en `res.on('finish')`.</Termino>
+  <Termino nombre="express-rate-limit">Limita las peticiones por IP. Al pasarse, 429.</Termino>
+  <Termino nombre="Jest">Framework de tests: `describe`, `it`, `expect`, `beforeAll`.</Termino>
+  <Termino nombre="Supertest">Manda peticiones a la app de Express sin levantar el servidor.</Termino>
+  <Termino nombre="Test de integración">Prueba la API entera, desde la petición hasta la base.</Termino>
+</Glosario>
+
+<MarcarCompletado />

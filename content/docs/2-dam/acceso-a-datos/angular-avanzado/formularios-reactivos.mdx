@@ -1,0 +1,738 @@
+---
+title: "Formularios reactivos: migrar el CRUD"
+description: La migración del formulario de proj-game a ReactiveForms del 18/11, paso a paso. FormControl con nonNullable y Validators, FormGroup, formControlName, hasError, FormGroupDirective, setValue frente a patchValue y la barrera de validación.
+icon: ListChecks
+---
+
+import { InspectorFormControl } from '@/components/temas/angular-avanzado/inspector-form-control';
+
+La Act 11, *"Migración ReactiveForms Git Vercel"*, pide rehacer el formulario de juegos con **formularios reactivos**, en una rama de Git aparte, y desplegar la app en Vercel. Se leyó el 12/11 y se hizo en directo el 18/11, campo a campo, en la rama `refactor/reactive-form2`. Si no tienes fresco el formulario de partida, repasa [CRUD con formulario: padre e hijo](/docs/2-dam/acceso-a-datos/angular-avanzado/crud-padre-hijo).
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Pasar de `FormsModule` y `ngModel` a `ReactiveFormsModule`, `FormControl` y `FormGroup`.
+  - Tipar bien un `FormControl` con `nonNullable` y poner sus `Validators`.
+  - Leer los errores con `hasError()` o `errors?.[...]` y saber cómo se llama cada error.
+  - Usar `FormGroupDirective`, rellenar el formulario al editar (`setValue` y `patchValue`) y montar la barrera de validación.
+</Callout>
+
+## Plantilla o clase: dónde vive el formulario
+
+<DeClase fecha="18/11" proyecto="proj-game" rama="refactor/reactive-form2" />
+
+| | Template-driven (Act 10) | Reactivo (Act 11) |
+| --- | --- | --- |
+| Módulo | `FormsModule` | `ReactiveFormsModule` |
+| Dónde se define | En la plantilla: `ngModel`, `name`, `#x="ngModel"` | En la clase: un `FormControl` por campo dentro de un `FormGroup` |
+| Validadores | Atributos HTML: `required`, `minlength="3"` | Funciones: `Validators.required`, `Validators.minLength(3)` |
+| Enlace en el HTML | `[(ngModel)]="game.title"` | `[formGroup]` en el `<form>` y `formControlName="title"` en cada campo |
+| Referencia del formulario | `NgForm` | `FormGroupDirective` |
+| Formularios grandes o dinámicos | Se complica | Más cómodo (`FormArray`, `FormBuilder`) |
+
+La idea: en el reactivo, **el modelo del formulario es un objeto de TypeScript** que puedes leer, cambiar y probar sin tocar el HTML. La plantilla solo se engancha a él.
+
+## La rama de trabajo
+
+Antes de tocar nada, la actividad pide una rama nueva desde la estable:
+
+<Terminal titulo="Act 11, paso 3">
+{`$ git status
+$ git switch main
+$ git pull --ff-only
+$ git switch -c refactor/reactive-forms
+$ git branch --show-current
+refactor/reactive-forms`}
+</Terminal>
+
+En clase la rama estable se llamaba `master` y ya había una `refactor/reactive-form` hecha. Para repetir el refactor desde cero, el profesor hizo `git switch master` y `git switch -c refactor/reactive-form2`.
+
+## La migración, paso a paso
+
+<DeClase fecha="18/11" proyecto="proj-game" nota="minutos 0 a 27" />
+
+<Steps>
+  <Step>
+
+#### Cambiar el módulo
+
+  En `crud.component.ts`, `FormsModule` sale de `imports` y entra `ReactiveFormsModule`. También se borran los `import` de `FormsModule` y `NgForm`. El editor se llena de errores, porque la plantilla sigue usando `ngModel`: es normal, se van quitando campo a campo.
+
+  </Step>
+  <Step>
+
+#### Enganchar el formulario
+
+  En la plantilla, `<form [formGroup]="formGroup" ...>`. En la clase, `formGroup = new FormGroup({})`, que se irá llenando.
+
+  </Step>
+  <Step>
+
+#### Un FormControl por campo
+
+  `title = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.minLength(3)] })`. La validación pasa del HTML al TypeScript.
+
+  </Step>
+  <Step>
+
+#### Meterlo en el grupo
+
+  `formGroup = new FormGroup({ title: this.title })`. La **clave** (`title:`) es el nombre con el que lo busca la plantilla.
+
+  </Step>
+  <Step>
+
+#### Cambiar la plantilla
+
+  En el input se quitan `name`, `[(ngModel)]` y `#title="ngModel"`, y se pone `formControlName="title"`.
+
+  </Step>
+  <Step>
+
+#### Borrar los atributos de validación
+
+  `required`, `minlength`, `min` y `max` desaparecen del HTML: ahora las reglas son las de `Validators`.
+
+  </Step>
+</Steps>
+
+<Comparar titulo="El campo título, antes y después" columnas>
+  <Lado titulo="Antes (master)">
+
+```html
+<input id="titleId"
+  type="text"
+  name="title"
+  [(ngModel)]="this.game.title"
+  required minlength="3"
+  #title="ngModel" />
+```
+
+  </Lado>
+  <Lado titulo="Después (reactivo)">
+
+```html
+<input id="titleId"
+  type="text"
+  formControlName="title" />
+```
+
+```ts
+title = new FormControl('', {
+  nonNullable: true,
+  validators: [
+    Validators.required,
+    Validators.minLength(3)
+  ]
+});
+```
+
+  </Lado>
+</Comparar>
+
+Lo bueno de guardar cada control en su propia propiedad (`title`, `genre`…) es que la plantilla puede seguir escribiendo `title.invalid` o `title.touched` igual que antes: ahora `title` es el `FormControl` de la clase, no la referencia `#title` del HTML.
+
+## El tipo de un FormControl
+
+<DeClase fecha="18/11" proyecto="proj-game" nota="con los tooltips y abriendo node_modules/@angular/forms/index.d.ts" />
+
+El profesor fue enseñando con el tooltip de VS Code qué tipo deduce TypeScript según cómo se crea el control:
+
+| Cómo se crea | Tipo | Qué pasa con `reset()` |
+| --- | --- | --- |
+| `new FormControl()` | `FormControl<any>` | Vuelve a `null`, y TypeScript no te avisa de nada |
+| `new FormControl('')` | `FormControl<string \| null>` | Vuelve a `null` |
+| `new FormControl('', { nonNullable: true })` | `FormControl<string>` | Vuelve al valor inicial, `''` |
+
+Sin `nonNullable`, Angular supone que el control puede quedarse en `null` (por ejemplo, después de un `reset()` sin valor), y el tipo lo refleja. Con `nonNullable: true`, el valor inicial es también el valor de reinicio y el `null` desaparece del tipo.
+
+El **segundo argumento** del constructor admite tres formas: un validador suelto, un array de validadores o un objeto de opciones (`FormControlOptions`) con `nonNullable`, `validators`, `asyncValidators` y `updateOn`. En clase siempre se usa el objeto.
+
+<Callout type="idea" title="Mira los tipos de la librería">
+  Con el cursor sobre `FormControl` y *Ir a la definición*, VS Code abre `node_modules/@angular/forms/index.d.ts`. Ahí se ven las sobrecargas del constructor, `FormControlState<T>` (`{ value, disabled }`) y que `FormControlOptions` extiende `AbstractControlOptions`. Es lo que hizo el profesor para explicar `nonNullable`.
+</Callout>
+
+## Validators
+
+Al escribir `Validators.` el autocompletado lista los que trae Angular: `compose`, `email`, `max`, `maxLength`, `min`, `minLength`, `nullValidator`, `pattern`, `required` y `requiredTrue`. Los que llevan parámetro (`minLength(3)`, `max(100)`…) son **funciones que devuelven un validador** (`ValidatorFn`); los que no, como `Validators.required`, se pasan sin paréntesis.
+
+Cuando un validador falla, añade una clave al objeto `errors` del control. **El nombre de la clave no siempre es el del validador**:
+
+| Validador | Clave en `errors` | Valor del error |
+| --- | --- | --- |
+| `Validators.required` | `required` | `true` |
+| `Validators.minLength(3)` | `minlength` (en minúsculas) | `{ requiredLength: 3, actualLength: 2 }` |
+| `Validators.maxLength(40)` | `maxlength` | `{ requiredLength: 40, actualLength: 41 }` |
+| `Validators.min(0.01)` | `min` | `{ min: 0.01, actual: 0 }` |
+| `Validators.max(100)` | `max` | `{ max: 100, actual: 150 }` |
+| `Validators.pattern(/^\d+$/)` | `pattern` | `{ requiredPattern: '/^\d+$/', actualValue: 2.5 }` |
+| `Validators.email` | `email` | `true` |
+
+El tooltip de `Validators.max` lo enseña así: con `max(15)` y el valor 16, el error es `{ max: { max: 15, actual: 16 } }`.
+
+`min`, `max`, `minLength` y `pattern` **no dan error con el campo vacío**: de eso se encarga `required`. Por eso casi siempre van juntos.
+
+La tabla de controles que pide la Act 11 (en el documento):
+
+| Control | Valor inicial | Validadores |
+| --- | --- | --- |
+| `title` | `''` | `required`, `minLength(3)` |
+| `genre` | `''` | `required` |
+| `platform` | `''` | `required` |
+| `price` | `0` | `required`, `min(0.01)` |
+| `stock` | `0` | `required`, `min(0)`, `pattern` de entero (`/^\d+$/`) |
+
+El documento avisa de que `type="number"` y `step="1"` en el input **no sustituyen** a la validación de Angular: el navegador deja escribir decimales igualmente. En clase, el precio llevó además `max(100)` y el stock `max(999)` en vez del `pattern`.
+
+## Mostrar los errores
+
+```html title="crud.component.html (título y precio)"
+@if (title.invalid && (title.touched || title.dirty)) {
+  @if (title.hasError('required')) { <p>Título obligatorio...</p> }
+  @if (title.errors?.['minlength']) { <p>Longitud minima 3...</p> }
+}
+
+@if (price.invalid && (price.touched || price.dirty || gameForm.submitted)) {
+  @if (price.hasError('required')) { <p>Precio es obligatorio...</p> }
+  @if (price.errors?.['min'] || price.errors?.['max']) { <p>Precio fuera de rango permitido [0.01-100]</p> }
+}
+```
+
+- `control.hasError('clave')` y `control.errors?.['clave']` hacen lo mismo. `hasError` se lee mejor y no necesita los corchetes. En clase se mezclan las dos.
+- La clave es la de la tabla de arriba: `hasError('minlength')`, no `hasError('minLength')`. Con el nombre mal no da error de compilación, simplemente el mensaje no sale nunca.
+- Al precio se le añadió `gameForm.submitted` a la condición, para que los errores salgan también al pulsar Guardar. El título no lo lleva: si pulsas Guardar sin tocarlo, su error no aparece.
+
+Pruébalo en el inspector. Escribe, sal de cada campo, borra, pulsa Guardar con el título sin tocar y activa después la barrera con `markAllAsTouched()`:
+
+<InspectorFormControl />
+
+Lo que enseña:
+
+- `touched` pasa a `true` al **salir** del campo; `dirty`, al **cambiar** el valor.
+- Con el campo vacío solo sale `required`; `min` y `max` no saltan hasta que hay un número.
+- Con `"ab"` en el título, `errors` es `{ minlength: { requiredLength: 3, actualLength: 2 } }`.
+- Al pulsar Guardar con todo vacío, salen los errores de precio y stock (su condición incluye `submitted`) pero no el del título. Con la barrera activada, `markAllAsTouched()` marca todos los campos como tocados y salen todos.
+- Si el formulario es inválido, `onSaveGame` hace `return` y no se manda nada a JSON Server.
+
+En la demo los mensajes de stock dicen "Stock…". En el código de clase dicen "Precio es obligatorio" y "Precio fuera de rango", copiados del precio.
+
+## La clave tiene que coincidir
+
+<DeClase fecha="18/11" proyecto="proj-game" nota="prueba con genre_" />
+
+`formControlName` busca el control **por la clave dentro del `FormGroup`**, no por el nombre de la propiedad de la clase. El profesor lo demostró cambiando la clave a `genre_`: el formulario solo funciona si en el `FormGroup` y en el HTML pone lo mismo.
+
+```ts
+genre = new FormControl('', { nonNullable: true, validators: [Validators.required] });
+formGroup = new FormGroup({ title: this.title, genre: this.genre });
+//                                             ^ la clave que busca formControlName="genre"
+```
+
+Si no coinciden, en la consola sale *"Cannot find control with name: 'genre'"*. Y si queda algún `#platform="ngModel"` de la versión anterior, sin `FormsModule` sale **NG8003**: *No directive found with exportAs 'ngModel'*. Los dos estilos no se mezclan.
+
+## gameForm pasa a ser un FormGroupDirective
+
+```html
+<form [formGroup]="formGroup" #gameForm="ngForm" (ngSubmit)="onSaveGame(gameForm)" novalidate>
+```
+
+La referencia `#gameForm="ngForm"` se queda, pero ya no es un `NgForm`: sobre un `<form>` con `[formGroup]`, `ngForm` es el nombre que exporta la directiva **`FormGroupDirective`** (el tooltip dice *"Binds an existing FormGroup or FormRecord to a DOM element"*). Sigue teniendo lo que se usaba antes: `submitted`, `valid`, `invalid`, `value` y `resetForm()`. Por eso el método cambia el tipo del parámetro:
+
+```ts
+onSaveGame(form: FormGroupDirective) { ... }   // antes: (form: NgForm)
+```
+
+En las capturas no se ve si al final se quita `#gameForm` del `<form>`.
+
+## El componente completo
+
+<DeClase fecha="18/11" proyecto="proj-game" rama="refactor/reactive-form2" />
+
+<Recorrido
+  titulo="src/app/crud/crud.component.ts (18/11)"
+  lenguaje="typescript"
+  codigo={`@Component({
+  selector: 'app-crud',
+  imports: [ReactiveFormsModule, JsonPipe],
+  templateUrl: './crud.component.html',
+  styleUrl: './crud.component.css'
+})
+export class CrudComponent implements OnChanges {
+  private gameService = inject(GameService);
+
+  title = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.minLength(3)] });
+  genre = new FormControl('', { nonNullable: true, validators: [Validators.required] });
+  platform = new FormControl('', { nonNullable: true, validators: [Validators.required] });
+  price = new FormControl(0, { nonNullable: true, validators: [Validators.required, Validators.min(0.01), Validators.max(100)] });
+  stock = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.min(0), Validators.max(999)] });
+
+  formGroup = new FormGroup({
+    title: this.title,
+    genre: this.genre,
+    platform: this.platform,
+    price: this.price,
+    stock: this.stock
+  });
+
+  edit = false;
+  editGame = input.required<Game | undefined>();
+  actualizaGames = output<Game>();
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['editGame']?.currentValue) {
+      this.formGroup.setValue(changes['editGame'].currentValue);
+      this.edit = true;
+    }
+  }
+
+  onSaveGame(form: FormGroupDirective) {
+    if (form.invalid) return;
+    if (this.edit) {
+      this.gameService.update({ id: this.editGame()?.id, ...form.value }).subscribe(gameUpdated => {
+        form.resetForm();
+        this.edit = false;
+        this.actualizaGames.emit(gameUpdated);
+      });
+    } else {
+      this.gameService.create(form.value).subscribe(gameSaved => {
+        form.resetForm();
+        this.actualizaGames.emit(gameSaved);
+      });
+    }
+  }
+}`}
+>
+  <Paso lineas="3" titulo="ReactiveFormsModule">
+    Sustituye a `FormsModule`. Da las directivas `[formGroup]`, `formControlName` y `[formControl]`.
+  </Paso>
+  <Paso lineas="10-14" titulo="Un control por campo">
+    Cada uno con su valor inicial, `nonNullable: true` y sus validadores. Son propiedades públicas para que la plantilla pueda leer `title.invalid`, `price.hasError(...)`…
+  </Paso>
+  <Paso lineas="16-22" titulo="El grupo">
+    Las claves son las que usa `formControlName`. El `FormGroup` es válido solo si lo son todos sus controles: si el precio es inválido, `formGroup.invalid` es `true`.
+  </Paso>
+  <Paso lineas="24-26" titulo="Igual que antes">
+    La bandera, la entrada y la salida no cambian. La propiedad `game` de la versión anterior ya no hace falta, porque los valores están en el `FormGroup` (en el código de clase se quedó declarada).
+  </Paso>
+  <Paso lineas="28-33" titulo="Rellenar al editar">
+    Ya no se copia el juego en `this.game`: se mete directamente en el formulario con `setValue`. Más abajo verás por qué es más seguro `patchValue`.
+  </Paso>
+  <Paso lineas="35-36" titulo="La misma barrera">
+    `form` es la `FormGroupDirective`. Si es inválido, no se hace nada.
+  </Paso>
+  <Paso lineas="37-42" titulo="Editar">
+    El formulario no tiene `id`, así que se recupera del juego que llegó del padre: `this.editGame()?.id` (la entrada es un signal y se lee con paréntesis). Con *spread* se le añaden los valores del formulario y se llama a `update`.
+  </Paso>
+  <Paso lineas="43-47" titulo="Crear">
+    `form.value` ya tiene la forma de un `Game` sin `id`, que es lo que espera `create`.
+  </Paso>
+</Recorrido>
+
+Sobre este código:
+
+- El `onSaveGame` es el de la diapositiva *"Reactivos en Angular 19"* (bloque 7). En directo solo se ve hasta el `if (this.edit)`: las llamadas al servicio del final no salen en las capturas.
+- El valor inicial de `price` se lee <Dudoso nota="En unas capturas se lee new FormControl('', ...) y en otras new FormControl(0, ...).">`0`</Dudoso>. El de `stock` es `''` en clase y `0` en la diapositiva.
+- En capturas posteriores, los validadores de `price` se leen <Dudoso nota="Seguramente por estar cortado o plegado en el editor.">`validators: [Validators.required, Validators.max(100)]`</Dudoso>, sin `nonNullable` ni `min`. Aquí se deja la primera versión, la que se escribe entre los minutos 20 y 22.
+- Mientras se escribía, el grupo tuvo `price: this.prices` (error de compilación) y se corrigió a `this.price`.
+- El nombre del grupo es `formGroup` en el código y `gameFormGroup` (o `gameForm`) en la diapositiva y la guía. El método es `onSaveGame` en clase y `saveGame` o `guardar` en la guía.
+
+### La plantilla
+
+```html title="src/app/crud/crud.component.html (18/11)"
+<form [formGroup]="formGroup" #gameForm="ngForm" (ngSubmit)="onSaveGame(gameForm)" novalidate>
+  <div>
+    <label for="titleId">Título</label>
+    <input id="titleId" type="text" formControlName="title" />
+    @if (title.invalid && (title.touched || title.dirty)) {
+      @if (title.hasError('required')) { <p>Título obligatorio...</p> }
+      @if (title.errors?.['minlength']) { <p>Longitud minima 3...</p> }
+    }
+  </div>
+
+  <label for="genreId">Género: </label>
+  <select id="genreId" formControlName="genre">
+    <option value="">Selecciona un género</option>
+    <option value="Platform">Platform</option>
+    <!-- Strategy, Racing, RPG, Action, Adventure, Simulation, Sports -->
+  </select>
+
+  <label for="platformId">Plataformma: </label>
+  <select id="platformId" formControlName="platform">
+    <option value="">Selecciona plataforma</option>
+    <option value="PC">PC</option>
+    <option value="PlayStation">PlayStation</option>
+    <option value="XBox">XBox</option>
+  </select>
+  @if (platform.invalid && (platform.dirty || platform.touched)) { <p>Plataforma obligatoria</p> }
+
+  <label for="priceId">Precio: </label>
+  <input id="priceId" type="number" formControlName="price" />
+  @if (price.invalid && (price.touched || price.dirty || gameForm.submitted)) {
+    @if (price.hasError('required')) { <p>Precio es obligatorio...</p> }
+    @if (price.errors?.['min'] || price.errors?.['max']) { <p>Precio fuera de rango permitido [0.01-100]</p> }
+  }
+
+  <div>
+    <label for="stockId">Stock: </label>
+    @let invalidStock = stock.invalid && (stock.touched || stock.dirty || gameForm.submitted);
+    <input [class.invalid-control]="invalidStock" id="stockId" type="number" formControlName="stock">
+    @if (invalidStock) {
+      @if (stock.hasError('required')) { <p>Precio es obligatorio...</p> }
+      @if (stock.errors?.['min'] || stock.errors?.['max']) { <p>Precio fuera de rango permitido [0-999]</p> }
+    }
+  </div>
+
+  <button>Guardar</button>
+  <p>Válido: {{ gameForm.valid }}</p>
+  <p>Modificado: {{ gameForm.dirty }}</p>
+  {{ this.game | json }}
+</form>
+```
+
+- "Plataformma" y los mensajes "Precio…" del stock son erratas del código de clase.
+- En el primer bloque del 18/11, la condición de `@let invalidStock` sale <Dudoso nota="El final de la línea está cortado en la captura.">cortada</Dudoso>; la versión de arriba es la del segundo bloque. Tampoco llega a verse escrito el `formControlName="stock"` en el primer bloque: en el segundo se descubre que faltaba (ver más abajo).
+- El argumento de `(ngSubmit)` sale cortado: la diapositiva pone unas veces `gameForm` y otras <Dudoso>`gameForm.value`</Dudoso>.
+- La última línea, `{{ this.game | json }}`, viene de la versión anterior: con el formulario reactivo, `game` ya no se actualiza. Para depurar sirve `{{ formGroup.value | json }}`.
+
+## Rellenar el formulario al editar
+
+<DeClase fecha="18/11, 19/11" proyecto="proj-game" />
+
+En directo, la línea de `ngOnChanges` salió mal un par de veces (`this.formGroup.value = ...`, `setValue() = ...`) antes de quedar como llamada. Al probarlo, el juego se cargaba en el formulario salvo el stock: al `<input>` de stock **le faltaba `formControlName="stock"`**. Se añadió y el formulario pasó a "Válido: true".
+
+<Comparar titulo="Dos formas de meter el juego en el formulario">
+  <Lado titulo="En directo (18/11): setValue">
+
+```ts
+ngOnChanges(changes: SimpleChanges): void {
+  if (changes['editGame']?.currentValue) {
+    this.formGroup.setValue(changes['editGame'].currentValue);
+    this.edit = true;
+  }
+}
+```
+
+`setValue` exige un objeto con **exactamente** las claves del grupo: ni una más ni una menos.
+
+  </Lado>
+  <Lado titulo="Diapositiva y 19/11: patchValue">
+
+```ts
+ngOnChanges(changes: SimpleChanges): void {
+  if (changes['editGame']?.currentValue) {
+    let game = changes['editGame']?.currentValue;
+    this.gameFormGroup.patchValue(game);
+    this.edit = true;
+  }
+}
+```
+
+`patchValue` rellena las claves que coinciden y no se queja ni de las que faltan ni de las que sobran.
+
+  </Lado>
+</Comparar>
+
+El `Game` que llega del padre trae además `id`, que no está en el grupo. Por cómo funciona `setValue`, eso debería dar el error *"Cannot find form control with name: 'id'"*, y por eso es más seguro `patchValue`. <Dudoso nota="El juego se carga en el formulario en la demo, pero no se ve la consola en ese momento.">En las capturas no se ve si dio error</Dudoso>.
+
+Hay un segundo motivo en `proj-game`: el 05/11, los juegos 1 a 15 de `db.json` no tenían `stock` (no se ve que se corrigiera). Con uno de esos, `setValue` también fallaría, ahora por la clave que **falta** (*Must supply a value for form control with name: 'stock'*). `patchValue` lo carga sin problema y deja el stock como estaba.
+
+| Método | Claves que faltan | Claves que sobran |
+| --- | --- | --- |
+| `setValue(obj)` | Error | Error |
+| `patchValue(obj)` | Se dejan como estaban | Se ignoran |
+
+## Barrera de validación (Tarea 5 de la guía)
+
+<DeClase fecha="18/11" nota="en la guía de la actividad, Tarea 5" />
+
+```ts title="Guía de la Act 11, Tarea 5"
+guardar(form: FormGroupDirective): void {
+  this.gameForm.markAllAsTouched();
+  if (this.gameForm.invalid) {
+    return; // no se contacta con JSON Server
+  }
+  const game = this.gameForm.getRawValue();
+  // TODO: llamar a GameService con game
+  // Tras confirmar el POST y actualizar el listado:
+  // form.resetForm();
+}
+```
+
+Aquí `this.gameForm` es el `FormGroup` (en el código del profesor, `formGroup`).
+
+1. **`markAllAsTouched()`** marca todos los controles como tocados, así salen todos los mensajes aunque el usuario no haya pasado por los campos.
+2. **`if (invalid) return`**: si algo falla, no se hace la petición. Para comprobarlo, la guía dice que abras la pestaña Network: al enviar un formulario inválido no debe salir ninguna.
+3. **`getRawValue()`** devuelve los valores de **todos** los controles, también los deshabilitados (`.value` deja fuera los que tienen `disabled`). Con controles `nonNullable`, su tipo es exacto: `{ title: string; genre: string; ... }`.
+4. La petición sigue en `GameService`, nunca en el componente. Después de que responda, `form.resetForm()`.
+
+La guía deja pendiente llamar al servicio y el `resetForm()`.
+
+## Tipos que no cuadran
+
+Con `stock = new FormControl('', { nonNullable: true, ... })`, el control es un `FormControl<string>`, pero el input es `type="number"` y el modelo `Game` dice `stock: number`. En clase no se ve qué se hace con ese desajuste. En ejecución funciona porque, con `type="number"`, Angular escribe un número en el control, pero TypeScript cree que es un texto y `form.value` (de la `FormGroupDirective`) es `any`, así que no te avisa.
+
+### Cómo dejarlo bien tipado <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  No se hizo en clase. Es una forma de que TypeScript compruebe que lo que mandas a `GameService` es un `Game`.
+</NoDadoEnClase>
+
+```ts title="crud.component.ts (tipado, no es la versión de clase)"
+price = new FormControl(0, { nonNullable: true, validators: [Validators.required, Validators.min(0.01), Validators.max(100)] });
+stock = new FormControl(0, { nonNullable: true, validators: [Validators.required, Validators.min(0), Validators.max(999), Validators.pattern(/^\d+$/)] });
+
+onSaveGame(form: FormGroupDirective) {
+  this.formGroup.markAllAsTouched();
+  if (this.formGroup.invalid) return;
+
+  const datos = this.formGroup.getRawValue();   // { title: string; ...; price: number; stock: number }
+  const peticion = this.edit
+    ? this.gameService.update({ id: this.editGame()?.id, ...datos })
+    : this.gameService.create(datos);
+
+  peticion.subscribe(game => {
+    form.resetForm();
+    this.edit = false;
+    this.actualizaGames.emit(game);
+  });
+}
+```
+
+Con `0` como valor inicial, `price` y `stock` son `FormControl<number>`, y `getRawValue()` devuelve un objeto con los mismos tipos que `Game` (sin `id`). Si te equivocas en un campo, ahora sí falla al compilar.
+
+## Después del refactor: build y Vercel
+
+<DeClase fecha="18/11" proyecto="proj-game" nota="segunda mitad de la clase" />
+
+La Act 11 termina subiendo la rama y desplegándola. Lo que toca a Angular:
+
+<Terminal titulo="WSL Ubuntu">
+{`$ npm ci
+$ npm run build
+$ ls dist/proj-game
+3rdpartylicenses.txt  browser  prerendered-routes.json
+$ ls dist/proj-game/browser
+index.html  main-XXXX.js  polyfills-XXXX.js  styles-XXXX.css`}
+</Terminal>
+
+- `npm ci` instala exactamente lo que dice `package-lock.json`, y `npm run build` tiene que terminar sin errores antes de subir nada.
+- Lo que se publica es `dist/proj-game/browser`, lo que genera Angular 19 sin SSR.
+- `vercel.json` con un *rewrite* manda todas las rutas a `index.html`, para que al recargar una ruta interna no salga 404.
+- La app publicada (`proj-game-r6lu.vercel.app`) salía con "1 de 0": en la consola, un **error de CORS**, porque la web pública intentaba llamar a `http://localhost:3000/games?_page=1&_limit=5`. Una web en Vercel no puede llamar al `localhost` de quien la visita. Por eso, en la Preview, el formulario valida pero guardar falla.
+
+```json title="vercel.json"
+{
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
+```
+
+La parte de ramas, PR de revisión y configuración de Vercel se dio junto a Git y despliegue: la tienes en [Despliegue en Vercel](/docs/2-dam/proyecto-intermodular/despliegue-en-vercel) y en [Git: ramas, tags y Git Graph](/docs/2-dam/proyecto-intermodular/git-ramas-y-tags).
+
+## Más allá de clase: FormBuilder, FormArray y validadores propios <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Esto está en la guía [10_Formularios](https://github.com/hokahey007/guides-angular) (con su proyecto en [codebase-angular/10_formularios](https://github.com/hokahey007/codebase-angular/tree/main/10_formularios)), pero no se dio en clase. Es un resumen con nuestras palabras.
+</NoDadoEnClase>
+
+<Tabs items={['FormBuilder', 'Validador propio', 'FormArray']}>
+  <Tab value="FormBuilder">
+
+`FormBuilder` ahorra escribir `new FormGroup` y `new FormControl`. Por dentro crea lo mismo. Con `nonNullable`, todos los controles son no nulos:
+
+```ts
+private fb = inject(FormBuilder);
+
+formGroup = this.fb.nonNullable.group({
+  title: ['', [Validators.required, Validators.minLength(3)]],
+  genre: ['', Validators.required],
+  platform: ['', Validators.required],
+  price: [0, [Validators.required, Validators.min(0.01), Validators.max(100)]],
+  stock: [0, [Validators.required, Validators.min(0), Validators.max(999)]],
+});
+```
+
+Cada clave es `[valorInicial, validadores]`. Para leer un control en la plantilla: `formGroup.controls.title.invalid`, o guárdalo antes con `@let title = formGroup.controls.title;`.
+
+  </Tab>
+  <Tab value="Validador propio">
+
+Un validador es una función que recibe el control y devuelve `null` si está bien o un objeto de error si está mal. La clave que devuelvas es la que luego consultas con `hasError`:
+
+```ts title="validadores.ts"
+import { AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
+
+export function enteroValidator(): ValidatorFn {
+  return (control: AbstractControl): ValidationErrors | null => {
+    if (control.value === '' || control.value === null) return null; // de eso se encarga required
+    return Number.isInteger(Number(control.value)) ? null : { entero: true };
+  };
+}
+```
+
+```ts
+stock = new FormControl(0, { nonNullable: true, validators: [Validators.required, enteroValidator()] });
+```
+
+```html
+@if (stock.hasError('entero')) { <p>El stock tiene que ser un número entero</p> }
+```
+
+  </Tab>
+  <Tab value="FormArray">
+
+Un `FormArray` es una lista de controles que puede crecer o encoger, por ejemplo, una lista de etiquetas o las líneas de un carrito:
+
+```ts
+etiquetas = new FormArray([new FormControl('', { nonNullable: true })]);
+formGroup = new FormGroup({ title: this.title, etiquetas: this.etiquetas });
+
+anadirEtiqueta(): void {
+  this.etiquetas.push(new FormControl('', { nonNullable: true }));
+}
+
+quitarEtiqueta(i: number): void {
+  this.etiquetas.removeAt(i);
+}
+```
+
+```html
+<div formArrayName="etiquetas">
+  @for (control of etiquetas.controls; track $index) {
+    <input [formControlName]="$index" />
+    <button type="button" (click)="quitarEtiqueta($index)">Quitar</button>
+  }
+</div>
+<button type="button" (click)="anadirEtiqueta()">Añadir etiqueta</button>
+```
+
+  </Tab>
+</Tabs>
+
+## Practica
+
+<CompletarCodigo
+  titulo="Un control con sus validadores"
+  enunciado="Completa el control del título y su sitio en el grupo."
+  lenguaje="typescript"
+  codigo={`title = new [[FormControl]]('', {
+  [[nonNullable]]: true,
+  validators: [Validators.[[required]], Validators.[[minLength]](3)]
+});
+
+formGroup = new [[FormGroup]]({ title: this.title });`}
+/>
+
+<Quiz titulo="Test: formularios reactivos">
+  <Pregunta enunciado="¿Qué tipo tiene `new FormControl('')` (sin opciones)?" explicacion="Sin `nonNullable`, Angular contempla que el control vuelva a `null` (por ejemplo, con `reset()`), así que el tipo es `FormControl<string | null>`.">
+    <Opcion>`FormControl<string>`</Opcion>
+    <Opcion correcta>`FormControl<string | null>`</Opcion>
+    <Opcion>`FormControl<any>`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Tienes `title = new FormControl('Hola', { nonNullable: true })`. ¿Qué vale `title.value` después de `title.reset()`?" explicacion="Con `nonNullable: true`, el valor inicial es también el de reinicio.">
+    <Opcion>`null`</Opcion>
+    <Opcion>`''`</Opcion>
+    <Opcion correcta>`'Hola'`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Con `Validators.minLength(3)`, ¿qué condición enseña el mensaje cuando el texto es demasiado corto?" explicacion="La clave del error va en minúsculas: `minlength`. Con `'minLength'` no da error de compilación, pero el mensaje no sale nunca.">
+    <Opcion>`title.hasError('minLength')`</Opcion>
+    <Opcion correcta>`title.hasError('minlength')`</Opcion>
+    <Opcion>`title.errors?.['min']`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Con `Validators.min(0.01)` y el campo vacío, el control tiene el error `min`." respuesta={false} explicacion="`min`, `max`, `minLength` y `pattern` no fallan con el campo vacío. Para eso está `Validators.required`." />
+  <Pregunta enunciado="En la clase, el control es `genre` pero en el grupo lo metes como `{ genre_: this.genre }`. ¿Qué tiene que poner la plantilla?" explicacion="`formControlName` busca por la clave del `FormGroup`, no por el nombre de la propiedad.">
+    <Opcion>`formControlName="genre"`</Opcion>
+    <Opcion correcta>`formControlName="genre_"`</Opcion>
+    <Opcion>Cualquiera de las dos</Opcion>
+  </Pregunta>
+  <Pregunta enunciado={'Has quitado `FormsModule` y en la plantilla queda un `#platform="ngModel"`. ¿Qué error sale?'} explicacion="Sin `FormsModule` no hay ninguna directiva que exporte `ngModel`: error NG8003.">
+    <Opcion>NG1</Opcion>
+    <Opcion correcta>NG8003: No directive found with exportAs 'ngModel'</Opcion>
+    <Opcion>TS2339</Opcion>
+  </Pregunta>
+  <Pregunta enunciado={'En un `<form [formGroup]="formGroup" #gameForm="ngForm">`, ¿qué es `gameForm`?'} explicacion="Sobre un formulario con `[formGroup]`, `ngForm` lo exporta la `FormGroupDirective`. Tiene `submitted` y `resetForm()`.">
+    <Opcion>Un `NgForm`</Opcion>
+    <Opcion correcta>Una `FormGroupDirective`</Opcion>
+    <Opcion>El `FormGroup` de la clase</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="El juego que llega del padre trae `id`, que no está en el grupo. ¿Qué método lo mete en el formulario sin problemas?" explicacion="`patchValue` ignora las claves que sobran. `setValue` exige exactamente las claves del grupo.">
+    <Opcion>`setValue`</Opcion>
+    <Opcion correcta>`patchValue`</Opcion>
+    <Opcion>`getRawValue`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué diferencia hay entre `formGroup.value` y `formGroup.getRawValue()`?" explicacion="`value` deja fuera los controles deshabilitados; `getRawValue()` los incluye todos.">
+    <Opcion correcta>`getRawValue()` incluye también los controles deshabilitados</Opcion>
+    <Opcion>`value` incluye también los controles inválidos</Opcion>
+    <Opcion>Ninguna: son iguales</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: formularios reactivos">
+  <Tarjeta frente="Los 6 pasos de la migración">`ReactiveFormsModule` en `imports`, `[formGroup]` en el `<form>`, un `FormControl` por campo, meterlos en el `FormGroup`, `formControlName` en vez de `name`/`ngModel`/`#x`, y borrar los atributos de validación.</Tarjeta>
+  <Tarjeta frente="`nonNullable: true`">Quita el `null` del tipo (`FormControl<string>`) y hace que `reset()` vuelva al valor inicial.</Tarjeta>
+  <Tarjeta frente="`formControlName`">Enlaza el campo con el control del grupo que tiene esa **clave**. Si no existe: *Cannot find control with name*.</Tarjeta>
+  <Tarjeta frente="`hasError('x')` frente a `errors?.['x']`">Hacen lo mismo. La clave es la del error: `required`, `minlength`, `min`, `max`, `pattern`.</Tarjeta>
+  <Tarjeta frente="`FormGroupDirective`">Lo que es `#gameForm="ngForm"` sobre un `<form [formGroup]>`. Tiene `submitted`, `value` y `resetForm()`.</Tarjeta>
+  <Tarjeta frente="`setValue` frente a `patchValue`">`setValue` exige exactamente todas las claves del grupo; `patchValue` rellena las que coinciden e ignora el resto.</Tarjeta>
+  <Tarjeta frente="Barrera de validación">`markAllAsTouched()`, `if (invalid) return` (no se llama a la API) y `getRawValue()` para enviar.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Migra un campo más" dificultad="facil">
+  Añade al formulario reactivo de clase un campo nuevo, una descripción opcional de 200 caracteres como máximo (en clase no existía: es para practicar). Crea el control, mételo en el grupo y escribe el `textarea` con su mensaje de error.
+
+  <Pista>Es opcional: no lleva `Validators.required`.</Pista>
+  <Pista>El error de `Validators.maxLength(200)` se llama `maxlength`.</Pista>
+
+  <Solucion>
+
+```ts
+description = new FormControl('', { nonNullable: true, validators: [Validators.maxLength(200)] });
+
+formGroup = new FormGroup({
+  title: this.title,
+  // ...
+  description: this.description,
+});
+```
+
+```html
+<label for="descriptionId">Descripción</label>
+<textarea id="descriptionId" formControlName="description"></textarea>
+@if (description.hasError('maxlength') && (description.touched || description.dirty)) {
+  <p>Máximo 200 caracteres ({{ description.value.length }} escritos)</p>
+}
+```
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Stock entero, como pide la Act 11" dificultad="media">
+  La tabla de la Act 11 pide para `stock` un valor inicial `0`, `required`, `min(0)` y un `pattern` de número entero. Escribe el control y los mensajes, y explica qué pasa si alguien escribe `2.5`.
+
+  <Pista>El patrón de la actividad es `/^\d+$/`: solo dígitos, de principio a fin.</Pista>
+
+  <Solucion>
+
+```ts
+stock = new FormControl(0, {
+  nonNullable: true,
+  validators: [Validators.required, Validators.min(0), Validators.pattern(/^\d+$/)]
+});
+```
+
+```html
+@let invalidStock = stock.invalid && (stock.touched || stock.dirty || gameForm.submitted);
+@if (invalidStock) {
+  @if (stock.hasError('required')) { <p>El stock es obligatorio</p> }
+  @if (stock.hasError('min')) { <p>El stock no puede ser negativo</p> }
+  @if (stock.hasError('pattern')) { <p>El stock tiene que ser un número entero</p> }
+}
+```
+
+  Con `2.5`, el valor no casa con `^\d+$` (tiene un punto), así que aparece el error `pattern` y el formulario es inválido. `min(0)` no falla porque 2,5 es mayor que 0. Con `-3` fallan los dos, `min` y `pattern`.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

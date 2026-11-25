@@ -1,0 +1,502 @@
+---
+title: "CRUD de usuarios: rutas, controlador y servicio"
+description: "El módulo users de la referencia (v0.4.0): cómo se reparte una petición entre routes, validate, controller y service, el select que quita passwordHash y la traducción de los errores P2025 y P2002 de Prisma a 404 y 409."
+icon: Route
+---
+
+import { SimuladorApi } from '@/components/temas/backend/simulador-api';
+
+Este es el corazón de la API: el **módulo `users`** del repositorio de referencia, que el profesor recorrió archivo por archivo el 27/10 en la v0.4.0. Aquí se ve cómo se organiza cada recurso de la API en capas y cómo viaja una petición desde que llega hasta que sale de PostgreSQL.
+
+<DeClase fecha="27/10" proyecto="node-server-26-27" nota="v0.4.0 de la referencia" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - La estructura `src/modules/<recurso>/` con `routes`, `controller`, `service` y `schema`.
+  - Por qué capas pasa una petición: router → `validate` → controlador → servicio → Prisma → PostgreSQL.
+  - Cómo se montan las rutas con `Router()` y un prefijo.
+  - Las consultas de Prisma del servicio y el `select` que no devuelve nunca `passwordHash`.
+  - Cómo traduce el controlador los errores de Prisma: **P2025 → 404** y **P2002 → 409**.
+</Callout>
+
+## Un módulo, cuatro ficheros
+
+Cada recurso de la API tiene su carpeta en `src/modules/`. El de usuarios:
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="modules" defaultOpen>
+      <Folder name="users" defaultOpen>
+        <File name="users.routes.ts" />
+        <File name="users.controller.ts" />
+        <File name="users.service.ts" />
+        <File name="users.schema.ts" />
+      </Folder>
+      <Folder name="auth" />
+    </Folder>
+    <Folder name="middleware">
+      <File name="validate.ts" />
+    </Folder>
+    <Folder name="config">
+      <File name="db.ts" />
+    </Folder>
+  </Folder>
+</Files>
+
+| Fichero | Qué hace | Sabe de `req` y `res` |
+| --- | --- | --- |
+| `users.routes.ts` | Qué método y qué URL van a qué controlador, y qué middlewares van delante. | No (solo los conecta) |
+| `users.controller.ts` | Lee la petición, llama al servicio y elige el **código HTTP**. | Sí |
+| `users.service.ts` | La lógica y las consultas a **Prisma**. | **No** |
+| `users.schema.ts` | Los schemas de **Zod** que validan lo que llega ([Validación con Zod 4](/docs/2-dam/apis/backend/validacion-zod)). | No |
+
+Si vienes de Spring, es el mismo reparto de siempre: el `@RestController` (rutas + controlador), el `@Service` y el repositorio, que aquí es directamente el cliente de Prisma.
+
+## El viaje de una petición
+
+Pulsa Reproducir para ver qué pasa con un `PATCH /api/users/5` que cambia el nombre:
+
+<Flujo
+  titulo="PATCH /api/users/5 con { name: 'Ana María' }"
+  nodos={["Cliente", "Router", "validate", "Controlador", "Servicio", "Prisma", "PostgreSQL"]}
+>
+  <Mensaje de="Cliente" a="Router" titulo="PATCH /api/users/5">
+    En `app.ts`, `app.use('/api/users', usersRoutes)` manda al router todo lo que empieza por `/api/users`. Dentro del router, `router.patch('/:id', ...)` coincide con `/5`, y `req.params.id` vale `'5'` (texto).
+  </Mensaje>
+  <Mensaje de="Router" a="validate" titulo="validate(updateUserSchema)">
+    La ruta tiene un middleware delante del controlador. Se ejecuta primero.
+  </Mensaje>
+  <Mensaje de="validate" a="validate" titulo="schema.safeParse(req.body)">
+    Zod comprueba el body. Si no vale, `validate` responde **400** con los errores y la petición acaba aquí: el controlador ni se entera.
+  </Mensaje>
+  <Mensaje de="validate" a="Controlador" titulo="next()">
+    Si vale, cambia `req.body` por los datos ya validados y llama a `next()`.
+  </Mensaje>
+  <Mensaje de="Controlador" a="Controlador" titulo="Number(req.params.id)">
+    Convierte el id a número. Si es `NaN` (por ejemplo `/api/users/abc`), responde **400** `ID inválido`.
+  </Mensaje>
+  <Mensaje de="Controlador" a="Servicio" titulo="updateUser(id, req.body)">
+    El controlador no habla con la base: se lo pide al servicio.
+  </Mensaje>
+  <Mensaje de="Servicio" a="Prisma" titulo="prisma.user.update(...)">
+    Con `where: { id }`, los datos y un `select` con los campos que se devuelven.
+  </Mensaje>
+  <Mensaje de="Prisma" a="PostgreSQL" titulo='UPDATE "User" ...'>
+    Prisma genera el SQL y lo manda por la conexión de `DATABASE_URL`.
+  </Mensaje>
+  <Mensaje de="PostgreSQL" a="Prisma" tipo="respuesta" titulo="Fila actualizada (o error)">
+    Si no hay ningún usuario con ese id, Prisma lanza **P2025**. Si el email nuevo ya lo tiene otro, **P2002**.
+  </Mensaje>
+  <Mensaje de="Prisma" a="Servicio" tipo="respuesta" titulo="Objeto sin passwordHash">
+    Solo vienen `id`, `email`, `name` y `createdAt`, los del `select`.
+  </Mensaje>
+  <Mensaje de="Servicio" a="Controlador" tipo="respuesta" titulo="El usuario">
+    El servicio devuelve lo que le da Prisma.
+  </Mensaje>
+  <Mensaje de="Controlador" a="Cliente" tipo="respuesta" titulo="200 + JSON">
+    `res.json(user)`. Si hubo error, el `catch` responde **404**, **409** o **500**.
+  </Mensaje>
+</Flujo>
+
+## Las rutas
+
+<DeClase fecha="27/10" nota="v0.4.0" />
+
+```ts title="src/modules/users/users.routes.ts"
+import { Router } from 'express';
+import { validate } from '../../middleware/validate.js';
+import { updateUserSchema } from './users.schema.js';
+import { listUsersCtrl, getUserCtrl, updateUserCtrl, deleteUserCtrl } from './users.controller.js';
+
+const router = Router();
+router.get('/', listUsersCtrl);
+router.get('/:id', getUserCtrl);
+router.patch('/:id', validate(updateUserSchema), updateUserCtrl);
+router.delete('/:id', deleteUserCtrl);
+export default router;
+```
+
+Y en `app.ts` se monta con un **prefijo**:
+
+```ts title="src/app.ts"
+app.use('/api/users', usersRoutes);
+```
+
+- `Router()` es como una mini app de Express con sus propias rutas. Al montarlo en `/api/users`, sus rutas se escriben **sin el prefijo**: `'/'` es `/api/users` y `'/:id'` es `/api/users/5`.
+- **`:id`** es un parámetro de ruta. Llega en `req.params.id`, siempre como **texto**.
+- En la ruta `patch` van dos funciones: primero el middleware `validate(updateUserSchema)` y luego el controlador. Puedes poner tantos middlewares como quieras entre la URL y el controlador.
+- Es **`PATCH`** y no `PUT` porque la actualización es parcial: puedes mandar solo el nombre o solo el email.
+
+<Callout type="info" title="No hay POST en /api/users">
+  En la v0.4.0 los usuarios se crean con el registro (`POST /api/auth/register`, v0.5.0). Para enseñarlo, el profesor escribió `router.post('/', createUserCtrl)` y salió `Cannot find name 'createUserCtrl'`: ese controlador no existe. También escribió `app.use('api/users/', (req, resp) => ...)` para enseñar un manejador escrito en línea, y lo borró.
+</Callout>
+
+En la referencia, las importaciones de `Router` y de `validate` <Dudoso nota="En la captura del 27/10 esas dos líneas no se ven. La ruta de validate coincide con la que usa auth.routes.ts en la v1.0.0.">no se ven en la captura del 27/10</Dudoso>.
+
+## El servicio
+
+El servicio es el único que usa Prisma. No recibe `req` ni `res`: recibe datos normales (un id, un email) y devuelve lo que da la base.
+
+<Recorrido
+  titulo="src/modules/users/users.service.ts"
+  lenguaje="ts"
+  codigo={`import { prisma } from '../../config/db.js';
+
+export async function createUser(email: string, name: string, passwordHash: string) {
+  return prisma.user.create({
+    data: { email, name, passwordHash },
+    select: { id: true, email: true, name: true, createdAt: true }
+  });
+}
+
+export async function findUserByEmail(email: string) {
+  return prisma.user.findUnique({ where: { email } });
+}
+
+export async function findUserById(id: number) {
+  return prisma.user.findUnique({
+    where: { id },
+    select: { id: true, email: true, name: true, createdAt: true }
+  });
+}
+
+export async function listUsers() {
+  return prisma.user.findMany({
+    select: { id: true, email: true, name: true, createdAt: true },
+    orderBy: { id: 'asc' }
+  });
+}
+
+export async function updateUser(id: number, data: { name?: string; email?: string }) {
+  return prisma.user.update({
+    where: { id },
+    data,
+    select: { id: true, email: true, name: true, createdAt: true }
+  });
+}
+
+export async function deleteUser(id: number) {
+  return prisma.user.delete({ where: { id } });
+}`}
+>
+  <Paso lineas="1" titulo="El cliente compartido">
+    Importa el único `PrismaClient`, el de `config/db.ts`.
+  </Paso>
+  <Paso lineas="3-8" titulo="create con select">
+    Inserta el usuario con el hash de la contraseña (lo usa el registro). `select` dice **qué campos devuelve**: todos menos `passwordHash`.
+  </Paso>
+  <Paso lineas="10-12" titulo="findUserByEmail, sin select">
+    Es la única que devuelve el usuario **entero**, con `passwordHash`, porque el login lo necesita para comparar la contraseña. Nunca se manda tal cual al cliente.
+  </Paso>
+  <Paso lineas="14-19" titulo="findUnique por id">
+    `findUnique` busca por un campo `@id` o `@unique`. Si no hay ninguno, **devuelve `null`** (no lanza error).
+  </Paso>
+  <Paso lineas="21-26" titulo="findMany con orderBy">
+    La lista, sin `passwordHash` y ordenada por `id` de menor a mayor.
+  </Paso>
+  <Paso lineas="28-34" titulo="update">
+    Actualiza por `where: { id }` solo los campos que vengan en `data`. Si no existe el usuario, **lanza P2025**; si el email ya lo usa otro, **P2002**.
+  </Paso>
+  <Paso lineas="36-38" titulo="delete">
+    Borra por id. Si no existe, también lanza P2025.
+  </Paso>
+</Recorrido>
+
+### El `select` que protege `passwordHash`
+
+Sin `select`, Prisma devuelve **todas** las columnas, y con ellas el hash de la contraseña. Por eso todas las funciones que devuelven usuarios al cliente llevan `select: { id: true, email: true, name: true, createdAt: true }`. Los tests de la v0.9.0 lo comprueban: `expect(res.body).not.toHaveProperty('passwordHash')`.
+
+El profesor **repite el `select` en cada función**. Si lo quieres escribir una sola vez:
+
+<Comparar titulo="El mismo select en todas las consultas">
+  <Lado titulo="Así está en clase">
+
+```ts
+return prisma.user.findMany({
+  select: { id: true, email: true, name: true, createdAt: true },
+  orderBy: { id: 'asc' }
+});
+```
+
+Se repite en `createUser`, `findUserById`, `listUsers` y `updateUser`.
+
+  </Lado>
+  <Lado titulo="En una constante">
+
+```ts
+import type { Prisma } from '@prisma/client';
+
+const publicUser = {
+  id: true, email: true, name: true, createdAt: true,
+} satisfies Prisma.UserSelect;
+
+return prisma.user.findMany({ select: publicUser, orderBy: { id: 'asc' } });
+```
+
+<NoDadoEnClase inline /> `satisfies` comprueba que el objeto es un `select` válido de `User` sin perder los tipos de la respuesta.
+
+  </Lado>
+</Comparar>
+
+### El choque de tipos con `exactOptionalPropertyTypes`
+
+El 27/10 el profesor intentó tipar `data` con el tipo que saca Zod del schema, `UpdateUserInput`, y salió este error:
+
+<Terminal titulo="Problems">
+{`Type '{ name?: string | undefined; email?: string | undefined; }' is not assignable to type '(Without<UserUpdateInput, UserUncheckedUpdateInput> & UserUncheckedUpdateInput) | …' with 'exactOptionalPropertyTypes: true'.`}
+</Terminal>
+
+Con `exactOptionalPropertyTypes`, `name?: string` significa "puede no estar, pero si está es un `string`". El tipo de Zod dice `name?: string | undefined`, que deja poner `undefined` a mano, y los tipos de Prisma no lo aceptan. Se probaron una `interface` escrita a mano y un genérico, y al final se volvió al tipo **escrito en línea**: `data: { name?: string; email?: string }`.
+
+## El controlador
+
+El controlador traduce entre HTTP y el servicio: saca los datos de `req`, llama al servicio dentro de un `try/catch` y elige el código de la respuesta.
+
+<Recorrido
+  titulo="src/modules/users/users.controller.ts"
+  lenguaje="ts"
+  codigo={`import type { Request, Response } from 'express';
+import { listUsers, findUserById, updateUser, deleteUser } from './users.service.js';
+
+export async function listUsersCtrl(_req: Request, res: Response) {
+  try {
+    const users = await listUsers();
+    res.json(users);
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
+}
+
+export async function updateUserCtrl(req: Request, res: Response) {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ message: 'ID inválido' });
+    }
+    const user = await updateUser(id, req.body);
+    res.json(user);
+  } catch (error: any) {
+    if (error.code === 'P2025') {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+    if (error.code === 'P2002') {
+      return res.status(409).json({ message: 'El email ya está en uso' });
+    }
+    res.status(500).json({ message: error.message });
+  }
+}`}
+>
+  <Paso lineas="1" titulo="Solo tipos de Express">
+    `Request` y `Response` son tipos, así que van con `import type`.
+  </Paso>
+  <Paso lineas="4-11" titulo="listUsersCtrl">
+    `async` porque espera al servicio. Si todo va bien, `res.json(users)` (200). Si falla, 500 con el mensaje del error. `_req` lleva guion bajo porque no se usa.
+  </Paso>
+  <Paso lineas="15-18" titulo="Comprobar el id">
+    `req.params.id` es texto. `Number('5')` da `5` y `Number('abc')` da `NaN`; con `isNaN` se responde **400** `ID inválido`. El `return` corta la función para no responder dos veces.
+  </Paso>
+  <Paso lineas="19-20" titulo="Llamar al servicio">
+    `req.body` ya viene validado por `validate`. Si todo va bien, 200 con el usuario actualizado.
+  </Paso>
+  <Paso lineas="22-24" titulo="P2025 → 404">
+    Prisma no encontró el registro que tenía que actualizar.
+  </Paso>
+  <Paso lineas="25-27" titulo="P2002 → 409">
+    Se ha intentado repetir un valor `@unique` (el email). 409 *Conflict*: la petición choca con lo que ya hay.
+  </Paso>
+  <Paso lineas="28" titulo="Lo demás → 500">
+    Cualquier otro error es un fallo del servidor.
+  </Paso>
+</Recorrido>
+
+Con el ratón encima, el profesor enseñó los tipos de `Request` y `Response` (`ParamsDictionary`, `ParsedQs`…): `Request` es genérico y por defecto los parámetros y la *query* son diccionarios de texto.
+
+<NoSeVio titulo="getUserCtrl y deleteUserCtrl">
+  De `getUserCtrl` solo se ve el principio: `Number(req.params.id)` con `isNaN` → 400, y la llamada a `findUserById`. El final (qué responde si no existe) no se ve, aunque los tests de la v0.9.0 esperan un **404** con un id inexistente. `deleteUserCtrl` no se ve entero. Los tienes como ejercicio al final, hechos por tu cuenta.
+</NoSeVio>
+
+## Errores de Prisma y códigos HTTP
+
+Prisma pone un código a cada error conocido en `error.code`. Los dos que traduce el controlador de clase:
+
+| Código de Prisma | Cuándo | Respuesta |
+| --- | --- | --- |
+| **P2025** | El registro que había que actualizar o borrar no existe. | **404** `Usuario no encontrado` |
+| **P2002** | Se repite un valor de un campo `@unique`. | **409** `El email ya está en uso` |
+
+<NoDadoEnClase inline /> Otros códigos útiles (como P2003, cuando se intenta borrar algo que todavía tiene datos relacionados) y cómo traducirlos todos en el `errorHandler` están en [Backend para el proyecto](/docs/2-dam/apis/backend-proyecto).
+
+Ojo con la diferencia: `findUnique` **devuelve `null`** si no encuentra nada, mientras que `update` y `delete` **lanzan P2025**. Por eso en `getUserCtrl` hay que comprobar el `null` a mano y en `updateUserCtrl` se mira el código del error.
+
+Los códigos HTTP que usa la API de clase:
+
+| Código | Cuándo | Ejemplo de clase |
+| --- | --- | --- |
+| 200 | Bien | `res.json(...)` |
+| 201 | Creado | Registro (`res.status(201).json(data)`) |
+| 400 | Datos mal | Falla Zod, o el id no es un número |
+| 401 | Credenciales o token | Login fallido, ruta protegida sin token |
+| 404 | No existe | P2025, o una ruta que no existe (`Cannot GET /x`) |
+| 409 | Choca con lo que hay | P2002, email ya registrado |
+| 500 | Fallo del servidor | El `catch` |
+
+## Pruébalo
+
+El simulador reproduce la API de la **v0.5.0** (el módulo `users` sin middleware de auth, y el de `auth` con registro y login) con una tabla `User` en memoria. Elige una petición de ejemplo o escribe la tuya y mira por qué capas pasa y qué responde:
+
+<SimuladorApi />
+
+Fíjate sobre todo en estos casos:
+
+- **`GET /api/users/abc`**: el controlador responde 400 `ID inválido` sin llegar al servicio.
+- **`PATCH /api/users/1` con un email mal escrito**: responde `validate` con 400 y el controlador ni se ejecuta.
+- **`PATCH /api/users/abc` con un body válido**: primero pasa `validate` (va antes) y después el controlador responde 400 por el id.
+- **`PATCH /api/users/99`**: P2025 → 404. **Email de otro usuario**: P2002 → 409.
+- **Un campo de más en el body** (por ejemplo `"rol": "admin"`): `validate` lo quita, porque `req.body` pasa a ser lo que devuelve Zod y `z.object` descarta por defecto las claves que no conoce. <NoDadoEnClase inline />
+- **`PUT /api/users/1`** y **`POST /api/users`**: no hay ruta para ese método, así que responde el 404 de Express.
+- **`DELETE`**: el usuario se borra, pero la demo no inventa la respuesta, porque `deleteUserCtrl` no se vio.
+
+## Practica
+
+<CompletarCodigo
+  titulo="Traducir los errores de Prisma"
+  enunciado="Completa el catch del controlador de actualizar."
+  lenguaje="typescript"
+  codigo={`} catch (error: any) {
+  if (error.code === '[[P2025]]') {
+    return res.status([[404]]).json({ message: 'Usuario no encontrado' });
+  }
+  if (error.code === '[[P2002]]') {
+    return res.status([[409]]).json({ message: 'El email ya está en uso' });
+  }
+  res.status([[500]]).json({ message: error.message });
+}`}
+/>
+
+<Quiz titulo="Test: el módulo users" descripcion="8 preguntas">
+  <Pregunta enunciado="¿En qué fichero del módulo se usa Prisma?" explicacion="Solo en el servicio. El controlador habla HTTP (req, res, códigos) y le pide los datos al servicio.">
+    <Opcion>`users.routes.ts`</Opcion>
+    <Opcion>`users.controller.ts`</Opcion>
+    <Opcion correcta>`users.service.ts`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="El router está montado con `app.use('/api/users', usersRoutes)`. ¿A qué URL responde `router.get('/:id', getUserCtrl)`?" explicacion="Las rutas del router se escriben sin el prefijo: `/:id` dentro del router es `/api/users/:id`.">
+    <Opcion>`/:id`</Opcion>
+    <Opcion correcta>`/api/users/:id`</Opcion>
+    <Opcion>`/api/users/users/:id`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué `listUsers` lleva `select: { id: true, email: true, name: true, createdAt: true }`?" explicacion="Para no devolver nunca `passwordHash`. Sin `select`, Prisma devuelve todas las columnas.">
+    <Opcion>Porque sin `select` Prisma no devuelve nada</Opcion>
+    <Opcion correcta>Para que la respuesta no incluya `passwordHash`</Opcion>
+    <Opcion>Para ordenar los resultados</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué responde el controlador si Prisma lanza P2002 al actualizar?" explicacion="P2002 es un valor `@unique` repetido (el email). La API responde 409 Conflict.">
+    <Opcion>404</Opcion>
+    <Opcion correcta>409</Opcion>
+    <Opcion>400</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`prisma.user.findUnique` lanza P2025 si no encuentra el usuario." respuesta={false} explicacion="`findUnique` devuelve `null`. Los que lanzan P2025 son `update` y `delete` cuando el registro no existe." />
+  <Pregunta enunciado='Llega `PATCH /api/users/abc` con el body `{ "name": "Eva" }`. ¿Quién responde y con qué código?' explicacion="`validate` va antes y el body es válido, así que pasa. Luego el controlador ve que `Number('abc')` es `NaN` y responde 400 `ID inválido`.">
+    <Opcion>`validate`, con 400</Opcion>
+    <Opcion correcta>El controlador, con 400 `ID inválido`</Opcion>
+    <Opcion>Prisma, con P2025 → 404</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué `findUserByEmail` no lleva `select`?" explicacion="El login necesita `passwordHash` para comparar la contraseña con `bcrypt.compare`. El servicio de auth monta luego la respuesta sin él.">
+    <Opcion>Porque se le olvidó al profesor</Opcion>
+    <Opcion correcta>Porque el login necesita `passwordHash` para comparar la contraseña</Opcion>
+    <Opcion>Porque `findUnique` no admite `select`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué el servicio tipa `data` como `{ name?: string; email?: string }` y no con `UpdateUserInput`?" explicacion="Con `exactOptionalPropertyTypes: true`, el tipo de Zod (`string | undefined`) no encaja con el de Prisma. Se dejó el tipo escrito en línea.">
+    <Opcion>Porque Zod no genera tipos</Opcion>
+    <Opcion correcta>Porque el tipo de Zod choca con los de Prisma por `exactOptionalPropertyTypes`</Opcion>
+    <Opcion>Porque así es más corto</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: CRUD de usuarios">
+  <Tarjeta frente="Las cuatro piezas de un módulo">`x.routes.ts` (URL → middlewares → controlador), `x.controller.ts` (HTTP), `x.service.ts` (lógica y Prisma) y `x.schema.ts` (Zod).</Tarjeta>
+  <Tarjeta frente="La cadena de una petición">Router → `validate` → controlador → servicio → Prisma → PostgreSQL, y vuelta.</Tarjeta>
+  <Tarjeta frente="¿Qué es `req.params.id`?">El parámetro `:id` de la ruta, siempre como texto. Se convierte con `Number()` y se comprueba con `isNaN`.</Tarjeta>
+  <Tarjeta frente="P2025">El registro que había que actualizar o borrar no existe → 404.</Tarjeta>
+  <Tarjeta frente="P2002">Valor repetido en un campo `@unique` → 409.</Tarjeta>
+  <Tarjeta frente="`findUnique` sin resultado">Devuelve `null`, no lanza error. Hay que comprobarlo a mano.</Tarjeta>
+  <Tarjeta frente="¿Para qué el `return` en `return res.status(400).json(...)`?">Para salir de la función y no seguir ejecutando (ni responder dos veces).</Tarjeta>
+  <Tarjeta frente="PATCH frente a PUT">`PATCH` actualiza parcialmente (solo lo que mandas). Por eso el schema tiene todo `.optional()`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Termina getUserCtrl" dificultad="facil">
+  En clase solo se ve el principio de `getUserCtrl`. Escríbelo entero: 400 si el id no es un número, 404 si el usuario no existe, 200 con el usuario si existe y 500 si falla otra cosa.
+
+  <Pista>`findUserById` devuelve `null` si no hay ningún usuario con ese id.</Pista>
+  <Pista>Copia la estructura de `updateUserCtrl`: `try/catch`, `Number` + `isNaN` y `return res.status(...)`.</Pista>
+
+  <Solucion>
+
+<NoDadoEnClase>El final de `getUserCtrl` no se vio en clase: esta es una forma de hacerlo siguiendo el estilo del resto del controlador. El mensaje del 404 es inventado.</NoDadoEnClase>
+
+```ts title="src/modules/users/users.controller.ts"
+export async function getUserCtrl(req: Request, res: Response) {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ message: 'ID inválido' });
+    }
+    const user = await findUserById(id);
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+    res.json(user);
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
+}
+```
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Escribe deleteUserCtrl" dificultad="media">
+  Escribe `deleteUserCtrl`, que no se vio en clase: 400 si el id no es un número, 404 si el usuario no existe y, si se borra, una respuesta sin cuerpo.
+
+  <Pista>`deleteUser` usa `prisma.user.delete`. ¿Devuelve `null` o lanza un error si no existe?</Pista>
+  <Pista>Para responder sin cuerpo se usa el código 204 y `res.status(204).end()`.</Pista>
+
+  <Solucion>
+
+<NoDadoEnClase>`deleteUserCtrl` no se vio en clase. Esta es la forma estándar, con el mismo estilo que `updateUserCtrl`.</NoDadoEnClase>
+
+```ts title="src/modules/users/users.controller.ts"
+export async function deleteUserCtrl(req: Request, res: Response) {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ message: 'ID inválido' });
+    }
+    await deleteUser(id);
+    res.status(204).end();
+  } catch (error: any) {
+    if (error.code === 'P2025') {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+    res.status(500).json({ message: error.message });
+  }
+}
+```
+
+`delete` **lanza P2025** si no existe (no devuelve `null` como `findUnique`), así que el 404 se saca del `catch`.
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Router()">Mini app de Express con sus rutas. Se monta con un prefijo: `app.use('/api/users', router)`.</Termino>
+  <Termino nombre="Controlador">Lee `req`, llama al servicio y responde con el código HTTP.</Termino>
+  <Termino nombre="Servicio">Lógica y consultas a Prisma. No sabe nada de `req` ni de `res`.</Termino>
+  <Termino nombre="select">Elige qué columnas devuelve Prisma. Se usa para no devolver `passwordHash`.</Termino>
+  <Termino nombre="orderBy">Ordena el resultado: `{ id: 'asc' }`.</Termino>
+  <Termino nombre="P2025 / P2002">Registro no encontrado (404) / valor único repetido (409).</Termino>
+</Glosario>
+
+<MarcarCompletado />

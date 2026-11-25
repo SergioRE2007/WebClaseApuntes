@@ -1,0 +1,17 @@
+{
+  "title": "C#",
+  "description": "Lo dado en clase de C#: del 05/11 al 19/11",
+  "icon": "Hash",
+  "pages": [
+    "index",
+    "de-java-a-csharp",
+    "visual-studio-y-proyecto",
+    "consola-y-formato",
+    "arrays-y-control",
+    "delegados",
+    "validador-y-lambdas",
+    "func-action-predicate",
+    "eventos",
+    "errores-y-glosario"
+  ]
+}

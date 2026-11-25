@@ -1,0 +1,447 @@
+---
+title: Parámetros, guards y lazy loading
+description: Lo que la Act 12 pide pero solo salió en el enunciado y en la solución desplegada (parámetros :id, ActivatedRoute con snapshot y observable, query params, comodín y loadChildren), más guards, resolvers y withComponentInputBinding de la guía de Routing.
+icon: Signpost
+---
+
+El 19/11 el profesor enseñó la solución desplegada de la Act 12 (`proj-routes.vercel.app`) y el enunciado completo, pero en directo solo se escribió lo que tienes en [Rutas con Angular Router](/docs/2-dam/acceso-a-datos/angular-avanzado/rutas). Esta página recoge el resto: primero lo que se **vio en el enunciado o en la solución** (sin su código), y después lo que está en la guía de Routing y no se dio.
+
+<NoDadoEnClase>
+  El código de esta página **no se escribió en clase**: o solo se vio el resultado en la solución desplegada, o está en la guía [9_Routing](https://github.com/hokahey007/guides-angular) (con su proyecto en [codebase-angular/09_rutas](https://github.com/hokahey007/codebase-angular/tree/main/09_rutas)). Es la forma estándar de hacerlo en Angular 19. Si te preguntan, di que lo has buscado tú.
+</NoDadoEnClase>
+
+## Qué se vio y qué no
+
+| Pieza | Qué se vio en clase |
+| --- | --- |
+| Parámetro `materiales/:id` y enlaces con array | Solo en el enunciado (Fase III, apartados 5.1 y 5.2) |
+| Leer `:id` con *snapshot* y con observable | Solo el resultado en la solución desplegada |
+| *Query params* (`?orden=asc`) | Solo las URL del enunciado y el resultado en la solución |
+| Comodín `**` con `NoEncontradoComponent` | Solo en la lista de tareas del enunciado |
+| `loadChildren` con `AULA_ROUTES` (Fase VI) | Se vio de pasada y muy pequeño: no se puede reconstruir |
+| Guards, resolvers, `withComponentInputBinding` | Nada: solo en la guía `9_Routing.md` |
+
+El árbol de rutas que pide la actividad:
+
+```text title="Árbol de rutas de la Act 12"
+/
+├── /inicio
+├── /ayuda
+└── /aula
+    ├── /materiales
+    │   └── /materiales/:id
+    └── /avisos
+
+/aula/materiales?orden=asc
+/aula/materiales?orden=desc&tipo=pdf
+/aula/materiales/7
+/aula/materiales/12?origen=destacados
+```
+
+En la segunda URL, el parámetro `tipo=pdf` se lee <Dudoso nota="Solo se ve en una captura y no está claro.">`&tipo=pdf`</Dudoso>.
+
+## Parámetros de ruta: materiales/:id
+
+<DeClase fecha="19/11" nota="solo en el enunciado (apartados 5.1 y 5.2)" />
+
+Esto es lo que pone el documento de la actividad:
+
+```ts title="Del enunciado: la ruta, dentro de children de aula"
+{ path: 'materiales/:id', component: DetalleMaterialComponent }
+```
+
+```html title="Del enunciado: materiales.component.html"
+<h3>Materiales disponibles</h3>
+<a [routerLink]="['/aula/materiales', 1]">Material 1</a>
+<a [routerLink]="['/aula/materiales', 7]">Material 7</a>
+```
+
+- Los dos puntos de `:id` indican un **segmento dinámico**: `/aula/materiales/1`, `/aula/materiales/7`… van todos al mismo componente.
+- `[routerLink]` con un **array de segmentos** monta la URL: `['/aula/materiales', 7]` es `/aula/materiales/7`. Así no hay que concatenar textos.
+- En una captura se lee `['/aula/materiales', 5]` con el texto "Material 1" <Dudoso nota="En las demás capturas se repiten el 1 y el 7." />.
+- Orden: si dentro de `children` hubiera una ruta `materiales/nuevo`, tendría que ir **antes** de `materiales/:id`, porque si no `nuevo` se tomaría como un id.
+
+<NoSeVio titulo="DetalleMaterialComponent">
+  El componente de detalle solo se ve funcionando en la solución desplegada, que enseña "Material id snapshot" y "Material id observable". No se ve su código.
+</NoSeVio>
+
+## Leer el parámetro: snapshot u observable
+
+El parámetro se lee con **`ActivatedRoute`**, que representa la ruta que ha activado el componente. Hay dos formas, y la solución desplegada enseñaba las dos a la vez para que se viera la diferencia:
+
+```ts title="pages/aula/detalle-material/detalle-material.component.ts"
+import { Component, OnInit, inject } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+
+@Component({
+  selector: 'app-detalle-material',
+  imports: [RouterLink],
+  templateUrl: './detalle-material.component.html',
+})
+export class DetalleMaterialComponent implements OnInit {
+  private route = inject(ActivatedRoute);
+
+  protected idSnapshot = '';
+  protected idObservable = '';
+
+  ngOnInit(): void {
+    // Una foto de la ruta en el momento de crear el componente
+    this.idSnapshot = this.route.snapshot.paramMap.get('id') ?? '';
+
+    // Un Observable que avisa cada vez que cambia el parámetro
+    this.route.paramMap.subscribe(params => {
+      this.idObservable = params.get('id') ?? '';
+    });
+  }
+}
+```
+
+```html title="detalle-material.component.html"
+<p>Material id snapshot: {{ idSnapshot }}</p>
+<p>Material id observable: {{ idObservable }}</p>
+<a [routerLink]="['/aula/materiales', 7]">Ir al material 7</a>
+```
+
+Mira qué pasa al ir del material 1 al 7 **sin salir del detalle**:
+
+<Flujo
+  titulo="Navegar entre detalles con el mismo componente"
+  nodos={["Usuario", "Router", "DetalleMaterial", "ActivatedRoute"]}
+>
+  <Mensaje de="Usuario" a="Router" titulo="/aula/materiales/1">
+    El usuario entra en el material 1.
+  </Mensaje>
+  <Mensaje de="Router" a="DetalleMaterial" titulo="Crea el componente">
+    No había ningún detalle en pantalla, así que el router crea `DetalleMaterialComponent` y se ejecuta `ngOnInit`.
+  </Mensaje>
+  <Mensaje de="DetalleMaterial" a="ActivatedRoute" titulo="snapshot y subscribe">
+    El *snapshot* da `'1'` y la suscripción a `paramMap` recibe también `'1'`. Las dos líneas dicen 1.
+  </Mensaje>
+  <Mensaje de="Usuario" a="Router" titulo="/aula/materiales/7">
+    Desde el propio detalle, el usuario pulsa el enlace al material 7.
+  </Mensaje>
+  <Mensaje de="Router" a="DetalleMaterial" titulo="Reutiliza el componente">
+    La ruta es la misma (`materiales/:id`); solo cambia el parámetro. Angular **no** vuelve a crear el componente, así que `ngOnInit` no se repite.
+  </Mensaje>
+  <Mensaje de="ActivatedRoute" a="DetalleMaterial" tipo="respuesta" titulo="paramMap emite '7'">
+    El observable avisa del cambio y `idObservable` pasa a 7. El *snapshot* se leyó una sola vez y sigue diciendo 1.
+  </Mensaje>
+</Flujo>
+
+| | `route.snapshot.paramMap.get('id')` | `route.paramMap.subscribe(...)` |
+| --- | --- | --- |
+| Qué es | Una foto del momento en que se creó el componente | Un `Observable` que emite cada vez que cambia |
+| Si se navega a otro id sin salir del componente | Se queda con el valor viejo | Se actualiza |
+| Cuándo usarlo | Cuando siempre se llega al detalle desde fuera (desde el listado) | Cuando se puede saltar de un detalle a otro |
+
+- Los parámetros llegan siempre como **texto**: para pedir el material a una API, `Number(params.get('id'))`.
+- Según la documentación de Angular, no hace falta desuscribirse de `paramMap` ni de los demás observables de `ActivatedRoute`: el router los limpia junto con el componente cuando lo destruye.
+- Para encadenar el parámetro con una petición HTTP, la guía usa `switchMap`: `this.route.paramMap.pipe(switchMap(p => this.service.getMaterial(Number(p.get('id')))))`. Lo tienes explicado en [RxJS y gestión de errores](/docs/2-dam/acceso-a-datos/angular-avanzado/rxjs-y-errores).
+
+## Query params
+
+<DeClase fecha="19/11" nota="solo en el enunciado y en la solución desplegada" />
+
+Los *query params* son la parte de la URL después de `?`. A diferencia de `:id`, son **opcionales** y no cambian qué ruta coincide: `/aula/materiales` y `/aula/materiales?orden=asc` van al mismo componente. La solución tenía dos enlaces, "Materiales (asc)" y "Materiales (desc)", y mostraba "Material order asc" (snapshot) y "Material order observable asc".
+
+```html title="Enlaces con query params"
+<a [routerLink]="['/aula/materiales']" [queryParams]="{ orden: 'asc' }">Materiales (asc)</a>
+<a [routerLink]="['/aula/materiales']" [queryParams]="{ orden: 'desc' }">Materiales (desc)</a>
+```
+
+```ts title="materiales.component.ts (leerlos)"
+private route = inject(ActivatedRoute);
+protected orden = 'asc';
+
+ngOnInit(): void {
+  this.route.queryParamMap.subscribe(q => {
+    this.orden = q.get('orden') ?? 'asc';
+  });
+}
+```
+
+Desde código: `this.router.navigate(['/aula/materiales'], { queryParams: { orden: 'desc' } })`.
+
+| Tipo | Ejemplo | Para qué |
+| --- | --- | --- |
+| Parámetro de ruta | `/aula/materiales/7` | Identificar el recurso: sin él, la ruta no tiene sentido |
+| *Query param* | `/aula/materiales?orden=asc` | Opciones y filtros: orden, búsqueda, página… |
+
+Es justo lo que necesitas para un listado con filtros: el criterio en la URL hace que se pueda recargar o compartir la búsqueda.
+
+## Comodín ** y orden de las rutas
+
+<DeClase fecha="19/11" nota="lista de tareas del enunciado" />
+
+La fase de redirecciones del enunciado pedía: `routerLinkActive` en el menú, `/` → `/inicio`, `/portal` → `/aula`, una ruta `**` que muestre `NoEncontradoComponent` y **las redirecciones antes del comodín**.
+
+```ts title="app.routes.ts (final de la lista)"
+  { path: 'portal', redirectTo: '/aula', pathMatch: 'full' },
+  { path: 'ayuda', component: AyudaComponent },
+  { path: '**', component: NoEncontradoComponent }
+];
+```
+
+- `**` coincide con **cualquier** URL. Como el router usa la primera ruta que coincide (*first-match-wins*), el comodín va siempre el último.
+- Sin comodín, una URL que no existe hace fallar la navegación con `NG04002: Cannot match any routes`.
+- La guía también enseña a redirigir en vez de mostrar una página: `{ path: '**', redirectTo: 'products' }`.
+
+## Lazy loading de rutas con loadChildren
+
+<DeClase fecha="19/11" nota="Fase VI del enunciado, vista de pasada" />
+
+`loadComponent` (que sí salió el 27/10) retrasa la carga de **un** componente. `loadChildren` retrasa la de **un grupo de rutas entero**: todo el Aula, con sus hijas, en un fichero aparte que solo se descarga al entrar en `/aula`.
+
+<NoSeVio titulo="AULA_ROUTES de clase">
+  La Fase VI se vio en pantalla muy pequeña. No se puede reconstruir el código del profesor; lo que sigue es la forma estándar.
+</NoSeVio>
+
+<Tabs items={['aula.routes.ts', 'app.routes.ts']}>
+  <Tab value="aula.routes.ts">
+
+```ts title="src/app/pages/aula/aula.routes.ts"
+import { Routes } from '@angular/router';
+import { AulaComponent } from './aula.component';
+import { MaterialesComponent } from './materiales/materiales.component';
+import { DetalleMaterialComponent } from './detalle-material/detalle-material.component';
+import { AvisosComponent } from './avisos/avisos.component';
+
+export const AULA_ROUTES: Routes = [
+  {
+    path: '',
+    component: AulaComponent,
+    children: [
+      { path: '', redirectTo: 'materiales', pathMatch: 'full' },
+      { path: 'materiales', component: MaterialesComponent },
+      { path: 'materiales/:id', component: DetalleMaterialComponent },
+      { path: 'avisos', component: AvisosComponent },
+    ],
+  },
+];
+```
+
+  </Tab>
+  <Tab value="app.routes.ts">
+
+```ts title="src/app/app.routes.ts"
+export const routes: Routes = [
+  { path: '', redirectTo: '/inicio', pathMatch: 'full' },
+  { path: 'inicio', component: InicioComponent },
+  {
+    path: 'aula',
+    loadChildren: () => import('./pages/aula/aula.routes').then(m => m.AULA_ROUTES),
+  },
+  { path: 'ayuda', component: AyudaComponent },
+  { path: '**', component: NoEncontradoComponent },
+];
+```
+
+  </Tab>
+</Tabs>
+
+- `app.routes.ts` ya no importa `AulaComponent` ni sus hijas: si las importara, entrarían en el JavaScript inicial y no habría carga perezosa.
+- Dentro de `AULA_ROUTES` los `path` son relativos a `aula`: el `''` es `/aula`.
+- **Para comprobarlo** (lo pide la actividad): F12 → **Network**, recarga en `/inicio` y entra en Aula. La primera vez se descarga un fichero `chunk-XXXX.js`; las siguientes, no.
+
+## Guards: quién puede entrar y salir
+
+Un *guard* es una función que el router ejecuta antes de entrar en una ruta (o de salir de ella) y que decide si se puede. Se generan con `ng generate guard <nombre>`.
+
+| Guard | Pregunta |
+| --- | --- |
+| `CanActivate` | ¿Se puede entrar en esta ruta? |
+| `CanActivateChild` | ¿Se puede entrar en sus hijas? |
+| `CanDeactivate` | ¿Se puede salir de aquí? |
+| `CanMatch` | ¿Esta ruta cuenta siquiera? (útil con lazy loading: si dice que no, ni se descarga) |
+
+<Tabs items={['CanActivate', 'CanDeactivate']}>
+  <Tab value="CanActivate">
+
+```ts title="src/app/auth.guard.ts"
+import { inject } from '@angular/core';
+import { CanActivateFn, Router } from '@angular/router';
+import { AuthService } from './services/auth.service';
+
+export const authGuard: CanActivateFn = () => {
+  const authService = inject(AuthService);
+  const router = inject(Router);
+
+  if (authService.isLoggedIn()) {
+    return true;
+  }
+  return router.parseUrl('/login');
+};
+```
+
+```ts title="app.routes.ts"
+{ path: 'mis-pedidos', component: MisPedidosComponent, canActivate: [authGuard] }
+```
+
+  Si hay sesión, devuelve `true` y se entra. Si no, devuelve un `UrlTree` (`parseUrl`): el router cancela la navegación y va a `/login`. El `AuthService` con `isLoggedIn` lo tienes en [Listado con filtros, paginación y token](/docs/2-dam/acceso-a-datos/angular-avanzado/listado-filtros-y-token).
+
+  </Tab>
+  <Tab value="CanDeactivate">
+
+```ts title="src/app/salir.guard.ts"
+import { CanDeactivateFn } from '@angular/router';
+import { NuevoJuegoComponent } from './pages/nuevo-juego/nuevo-juego.component';
+
+export const salirGuard: CanDeactivateFn<NuevoJuegoComponent> = (component) => {
+  if (!component.formGroup.dirty) {
+    return true;
+  }
+  return confirm('Tienes cambios sin guardar. ¿Seguro que quieres salir?');
+};
+```
+
+```ts title="app.routes.ts"
+{ path: 'juegos/nuevo', component: NuevoJuegoComponent, canDeactivate: [salirGuard] }
+```
+
+  El guard recibe el componente del que se sale, así que puede mirar su estado. `confirm()` es el cuadro del navegador con Aceptar y Cancelar: es lo que usan las guías de Routing (en el carrito) y de Formularios, siempre dentro de un `CanDeactivate`.
+
+  </Tab>
+</Tabs>
+
+<Callout type="warn" title="Un guard no es seguridad">
+  El guard solo esconde pantallas en el navegador; cualquiera puede saltárselo. Lo que de verdad protege los datos es que **la API** compruebe el token en cada petición.
+</Callout>
+
+## Resolvers y withComponentInputBinding
+
+Un **resolver** carga datos **antes** de activar la ruta: el componente nace con los datos ya listos.
+
+```ts title="src/app/material.resolver.ts"
+import { inject } from '@angular/core';
+import { ResolveFn } from '@angular/router';
+import { Material, MaterialService } from './services/material.service';
+
+export const materialResolver: ResolveFn<Material> = (route) => {
+  return inject(MaterialService).getMaterial(Number(route.paramMap.get('id')));
+};
+```
+
+```ts title="app.routes.ts"
+{ path: 'materiales/:id', component: DetalleMaterialComponent, resolve: { material: materialResolver } }
+```
+
+Con **`withComponentInputBinding()`** el router pasa los parámetros, los *query params* y los datos resueltos directamente a los `input()` del componente que se llamen igual. Te ahorras `ActivatedRoute`:
+
+```ts title="app.config.ts"
+provideRouter(routes, withComponentInputBinding())
+```
+
+```ts title="detalle-material.component.ts (con inputs)"
+export class DetalleMaterialComponent {
+  id = input<string>();          // el :id de la URL
+  orden = input<string>();       // ?orden=asc
+  material = input<Material>();  // lo que devuelve el resolver con la clave material
+}
+```
+
+Como son signals, se leen con paréntesis (`this.id()`) y se actualizan solos aunque el componente se reutilice.
+
+## Practica
+
+<Quiz titulo="Test: parámetros, guards y lazy loading">
+  <Pregunta enunciado={"¿Qué URL genera `[routerLink]=\"['/aula/materiales', 7]\"`?"} explicacion="Cada elemento del array es un segmento: `/aula/materiales/7`.">
+    <Opcion>`/aula/materiales?id=7`</Opcion>
+    <Opcion correcta>`/aula/materiales/7`</Opcion>
+    <Opcion>`/aula/materiales,7`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Estás en `/aula/materiales/1` y pulsas un enlace a `/aula/materiales/7`. ¿Qué enseña `route.snapshot.paramMap.get('id')` leído en `ngOnInit`?" explicacion="Angular reutiliza el componente, `ngOnInit` no se repite y el snapshot se queda con `'1'`. El observable `paramMap` sí emite `'7'`.">
+    <Opcion correcta>`'1'`: el componente se reutiliza y el snapshot no cambia</Opcion>
+    <Opcion>`'7'`: el snapshot se actualiza solo</Opcion>
+    <Opcion>`null`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`params.get('id')` devuelve un número si en la URL hay un número." respuesta={false} explicacion="Los parámetros siempre llegan como texto (o `null`). Hay que convertirlos con `Number(...)`." />
+  <Pregunta enunciado="¿Dónde va la ruta `{ path: '**', ... }`?" explicacion="El router se queda con la primera ruta que coincide y `**` coincide con todo: va la última.">
+    <Opcion>La primera, para capturar los errores antes</Opcion>
+    <Opcion correcta>La última, después de todas las rutas y redirecciones</Opcion>
+    <Opcion>Da igual el orden</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué diferencia hay entre `loadComponent` y `loadChildren`?" explicacion="`loadComponent` carga un componente bajo demanda; `loadChildren`, un array de rutas entero (con sus componentes).">
+    <Opcion correcta>`loadComponent` carga un componente; `loadChildren`, un grupo de rutas entero</Opcion>
+    <Opcion>`loadChildren` solo sirve para rutas con parámetros</Opcion>
+    <Opcion>Ninguna, son sinónimos</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Un `CanActivateFn` devuelve `router.parseUrl('/login')`. ¿Qué pasa?" explicacion="Devolver un `UrlTree` cancela la navegación actual y empieza otra hacia esa URL.">
+    <Opcion>Se entra en la ruta y además se abre el login</Opcion>
+    <Opcion correcta>Se cancela la navegación y el router va a `/login`</Opcion>
+    <Opcion>Sale un error en la consola</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Con un `authGuard` en Angular, la API ya no necesita comprobar el token." respuesta={false} explicacion="El guard solo actúa en el navegador y se puede saltar. La API tiene que comprobar el token siempre." />
+</Quiz>
+
+<Flashcards titulo="Repaso: parámetros, guards y lazy loading">
+  <Tarjeta frente="`:id` en un `path`">Segmento dinámico: `materiales/:id` coincide con `/materiales/1`, `/materiales/7`…</Tarjeta>
+  <Tarjeta frente="Snapshot frente a `paramMap`">El snapshot es una foto al crear el componente; `paramMap` es un `Observable` que avisa si el parámetro cambia con el componente reutilizado.</Tarjeta>
+  <Tarjeta frente="Query params">Lo que va tras `?`. Opcionales, no cambian qué ruta coincide. Se pasan con `[queryParams]` y se leen con `queryParamMap`.</Tarjeta>
+  <Tarjeta frente="`**`">Ruta comodín: coincide con todo. Va la última porque el router usa la primera que coincide.</Tarjeta>
+  <Tarjeta frente="`loadChildren`">Carga un `Routes` entero en un fichero aparte la primera vez que se entra. Se comprueba en la pestaña Network.</Tarjeta>
+  <Tarjeta frente="`CanActivate` y `CanDeactivate`">Guards para dejar entrar (o redirigir con un `UrlTree`) y para dejar salir (por ejemplo, con `confirm()` si hay cambios).</Tarjeta>
+  <Tarjeta frente="`withComponentInputBinding()`">Pasa `:id`, query params y datos resueltos a los `input()` del componente con el mismo nombre.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Detalle de un juego por URL" dificultad="media">
+  En `proj-game`, crea una ruta `juegos/:id` con un `DetalleJuegoComponent` que lea el id de la URL y pida el juego con `gameService.getGameById(id)`. Haz que funcione también si desde el detalle se navega a otro juego.
+
+  <Pista>Como se puede saltar de un detalle a otro, no te vale el snapshot: suscríbete a `paramMap`.</Pista>
+  <Pista>El id llega como texto: `Number(params.get('id'))`.</Pista>
+
+  <Solucion>
+
+```ts
+export class DetalleJuegoComponent implements OnInit {
+  private route = inject(ActivatedRoute);
+  private gameService = inject(GameService);
+  protected game = signal<Game | undefined>(undefined);
+
+  ngOnInit(): void {
+    this.route.paramMap.subscribe(params => {
+      const id = Number(params.get('id'));
+      this.gameService.getGameById(id).subscribe(game => this.game.set(game));
+    });
+  }
+}
+```
+
+```html
+@if (game(); as g) {
+  <h2>{{ g.title }}</h2>
+  <p>{{ g.genre }} · {{ g.platform }} · {{ g.price }} €</p>
+} @else {
+  <p>Cargando...</p>
+}
+```
+
+  Con `switchMap` (de RxJS) se evita la suscripción dentro de otra suscripción y se cancela la petición anterior si cambias de juego rápido: `this.route.paramMap.pipe(switchMap(p => this.gameService.getGameById(Number(p.get('id'))))).subscribe(g => this.game.set(g))`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Que no se pierdan los cambios" dificultad="dificil">
+  Tienes una página `NuevoJuegoComponent` (ruta `juegos/nuevo`) con el formulario reactivo del CRUD en una propiedad `formGroup`. Si el usuario ha empezado a rellenarlo y pulsa un enlace del menú, pregúntale si quiere salir. Si no ha tocado nada, que salga sin preguntar.
+
+  <Pista>Es un `CanDeactivateFn<NuevoJuegoComponent>`: recibe el componente y puede mirar `formGroup.dirty`.</Pista>
+  <Pista>Regístralo en la ruta del formulario con `canDeactivate: [...]`.</Pista>
+
+  <Solucion>
+
+```ts
+export const salirGuard: CanDeactivateFn<NuevoJuegoComponent> = (component) =>
+  !component.formGroup.dirty || confirm('Tienes cambios sin guardar. ¿Seguro que quieres salir?');
+```
+
+```ts
+{ path: 'juegos/nuevo', component: NuevoJuegoComponent, canDeactivate: [salirGuard] }
+```
+
+  Para que el guard pueda leer `formGroup`, la propiedad no puede ser `private` (con `protected` tampoco: el guard está fuera de la clase). En el `CrudComponent` de clase ya es pública.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

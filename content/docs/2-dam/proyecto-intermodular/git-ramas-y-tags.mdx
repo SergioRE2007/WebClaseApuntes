@@ -1,0 +1,520 @@
+---
+title: "Git: ramas, tags y Git Graph"
+description: "Git como se dio en clase: crear el repositorio, commits con prefijo, ramas locales y remotas, HEAD, un tag por versión, Git Graph, push de los tags y una rama por refactor con su Pull Request."
+icon: GitBranch
+---
+
+import { HistorialVersiones, RamaDeTrabajo } from '@/components/temas/proyecto/grafo-git';
+
+Git no tuvo una clase propia: fue saliendo dentro de otras asignaturas. En **Android** se creó el repositorio desde cero; en el **backend** el profesor enseñó cómo avanza su proyecto de referencia, versión a versión, con tags y la extensión Git Graph; y en **Angular** se trabajó con una rama por refactor para la actividad de Vercel.
+
+<DeClase fecha="26/10, 09/11" proyecto="PokeApp (Android)" nota="git init y commits desde Android Studio" />
+<DeClase fecha="20/10, 27/10, 03/11" proyecto="node-server-26-27 (backend)" nota="ramas, tags, Git Graph y git push origin --tags" />
+<DeClase fecha="12/11, 18/11" proyecto="proj-game (Angular)" nota="una rama por refactor, push y PR de revisión" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué son un commit, su padre, una rama, una rama remota y HEAD.
+  - Cómo se usan los tags `vX.Y.Z` para marcar cada versión del proyecto.
+  - Leer el historial con Git Graph y moverte entre versiones.
+  - Subir los tags y trabajar en una rama con su Pull Request.
+</Callout>
+
+## Las piezas de Git
+
+Antes de los comandos, las cinco palabras que se usaron en clase:
+
+<Glosario titulo="Vocabulario de Git">
+  <Termino nombre="Commit">Una foto del proyecto con un mensaje. Tiene un identificador (el *hash*, como `325e9297`) y apunta a su **padre**, el commit anterior. El primero del repositorio no tiene padre: Git Graph lo muestra como `Parents: None`.</Termino>
+  <Termino nombre="Rama">Una línea de trabajo que avanza: es un nombre que apunta al último commit de esa línea (`main`, `master`, `vercel-deployment`). Cada commit nuevo mueve la rama actual.</Termino>
+  <Termino nombre="Rama remota">La copia que hay en GitHub de una rama, vista desde tu ordenador: `origin/main` es la `main` del remoto `origin`.</Termino>
+  <Termino nombre="Tag">Una marca **fija** en un commit, como `v1.0.0`. A diferencia de una rama, no se mueve cuando haces más commits.</Termino>
+  <Termino nombre="HEAD">Lo que estás viendo ahora mismo. Normalmente apunta a una rama; si haces checkout de un tag antiguo, queda **separado** (*detached*) en ese commit.</Termino>
+</Glosario>
+
+## Crear el repositorio
+
+<DeClase fecha="26/10" proyecto="PokeApp (Android)" />
+
+En la clase de Android se creó el repositorio de las dos formas:
+
+- **Desde Android Studio:** el panel *Version Control*, con **Create Git repository** o **Share on GitHub** (que además lo sube).
+- **Desde la terminal** (PowerShell): `git init` y el primer commit.
+
+```bash title="Terminal"
+git init
+git status
+git add .
+git commit -m "..."
+```
+
+- `git init` crea el repositorio con la rama `main`.
+- En Windows sale el aviso `LF will be replaced by CRLF`. **No es un error**: Git avisa de que cambiará los saltos de línea (por la opción `core.autocrlf`). Se puede ignorar.
+- En Angular no hace falta: `ng new` inicializa Git solo (28/10, `proj-game`).
+
+<NoSeVio>Los mensajes exactos de `git status` y `git commit` del 26/10 no se leen en las capturas: solo se ve el principio de cada comando.</NoSeVio>
+
+## Commits con prefijo
+
+Los mensajes del profesor siguen la convención de **prefijos** (*Conventional Commits*): una palabra que dice qué tipo de cambio es, dos puntos y la descripción.
+
+| Prefijo | Para qué | Dónde salió |
+| --- | --- | --- |
+| `feat:` | Funcionalidad nueva | Backend (20/10, 27/10, 03/11) y Android (26/10, 09/11) |
+| `fix:` | Arreglo | Backend |
+| `docs:` | Solo documentación | Backend |
+| `chore:` | Configuración o tareas que no cambian el código de la app | Guía de la Act 11 (18/11) |
+| `refactor:` | Cambiar el código sin cambiar lo que hace | Guía de la Act 11 (18/11) |
+
+Mensajes reales que se vieron:
+
+- `feat: Add media upload with Cloudinary integration (v1.1.0)` (backend).
+- <Dudoso nota="El 20/10 se lee `doc:` y el 27/10 `docs:`.">`docs: actualizar CHANGELOG con v1.1.0`</Dudoso> (backend).
+- `docs: README completo como manual con todas las versiones detalladas` (backend).
+- `v0.8.0 - Seguridad adicional: rate limiting con express-rate-limit y logging con Winston` (backend).
+- `v0.9.0 - Testing con Jest y Supertest`, con una lista debajo: "Configurado Jest con TypeScript y ES modules" y "Añadidos tests de integración para Auth (8 tests)" <Dudoso nota="La lista sale cortada: solo se leen las dos primeras líneas." />.
+- `feat: change ds and repo to flow emition` (Android, 09/11).
+- `chore: configure SPA navigation on Vercel` y `refactor: migrate game form to reactive forms` (guía de la Act 11).
+
+Fíjate en que los mensajes largos llevan **una lista de cambios** debajo de la primera línea: junto con el CHANGELOG, documentan cada versión. El 27/10 el profesor dijo que sus mensajes siguen esa convención, y el 03/11 que los prefijos los usa "desde la v1.0.1" de su repositorio.
+
+<Comparar titulo="El mensaje del commit">
+  <Lado tipo="evitar">
+
+```bash
+git add -A .
+git commit -m "."
+```
+
+En la demo del 18/11 el commit se hizo con el mensaje `"."`. Dentro de dos semanas nadie sabrá qué cambió ahí.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Lo que pide la guía">
+
+```bash
+git add vercel.json
+git commit -m "chore: configure SPA navigation on Vercel"
+
+git add .
+git commit -m "refactor: migrate game form to reactive forms"
+```
+
+Un commit por cambio lógico, con prefijo y una descripción que se entiende sin abrir el código.
+
+  </Lado>
+</Comparar>
+
+## Ramas locales y remotas
+
+<DeClase fecha="20/10" proyecto="node-server-26-27" />
+
+El 20/10 el profesor abrió en Cursor el selector **"Select a branch or tag to checkout"** de su repositorio de referencia del backend. Ahí se ve todo de golpe:
+
+| Tipo | Qué aparece |
+| --- | --- |
+| Ramas locales | `main` y `vercel-deployment` |
+| Ramas remotas | `origin/main` y `origin/vercel-deployment` |
+| Tags | `v1.0.0` ("v1.0.0 - Producción y documentación") y `v1.1.0` (el `feat:` de Cloudinary) |
+
+- Las **ramas locales** son las de tu ordenador; las **remotas** (`origin/...`) son cómo estaba GitHub la última vez que hablaste con él.
+- Hay **una rama aparte para desplegar**: `vercel-deployment`.
+- La idea principal de ese día: **el proyecto avanza por versiones etiquetadas**, y se puede hacer checkout de una rama o de un tag desde el propio IDE para ver el proyecto tal como estaba.
+
+<NoSeVio titulo="La rama vercel-deployment">
+  La rama `vercel-deployment` no se llega a abrir en ninguna clase: no se sabe qué cambia para desplegar la API. El 20/10 tampoco se ve qué rama o tag se elige al final.
+</NoSeVio>
+
+## Un tag por versión
+
+<DeClase fecha="27/10, 03/11" proyecto="node-server-26-27" />
+
+El repositorio de referencia del backend tiene **un tag por hito** (`v0.1.0` ... `v1.1.3`) y **un commit por versión**. Hacer checkout de un tag te enseña el código **exactamente como estaba** en esa versión. El profesor lo usa como una guía que se avanza versión a versión.
+
+Pulsa cualquier versión de la demo para hacer su "checkout" (también con las flechas ↑ y ↓). Fíjate en lo que pasa con HEAD y con los commits de arriba:
+
+<HistorialVersiones />
+
+Lo que enseña la demo, que es lo que dijo el profesor con Git Graph delante:
+
+- Al hacer checkout de un tag antiguo, **HEAD queda separado** (*detached*) en ese commit.
+- Los commits posteriores siguen existiendo, pero **no están incluidos en HEAD**. Git Graph lo dice literalmente con un tooltip: "This commit is not included in HEAD".
+
+Para volver a la última versión basta con hacer checkout de la rama `main` otra vez (en clase no se llega a ver ese paso).
+
+### El historial completo
+
+| Versión | Qué añade |
+| --- | --- |
+| `v0.1.0` | Proyecto base: npm, TypeScript y la estructura de carpetas. |
+| `v0.2.0` | Express básico: servidor, middlewares y el endpoint `/health`. |
+| `v0.3.0` | PostgreSQL + Docker con Prisma: schema, migraciones y cliente de la BD. |
+| `v0.4.0` | Validación con Zod: schemas, middleware y CRUD de usuarios. |
+| `v0.5.0` | Módulo Auth: registro, login, bcrypt y JWT. |
+| `v0.6.0` | Middleware de autenticación: JWT, rutas protegidas y `/me`. |
+| `v0.7.0` | Mejoras en Users: actualizar el perfil y cambiar la contraseña. |
+| `v0.8.0` | Seguridad adicional: rate limiting con express-rate-limit y logging con Winston. |
+| `v0.9.0` | Testing con Jest y Supertest. |
+| `v1.0.0` | Producción y documentación: Docker de producción y Swagger en `/api-docs`. |
+| `v1.0.1` | Documentación Swagger/OpenAPI completa. |
+| `v1.0.2` | Se sustituye ts-node por tsx para que funcionen bien los ES Modules. |
+| `v1.1.0` | Subida de archivos con Cloudinary. |
+| `v1.1.1` | `env.production.example` con las variables de Cloudinary. |
+| `v1.1.2` | Errores de TypeScript arreglados en el módulo media. |
+| `v1.1.3` | La documentación de Swagger ya muestra todos los endpoints. |
+
+Además hay commits sueltos, como "Fix: Permisos de carpeta logs en Docker" (después de la v1.0.0) y `docs: README completo como manual con todas las versiones detalladas`. Los commits son de noviembre de 2025: el repositorio viene del curso anterior. Los mensajes de la v0.3.0, v0.6.0, v0.7.0, v0.8.0, v0.9.0 y v1.0.0 salen cortados o resumidos en Git Graph, así que las descripciones de la tabla son las de la lista del profesor.
+
+Cómo se reparte el proyecto en esas versiones lo tienes explicado en [APIs](/docs/2-dam/apis).
+
+### Qué significa vX.Y.Z <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  En clase se usaron los tags de versión semántica y se vieron los rangos `^` y `~` del `package.json` (20/10 y 28/10), pero no se explicó qué significa cada número de un tag. Es el convenio *Semantic Versioning*.
+</NoDadoEnClase>
+
+`vMAYOR.MENOR.PARCHE`:
+
+- **MAYOR** (`v1.0.0`): cambios que rompen lo anterior. Por debajo de `1.0.0` se considera que el proyecto aún está en desarrollo, como el repositorio de clase hasta llegar a "Producción y documentación".
+- **MENOR** (`v1.1.0`): algo nuevo que no rompe nada, como la subida de archivos con Cloudinary.
+- **PARCHE** (`v1.1.2`): arreglos, como los errores de TypeScript del módulo media.
+
+## Moverse entre versiones
+
+<DeClase fecha="27/10, 03/11" proyecto="node-server-26-27" nota="todo desde la interfaz de Cursor" />
+
+El profesor cambia de versión desde la **barra de estado de Cursor** (o VS Code): pulsa el nombre de la rama y elige **"Checkout Branch/Tag..."**. El menú que sale el 03/11 tiene:
+
+| Opción | Qué hace |
+| --- | --- |
+| Create new branch / Create new branch from... | Crear una rama en el commit actual o en otro |
+| Checkout detached... | Ir a un commit suelto (HEAD separado) |
+| `main`, `vercel-deployment` | Cambiar a una rama local |
+| `origin/main`, `origin/vercel-deployment` | Ramas remotas |
+| `v1.1.0`, etc. | Ir a un tag |
+
+<NoSeVio titulo="Comandos de checkout">
+  En clase no se ve ningún comando de checkout: todo se hace desde la interfaz del editor. El 27/10, además, la terminal dice `git:(v0.4.0)` mientras la barra de estado dice `v0.5.0`, con tres archivos modificados sin commit (`validate.ts`, `users.controller.ts` y `users.schema.ts`), y no se ve qué se hizo con ellos.
+</NoSeVio>
+
+### Lo mismo en la terminal <NoDadoEnClase inline />
+
+<NoDadoEnClase />
+
+```bash title="Terminal"
+git tag                       # lista los tags
+git switch --detach v0.4.0    # ir al tag v0.4.0 (HEAD separado)
+git checkout v0.4.0           # lo mismo, con el comando antiguo
+git switch main               # volver a la rama main
+git log --oneline --graph --all --decorate   # el grafo en la terminal
+```
+
+<Callout type="warn" title="Cambios sin guardar">
+  Si tienes archivos modificados sin commit, Git puede negarse a cambiar de versión (`Your local changes would be overwritten by checkout`). Haz commit antes, o guárdalos con `git stash`.
+</Callout>
+
+## Git Graph
+
+<DeClase fecha="27/10, 03/11" proyecto="node-server-26-27" />
+
+Para leer el historial, el profesor usa la extensión **Git Graph** de Cursor/VS Code.
+
+<Steps>
+  <Step>
+
+#### Instálala
+
+  En Extensiones busca "git graph" y elige **Git Graph v1.30.0, de mhutchie** (la que tiene unos 1,2 millones de descargas). Parecidas: GitLens, Git Blame, IntelliGit y GitLG.
+
+  </Step>
+  <Step>
+
+#### Mira el grafo
+
+  Sale el grafo con las ramas (`main`, `origin/HEAD`, `vercel-deployment`) y los tags. La casilla **Show Remote Branches** enseña también las ramas remotas.
+
+  </Step>
+  <Step>
+
+#### Pincha un commit
+
+  Ves el **hash** completo, el **padre** (*Parents*), el autor y el *committer*, la fecha y el árbol de archivos cambiados con sus líneas añadidas y quitadas (`+/-`).
+
+  </Step>
+  <Step>
+
+#### Pincha un archivo
+
+  Se abre su *diff* ("Click to View Diff"). Un archivo nuevo sale como "Added in" seguido del hash del commit. Con el botón derecho, "Copy Absolute File Path" copia su ruta.
+
+  </Step>
+</Steps>
+
+Así explicó el profesor **qué añadió cada versión**: abriendo el commit y leyendo qué archivos cambia. Algunos de los que se vieron:
+
+<Tabs items={['v0.5.0', 'v0.8.0', 'v0.9.0', 'v1.0.0']}>
+  <Tab value="v0.5.0">
+
+Commit `325e9297`, "Módulo Auth":
+
+- `src/modules/auth/auth.controller.ts`, `auth.routes.ts` y `auth.service.ts`.
+- `app.ts` (+2).
+- `CHANGELOG.md` (+42) y `docs/API_EXAMPLES.md` (+70).
+
+</Tab>
+  <Tab value="v0.8.0">
+
+Commit `486c9ecb`, "Seguridad adicional: rate limiting con express-rate-limit y logging con Winston":
+
+- `src/middleware/rateLimiter.ts`, `src/middleware/requestLogger.ts` y `src/utils/logger.ts` (nuevos).
+- `src/middleware/error.ts` (+5 -2), `src/app.ts` (+6 -4) y `src/index.ts` (+18 -3).
+- `docs/API_EXAMPLES.md` (+55 -6) y `.gitignore` (+1).
+
+</Tab>
+  <Tab value="v0.9.0">
+
+Commit `99fb2e12`, "Testing con Jest y Supertest":
+
+- `src/tests/auth.test.ts` y `src/tests/users.test.ts`.
+- `src/app.ts` (+11 -2), `jest.config.js`, `package.json` (+8 -1) y `package-lock.json`.
+- `README.md` (+619 -19), `CHANGELOG.md` (+76) y `.gitignore`.
+
+</Tab>
+  <Tab value="v1.0.0">
+
+Commit <Dudoso nota="También se lee `556a6e84`.">`556a6f84`</Dudoso>, "Producción y documentación":
+
+- `config/swagger.ts`, `Dockerfile`, `.dockerignore`, `docker-compose.prod.yml` y `env.production.example`.
+- `auth.routes.ts` (+5 -3), `app.ts` (+7 -1) y `package.json` (+4).
+- `CHANGELOG.md` (+73) y `README.md` (+524 -8), con los *diffs* abiertos en el editor.
+
+</Tab>
+</Tabs>
+
+Los hashes de los padres solo se leen en parte en las capturas. En Angular (14/10) también se vio Git Graph o GitLens con el aviso "Not Committed Yet" en la rama `master`: son los cambios que aún no tienen commit.
+
+## Subir los tags
+
+<DeClase fecha="03/11" proyecto="node-server-26-27" />
+
+Un `git push` normal sube los commits de la rama, pero **no sube los tags**. Hay que pedirlo:
+
+```bash title="Terminal"
+git push origin --tags
+```
+
+El 03/11 ese comando estaba escrito en la terminal todo el rato.
+
+<NoSeVio titulo="Crear un tag">
+  En clase se explicó cómo subir los tags, pero no cómo crearlos.
+</NoSeVio>
+
+### Crear un tag <NoDadoEnClase inline />
+
+<NoDadoEnClase />
+
+```bash title="Terminal"
+git tag -a v0.1.0 -m "v0.1.0 - Proyecto base"   # tag anotado en el commit actual
+git push origin v0.1.0                           # sube solo ese tag
+git push origin --tags                           # o todos (lo de clase)
+```
+
+- `-a` crea un tag **anotado**: guarda autor, fecha y mensaje, como un commit. Es el recomendado para marcar versiones.
+- Sin `-a` ni `-m` (`git tag v0.1.0`) se crea un tag ligero, que es solo un nombre.
+- Créalo **después** del commit que cierra la versión: el tag se pone en el commit en el que está HEAD.
+
+## CHANGELOG y README por versiones
+
+<DeClase fecha="27/10, 03/11" proyecto="node-server-26-27" />
+
+Junto a cada tag, el repositorio de referencia tiene su documentación:
+
+- **`CHANGELOG.md`**: un apartado por versión (por ejemplo, "v0.3.0 - PostgreSQL + Docker con Prisma"), con secciones como "Añadido" y "Seguridad en producción". Junto a cada versión hay un commit `docs: actualizar CHANGELOG con vX`.
+- **`README.md`**: funciona como **manual completo**, con un índice enlazado por versiones (v0.1.0 ... v1.0.0). Cada versión tiene su **"Objetivo"** y sus pasos.
+- **`docs/API_EXAMPLES.md`**: ejemplos de uso de la API, que crecen con cada versión.
+
+Es lo mismo que el Changelog de Confluence del [proyecto real de Jira](/docs/2-dam/proyecto-intermodular/desarrollo-agil-y-jira), pero dentro del repositorio. Para tu proyecto es oro: la revisión semanal de Acceso a Datos mira la **trazabilidad** (que el repositorio refleje el avance con commits).
+
+<NoDadoEnClase titulo="Un CHANGELOG con ese formato">
+  El contenido de los apartados del CHANGELOG de clase no se llega a leer. Esto es un ejemplo propio con la misma estructura.
+</NoDadoEnClase>
+
+```md title="CHANGELOG.md"
+# Changelog
+
+## v0.2.0 - Express básico
+
+### Añadido
+- Servidor Express con `app.ts` e `index.ts` separados.
+- Middlewares `express.json()` y `morgan('dev')`.
+- Endpoint `GET /health`.
+
+## v0.1.0 - Proyecto base
+
+### Añadido
+- Proyecto npm con TypeScript y la estructura de carpetas.
+```
+
+## Una rama por refactor
+
+<DeClase fecha="12/11, 18/11" proyecto="proj-game" nota="Act 11, «Migración ReactiveForms, Git y Vercel»" />
+
+En la actividad de Angular había que pasar el formulario de juegos a formularios reactivos **en una rama aparte**, sin tocar la rama estable. El patrón:
+
+1. Desde la rama estable y actualizada, crear la rama con `git switch -c`.
+2. Trabajar y hacer commits en ella.
+3. Subirla con `git push origin <rama>` (o `git push -u`).
+4. Abrir una **Pull Request de revisión** contra `main` y **dejarla abierta**.
+
+El 12/11 se leyó el paso 3 de la guía, que empieza así:
+
+```bash title="Guía de la Act 11, paso 3"
+git status
+git switch main
+git pull --ff-only
+git switch -c refactor/reactive-forms
+git branch --show-current
+```
+
+- `git status`: comprobar que no hay nada a medias.
+- `git pull --ff-only`: traer lo último de GitHub **solo si se puede avanzar sin mezclar** (*fast-forward*). Si tu rama y la remota se han separado, falla en vez de crear un *merge*.
+- `git branch --show-current`: comprobar en qué rama estás antes de seguir.
+
+El 18/11 el profesor lo hizo en directo con su proyecto. Recórrelo paso a paso:
+
+<RamaDeTrabajo />
+
+Los comandos de la demo, tal cual:
+
+```bash title="Terminal (18/11)"
+git branch
+git switch master
+git switch -c refactor/reactive-form2
+git add -A .
+git commit -m "."
+git push origin refactor/reactive-form2
+```
+
+- `git switch -c` crea la rama en el commit actual y se cambia a ella ("Switched to a new branch").
+- El commit dio `[refactor/reactive-form2 52bc022]`, "3 files changed, 63 insertions(+), 36 deletions(-)" y "create mode 100644 vercel.json". Un segundo `commit` dijo "nothing to commit, working tree clean" y otro `push`, "Everything up-to-date".
+- Al subir la rama, GitHub responde con `[new branch]` y el enlace para crear la Pull Request.
+
+<Callout type="warn" title="main o master">
+  La guía usa `main` y `feature/reactive-forms`; el profesor trabajó con `master` (su rama principal) y `refactor/reactive-form2`. Ya tenía otra rama, `refactor/reactive-form`, con el refactor hecho, y creó la segunda para repetirlo desde cero. Usa los nombres de tu repositorio.
+</Callout>
+
+### La Pull Request de revisión
+
+Es el paso E de la guía: en GitHub se abre la PR con **base `main`** y **compare `feature/reactive-forms`**, con el título "Refactorizar: formularios reactivos". En *Files changed* se comparan los cambios (en clase, `GameService` y la interfaz `Game`) y **la PR se deja abierta**: sirve para revisar, no se fusiona. Mientras, Vercel publica una Preview de la rama; eso está en [Despliegue en Vercel](/docs/2-dam/proyecto-intermodular/despliegue-en-vercel).
+
+## Errores típicos
+
+- **`LF will be replaced by CRLF`** (salió en clase): es un aviso de Windows sobre los saltos de línea, no un error. Se puede ignorar.
+
+<NoDadoEnClase titulo="Otros errores habituales">
+  Estos no salieron en clase, pero te los vas a encontrar trabajando en equipo.
+</NoDadoEnClase>
+
+- **`Your local changes would be overwritten by checkout`**: hay archivos cambiados sin commit. Muchas veces son archivos de `.idea` que Android Studio cambia solo. Haz commit, `git stash`, o descártalos con `git restore <archivo>` si no son tuyos.
+- **No subas la configuración local de Android Studio** (`.idea/workspace.xml`, `.idea/appInsightsSettings.xml`, `local.properties`): ponla en el `.gitignore`.
+- **`! [rejected] ... (fetch first)`** al hacer `push`: alguien subió antes que tú. Primero `git pull` y después `push`.
+- **Has subido el `.env`**: añádelo al `.gitignore` y cambia las contraseñas y el `JWT_SECRET`. Aunque lo borres, sigue en el historial.
+- **`&&` da error en PowerShell**: en la PowerShell de Windows 10 y 11 (la 5.1) no existe `&&`. Ejecuta los comandos de uno en uno o sepáralos con `;`.
+
+## Practica
+
+<CompletarCodigo
+  titulo="La rama del refactor"
+  enunciado="Completa los comandos: volver a la rama estable, crear la rama, hacer commit con prefijo, subir la rama y subir los tags."
+  lenguaje="bash"
+  codigo={`git switch [[master|main]]
+git switch [[-c]] refactor/reactive-form2
+git add -A .
+git commit -m "[[refactor]]: migrate game form to reactive forms"
+git push [[origin]] refactor/reactive-form2
+git push origin [[--tags]]`}
+/>
+
+<Quiz titulo="Test: Git como se dio en clase">
+  <Pregunta enunciado="Haces checkout del tag `v0.4.0` en un repositorio que llega hasta `v1.1.3`. ¿Qué pasa con los commits posteriores?" explicacion="Siguen existiendo, pero no forman parte de HEAD: Git Graph lo marca con «This commit is not included in HEAD». Vuelves a ellos haciendo checkout de `main`.">
+    <Opcion>Se borran</Opcion>
+    <Opcion correcta>Siguen ahí, pero no están incluidos en HEAD</Opcion>
+    <Opcion>Se mezclan con `v0.4.0`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Un `git push` normal sube también los tags." respuesta={false} explicacion="Los tags se suben aparte, con `git push origin --tags` (o uno a uno con `git push origin v1.0.0`)." />
+  <Pregunta enunciado="¿Qué diferencia hay entre una rama y un tag?" explicacion="La rama avanza con cada commit nuevo; el tag es una marca fija en un commit.">
+    <Opcion correcta>La rama se mueve con cada commit; el tag se queda fijo</Opcion>
+    <Opcion>El tag solo existe en GitHub</Opcion>
+    <Opcion>No hay diferencia, son sinónimos</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué es `origin/main`?" explicacion="Es la rama `main` del remoto `origin` (GitHub), tal como estaba la última vez que te comunicaste con él.">
+    <Opcion>Una rama local de copia de seguridad</Opcion>
+    <Opcion correcta>La rama `main` del remoto, vista desde tu ordenador</Opcion>
+    <Opcion>El primer commit del repositorio</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué prefijo le pondrías a un commit que solo añade `vercel.json`?" explicacion="La guía usa `chore: configure SPA navigation on Vercel`: es configuración, no cambia lo que hace la app.">
+    <Opcion>`feat:`</Opcion>
+    <Opcion>`fix:`</Opcion>
+    <Opcion correcta>`chore:`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿Qué comando crea la rama `refactor/reactive-form2` y te cambia a ella?" respuesta={["git switch -c refactor/reactive-form2", "git checkout -b refactor/reactive-form2"]} explicacion="`git switch -c` es lo que se usó en clase. `git checkout -b` hace lo mismo con el comando antiguo." />
+  <Pregunta enunciado="En Git Graph, el commit `v0.1.0` muestra `Parents: None`. ¿Por qué?" explicacion="Es el primer commit del repositorio: no hay ningún commit anterior al que apuntar.">
+    <Opcion>Porque es un tag, no un commit</Opcion>
+    <Opcion correcta>Porque es el primer commit del repositorio</Opcion>
+    <Opcion>Porque está en una rama remota</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Según la guía de la Act 11, ¿qué se hace con la Pull Request de revisión?" explicacion="Se deja abierta para revisarla; producción sigue saliendo de la rama principal.">
+    <Opcion>Se fusiona en cuanto se crea</Opcion>
+    <Opcion correcta>Se deja abierta para la revisión</Opcion>
+    <Opcion>Se cierra y se borra la rama</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: Git">
+  <Tarjeta frente="¿Qué es HEAD?">Lo que estás viendo ahora mismo. Normalmente apunta a una rama; tras hacer checkout de un tag antiguo queda separado (*detached*).</Tarjeta>
+  <Tarjeta frente="Subir los tags">`git push origin --tags`. Un `push` normal no los sube.</Tarjeta>
+  <Tarjeta frente="Un tag por versión">Cada hito del proyecto es un commit marcado con `vX.Y.Z`. Haciendo checkout del tag ves el código tal como estaba.</Tarjeta>
+  <Tarjeta frente="Qué enseña Git Graph de un commit">Hash, padre (*Parents*), autor y *committer*, fecha y los archivos cambiados con su `+/-`; al pinchar un archivo, el *diff*.</Tarjeta>
+  <Tarjeta frente="Crear una rama y cambiarte a ella">`git switch -c <rama>`. Se crea en el commit actual.</Tarjeta>
+  <Tarjeta frente="`git pull --ff-only`">Trae lo último del remoto solo si se puede avanzar sin mezclar. Si las ramas se han separado, falla en vez de crear un *merge*.</Tarjeta>
+  <Tarjeta frente="Prefijos de commit que salieron">`feat:`, `fix:`, `docs:` (backend) y `chore:`, `refactor:` (guía de la Act 11).</Tarjeta>
+  <Tarjeta frente="`LF will be replaced by CRLF`">Un aviso de Windows sobre los saltos de línea (`core.autocrlf`). No es un error.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Versiona tu proyecto como el de clase" dificultad="media">
+  En el repositorio de tu backend, cierra el hito en el que estés con un commit con prefijo, márcalo con un tag `vX.Y.Z`, añade su apartado al `CHANGELOG.md` y súbelo todo a GitHub, tags incluidos. Después, comprueba en Git Graph que el tag está en el commit correcto.
+
+  <Pista>El tag se pone en el commit en el que está HEAD: primero el commit, después el tag.</Pista>
+  <Pista>Recuerda que `git push` no sube los tags.</Pista>
+
+  <Solucion>
+
+```bash title="Terminal"
+git add .
+git commit -m "feat: CRUD de productos con Prisma"
+# añade el apartado "v0.4.0 - CRUD de productos" al CHANGELOG.md
+git add CHANGELOG.md
+git commit -m "docs: actualizar CHANGELOG con v0.4.0"
+git tag -a v0.4.0 -m "v0.4.0 - CRUD de productos"
+git push origin main
+git push origin --tags
+```
+
+Crear el tag con `git tag -a` no se dio en clase; subirlo con `--tags`, sí. En Git Graph el tag `v0.4.0` tiene que salir en el último commit (el del CHANGELOG), así la versión incluye su documentación. En el repositorio de referencia el tag está en el commit de la versión y el `docs: actualizar CHANGELOG con vX` va en un commit aparte: las dos formas valen si las usas siempre igual.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Lee un commit" dificultad="facil">
+  Instala Git Graph, abre el repositorio de tu proyecto y elige un commit cualquiera. Apunta su hash, su padre, cuántos archivos cambió y cuántas líneas añadió y quitó en el más grande. Abre el *diff* de ese archivo y explica en una frase qué cambió.
+
+  <Pista>Si el commit tiene `Parents: None`, has elegido el primero del repositorio.</Pista>
+
+  <Solucion>
+
+No hay una única respuesta. Lo importante es saber sacarlo: el hash y *Parents* están arriba del detalle del commit, la lista de archivos con su `+/-` debajo, y al pinchar un archivo se abre el *diff* (en verde lo añadido y en rojo lo quitado). Es lo que hacía el profesor para explicar qué añadía cada versión.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

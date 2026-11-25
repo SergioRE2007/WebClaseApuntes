@@ -1,0 +1,514 @@
+---
+title: Proyecto standalone y Angular CLI
+description: "Cómo se crea un proyecto de Angular 19, para qué sirve cada archivo (main.ts, index.html, app.config.ts, app.routes.ts…), ng serve, ng generate, package.json y Tailwind CSS 4."
+icon: FolderTree
+---
+
+**Angular** es un *framework* de Google para hacer aplicaciones web de una sola página (SPA): el navegador descarga una vez la aplicación y, a partir de ahí, Angular cambia la pantalla sin recargar la página. Se programa en **TypeScript**, que es JavaScript con tipos, y se maneja casi todo desde la terminal con el **Angular CLI** (`ng`).
+
+En clase se usó **Angular 19** (en DevTools sale `ng-version="19.2.25"` y en `package.json` los paquetes van con `^19.2.0`).
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Crear un proyecto con `ng new` y entender cada archivo que genera.
+  - Cómo arranca una aplicación: de `index.html` a `AppComponent`.
+  - Arrancar el servidor de desarrollo con `ng serve -o` y los scripts de `package.json`.
+  - Generar componentes, servicios e interfaces con `ng generate`.
+  - Leer los rangos de versiones (`^` y `~`) y distinguir `dependencies` de `devDependencies`.
+</Callout>
+
+## Crear un proyecto
+
+<DeClase fecha="28/10" proyecto="proj-game" nota="el proyecto proj-lamp del 14/10 ya venía creado" />
+
+```bash title="Terminal"
+ng new proj-game
+```
+
+El CLI hace dos preguntas. En clase se respondió así:
+
+| Pregunta | Respuesta |
+| --- | --- |
+| Formato de estilos (*stylesheet format*) | **CSS** |
+| ¿Activar SSR y SSG (renderizado en el servidor)? | **No** |
+
+Crea la carpeta, instala las dependencias con npm e inicializa un repositorio de Git. Al abrirlo en VS Code sobre WSL puede salir el aviso de **Restricted Mode**: hay que pulsar "Trust Folder & Continue" para poder usar la terminal.
+
+## Estructura de un proyecto standalone
+
+<DeClase fecha="14/10" proyecto="proj-lamp" />
+
+<Files>
+  <Folder name="proj-lamp" defaultOpen>
+    <Folder name="public">
+      <File name="favicon.ico" />
+    </Folder>
+    <Folder name="src" defaultOpen>
+      <Folder name="app" defaultOpen>
+        <Folder name="components">
+          <Folder name="lampara">
+            <File name="lampara.component.css" />
+            <File name="lampara.component.html" />
+            <File name="lampara.component.ts" />
+          </Folder>
+        </Folder>
+        <File name="app.component.css" />
+        <File name="app.component.html" />
+        <File name="app.component.spec.ts" />
+        <File name="app.component.ts" />
+        <File name="app.config.ts" />
+        <File name="app.routes.ts" />
+      </Folder>
+      <File name="index.html" />
+      <File name="main.ts" />
+      <File name="styles.css" />
+    </Folder>
+    <File name="angular.json" />
+    <File name="package.json" />
+    <File name="package-lock.json" />
+    <File name="tsconfig.json" />
+    <File name="tsconfig.app.json" />
+    <File name="tsconfig.spec.json" />
+  </Folder>
+</Files>
+
+| Archivo | Para qué sirve |
+| --- | --- |
+| `src/index.html` | La única página HTML. Tiene `<base href="/">` y la etiqueta `<app-root>`, donde se monta la aplicación. |
+| `src/main.ts` | El punto de entrada: arranca la aplicación con `AppComponent` y la configuración de `app.config.ts`. |
+| `src/styles.css` | Estilos **globales**: valen para toda la aplicación. |
+| `src/app/app.component.*` | El componente raíz: clase (`.ts`), plantilla (`.html`), estilos (`.css`) y pruebas (`.spec.ts`). |
+| `src/app/app.config.ts` | Los *providers* de toda la aplicación: el router, `HttpClient`… |
+| `src/app/app.routes.ts` | La tabla de rutas (al crear el proyecto, vacía). |
+| `package.json` | Dependencias y scripts de npm. |
+| `angular.json` | Configuración del CLI: cómo se compila y se sirve el proyecto. |
+| `tsconfig*.json` | Configuración de TypeScript (modo `strict`). |
+
+Lo de `angular.json` y los tres `tsconfig` está explicado a fondo en la Guía5 de ficheros de configuración del [repositorio de guías](https://github.com/hokahey007/guides-angular).
+
+### El componente raíz
+
+Así quedó `app.component.ts` en la clase de la lámpara, después de importar el hijo:
+
+```ts title="src/app/app.component.ts"
+import { Component } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
+import { LamparaComponent } from './components/lampara/lampara.component';
+
+@Component({
+  selector: 'app-root',
+  imports: [RouterOutlet, LamparaComponent],
+  templateUrl: './app.component.html',
+  styleUrl: './app.component.css'
+})
+export class AppComponent {
+  title = 'proj-lamp';
+}
+```
+
+Al crear el proyecto, `app.component.html` trae una plantilla de ejemplo muy larga (con un `<style>` y variables CSS en `:host`). En clase se borra entera y se escribe la plantilla propia.
+
+### Lo que genera el CLI en los demás archivos
+
+El 14/10 se miró en `index.html` la etiqueta `<app-root>` y el `<base href="/">`; el resto de estos archivos se nombra, pero no se abre (el `app.config.ts` sale en pantalla el 19/11, en la clase de rutas, con este mismo contenido). Esto es lo que genera `ng new` en Angular 19 <NoDadoEnClase inline />:
+
+<Tabs items={['main.ts', 'index.html', 'app.config.ts', 'app.routes.ts']}>
+  <Tab value="main.ts">
+
+```ts title="src/main.ts"
+import { bootstrapApplication } from '@angular/platform-browser';
+import { appConfig } from './app/app.config';
+import { AppComponent } from './app/app.component';
+
+bootstrapApplication(AppComponent, appConfig)
+  .catch((err) => console.error(err));
+```
+
+  </Tab>
+  <Tab value="index.html">
+
+```html title="src/index.html"
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ProjLamp</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+</head>
+<body>
+  <app-root></app-root>
+</body>
+</html>
+```
+
+  </Tab>
+  <Tab value="app.config.ts">
+
+```ts title="src/app/app.config.ts"
+import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
+import { provideRouter } from '@angular/router';
+
+import { routes } from './app.routes';
+
+export const appConfig: ApplicationConfig = {
+  providers: [provideZoneChangeDetection({ eventCoalescing: true }), provideRouter(routes)]
+};
+```
+
+Aquí se añade `provideHttpClient()` cuando la aplicación tiene que hacer peticiones HTTP (lo verás en [HttpClient](/docs/2-dam/acceso-a-datos/angular/httpclient)).
+
+  </Tab>
+  <Tab value="app.routes.ts">
+
+```ts title="src/app/app.routes.ts"
+import { Routes } from '@angular/router';
+
+export const routes: Routes = [];
+```
+
+  </Tab>
+</Tabs>
+
+### Cómo arranca la aplicación
+
+<Flujo
+  titulo="De index.html a la pantalla"
+  nodos={["Navegador", "index.html", "main.ts", "app.config.ts", "AppComponent"]}
+>
+  <Mensaje de="Navegador" a="index.html" titulo="GET /">
+    El navegador pide la página. Recibe `index.html`, que solo tiene un `<app-root>` vacío, y los archivos JavaScript compilados.
+  </Mensaje>
+  <Mensaje de="index.html" a="main.ts" titulo="Se ejecuta el bundle">
+    El código de `main.ts` es lo primero que se ejecuta.
+  </Mensaje>
+  <Mensaje de="main.ts" a="app.config.ts" titulo="bootstrapApplication(AppComponent, appConfig)">
+    Angular lee los *providers* de `appConfig`: el router y, si lo añades, `HttpClient`.
+  </Mensaje>
+  <Mensaje de="main.ts" a="AppComponent" titulo="Crea el componente raíz">
+    Angular crea `AppComponent`.
+  </Mensaje>
+  <Mensaje de="AppComponent" a="index.html" tipo="respuesta" titulo="Pinta dentro de app-root">
+    El `selector: 'app-root'` coincide con la etiqueta de `index.html`, así que Angular pinta ahí la plantilla de `AppComponent`. Y dentro de esa plantilla, los componentes hijos.
+  </Mensaje>
+</Flujo>
+
+### Standalone: sin NgModule
+
+En Angular 19 todos los componentes son **standalone**: cada uno dice en su array `imports` lo que usa su plantilla (otros componentes, `RouterOutlet`, pipes…). Ya no hace falta `NgModule`, que es lo que verás en tutoriales antiguos (`app.module.ts` con `declarations`).
+
+<Callout type="info" title="standalone: true sobra en Angular 19">
+  El 27/10 la IA de Cursor añadió `standalone: true` a varios componentes. No rompe nada, pero en Angular 19 ya es el valor por defecto.
+</Callout>
+
+## Arrancar el servidor de desarrollo
+
+<DeClase fecha="14/10" proyecto="proj-lamp" />
+
+```bash title="Terminal"
+ng serve -o
+```
+
+- `ng serve` compila la aplicación y la sirve en `http://localhost:4200`. `-o` (`--open`) abre el navegador.
+- Se queda **vigilando los archivos**: al guardar, recarga sola. Con HMR (*Hot Module Replacement*) los cambios de un componente o de un CSS se aplican sin recargar la página.
+- Para pararlo, `Ctrl+C` en la terminal.
+
+<Terminal titulo="bash — ~/proj-lamp">
+{`$ ng serve -o
+Component HMR has been enabled.
+Initial total 138.84 kB
+Application bundle generation complete.
+  ➜  Local:   http://localhost:4200/
+Component update sent to client(s).
+Stylesheet update sent to client(s).`}
+</Terminal>
+
+Los mensajes del final salen cada vez que guardas un componente o una hoja de estilos.
+
+### Los scripts de package.json
+
+```json title="package.json (scripts)"
+"scripts": {
+  "ng": "ng",
+  "start": "ng serve -o",
+  "build": "ng build",
+  "watch": "ng build --watch --configuration development",
+  "test": "ng test"
+}
+```
+
+| Comando | Qué hace |
+| --- | --- |
+| `npm start` | Ejecuta el script `start`. En clase se cambió de `ng serve` a `ng serve -o` para que abra el navegador. |
+| `npm run build` | Compila para producción. El resultado queda en `dist/<proyecto>/browser`. |
+| `npm run watch` | Compila en modo desarrollo cada vez que guardas, sin servidor. |
+| `npm run test` | Lanza `ng test`: las pruebas `.spec.ts` con Karma y Jasmine, en el puerto 9876. |
+
+En clase se probó un momento `"start": "ng serve -o --host 0.0.0.0 --port 4300"` (`--host 0.0.0.0` deja entrar desde otros equipos de la red y `--port` cambia el puerto), y se volvió a `ng serve -o`. VS Code también tiene un botón "Run Script" encima de cada script.
+
+## Generar código con ng generate
+
+<DeClase fecha="14/10, 27/10, 28/10" />
+
+`ng generate` (abreviado `ng g`) crea los archivos con la estructura correcta. La ruta que le pasas es relativa a `src/app`.
+
+| Comando | Crea |
+| --- | --- |
+| `ng g c components/lampara --skip-tests` | El componente `LamparaComponent` en `src/app/components/lampara/` (`.ts`, `.html` y `.css`, sin `.spec.ts`). |
+| `ng g c pages/posts` | Un componente de página, con su `.spec.ts`. |
+| `ng g s services/posts` | El servicio `PostsService` (`posts.service.ts` y `posts.service.spec.ts`). |
+| `ng g i models/product` | La interfaz `Product` en `models/product.ts`. |
+| `ng g interface interface/CRUD` | Lo mismo, escrito largo: la interfaz `CRUD` en `interface/crud.ts`. |
+
+<Terminal titulo="bash — ~/proj-lamp">
+{`$ ng g c --skip-tests components/lampara
+CREATE src/app/components/lampara/lampara.component.css (0 bytes)
+CREATE src/app/components/lampara/lampara.component.html (22 bytes)
+CREATE src/app/components/lampara/lampara.component.ts (218 bytes)`}
+</Terminal>
+
+- `c` es *component*, `s` es *service* e `i` es *interface*. Las opciones pueden ir antes o después de la ruta.
+- `--skip-tests` no genera el `.spec.ts`. En el autocompletado salen también `--skip-import` y `--skip-selector`. Ojo: algún enunciado pone `--skip-test`, pero la opción es `--skip-tests`.
+- El componente nuevo trae la plantilla `<p>lampara works!</p>`, que es lo que ves en el navegador hasta que la cambias.
+
+<Callout type="error" title="ng g pages/posts falla">
+  El 27/10 se escribió `ng g pages/posts` y salió *"A collection and schematic is required during execution"*: falta decir **qué** se genera. Se arregla con `ng g c pages/posts`.
+</Callout>
+
+### Cómo se organizaron las carpetas en clase
+
+<Files>
+  <Folder name="src/app" defaultOpen>
+    <Folder name="components" defaultOpen>
+      <Folder name="lampara" />
+    </Folder>
+    <Folder name="interface" defaultOpen>
+      <File name="crud.ts" />
+    </Folder>
+    <Folder name="models" defaultOpen>
+      <File name="post.model.ts" />
+      <File name="comment.model.ts" />
+    </Folder>
+    <Folder name="pages" defaultOpen>
+      <Folder name="posts" />
+      <Folder name="comments" />
+      <Folder name="dashboard" />
+    </Folder>
+    <Folder name="services" defaultOpen>
+      <File name="posts.service.ts" />
+      <File name="comments.service.ts" />
+    </Folder>
+  </Folder>
+</Files>
+
+Componentes reutilizables en `components/`, páginas (lo que pinta una ruta) en `pages/`, modelos en `models/`, servicios en `services/` y la interfaz genérica en `interface/`.
+
+## Avisos y errores del compilador
+
+El compilador de Angular revisa también las plantillas. Lo que salió en estas clases:
+
+| Código | Qué significa | Cómo se arregla |
+| --- | --- | --- |
+| `TS-998113` | *"RouterOutlet is not used within the template of AppComponent"*: algo de `imports` no se usa en la plantilla. Es un **aviso**, no impide compilar. | Quitarlo de `imports`, o usarlo. |
+| `NG1` | La plantilla usa una propiedad `private`. | Hacerla `protected` (ver [plantillas](/docs/2-dam/acceso-a-datos/angular/plantillas-y-binding)). |
+| `TS2339` | *"Property 'x' does not exist on type..."*: por ejemplo, un parámetro del constructor sin `private`. | Ver [servicios](/docs/2-dam/acceso-a-datos/angular/servicios-e-inyeccion). |
+| `TS2304` | *"Cannot find name 'PostsComponent'"*: se usa una clase sin importarla. | Añadir el `import` arriba del archivo. |
+
+El **Angular Language Service** (la extensión de Angular para VS Code) marca estos errores en rojo mientras escribes y autocompleta las propiedades del componente dentro de la plantilla.
+
+## package.json: dependencias y versiones
+
+<DeClase fecha="28/10" proyecto="proj-game" />
+
+- **`dependencies`**: lo que necesita la aplicación para funcionar (los paquetes `@angular/*`, `rxjs`, `zone.js`…).
+- **`devDependencies`**: lo que solo hace falta para desarrollar y compilar (`@angular/cli`, `typescript`, Karma, Jasmine, `json-server`…). Se instalan con `npm install --save-dev paquete` (o `-D`).
+
+```json title="package.json (extracto de proj-game)"
+"dependencies": {
+  "@angular/core": "^19.2.0",
+  "@angular/router": "^19.2.0",
+  "rxjs": "~7.8.0",
+  "tslib": "^2.3.0",
+  "zone.js": "~0.15.0"
+},
+"devDependencies": {
+  "@angular/cli": "^19.2.27",
+  "@angular-devkit/build-angular": "^19.2.27",
+  "json-server": "^0.17.4",
+  "karma": "~6.4.0",
+  "typescript": "~5.7.2"
+}
+```
+
+Una captura muestra `@angular/cli` con <Dudoso nota="En el resto de capturas sale con ^.">`~19.2.27`</Dudoso>.
+
+### Rangos semver: `^` frente a `~`
+
+Una versión tiene tres números: `MAYOR.MENOR.PARCHE`.
+
+| Rango | Deja instalar | Ejemplo |
+| --- | --- | --- |
+| `^19.2.0` | Cualquier `19.x.y` igual o mayor que `19.2.0`. No pasa a la `20`. | `19.2.25` sí, `19.3.0` sí, `20.0.0` no. |
+| `~5.7.2` | Solo parches: `5.7.x` igual o mayor que `5.7.2`. | `5.7.3` sí, `5.8.0` no. |
+| `0.17.4` (sin símbolo) | Exactamente esa versión. | Solo `0.17.4`. |
+
+`npm install --save-dev json-server@0.17.4` guarda `"^0.17.4"`, aunque le hayas pedido una versión exacta.
+
+Al instalar paquetes, npm avisa a veces de vulnerabilidades y propone `npm audit fix`. En clase salieron 30. `npm audit fix --force` puede actualizar a versiones mayores y romper el proyecto, así que úsalo con cuidado.
+
+## Tailwind CSS 4
+
+<DeClase fecha="27/10" proyecto="angular-http" />
+
+**Tailwind** es una librería de CSS con clases de utilidad que se escriben directamente en la plantilla (`text-blue-500`, `rounded-full`, `hover:text-indigo-300`, `sm:`…). En clase se instaló siguiendo la guía oficial de Tailwind para Angular:
+
+<Steps>
+  <Step>
+
+#### Instalar los paquetes
+
+```bash title="Terminal"
+npm install tailwindcss @tailwindcss/postcss postcss --force
+```
+
+  </Step>
+  <Step>
+
+#### Configurar PostCSS
+
+```json title=".postcssrc.json"
+{
+  "plugins": {
+    "@tailwindcss/postcss": {}
+  }
+}
+```
+
+  </Step>
+  <Step>
+
+#### Importarlo en los estilos globales
+
+```css title="src/styles.css"
+@import "tailwindcss";
+```
+
+  </Step>
+</Steps>
+
+Después, la IA de Cursor ajustó `@source` en `styles.css` para decirle a Tailwind qué carpetas escanear. El valor exacto no se lee bien: <Dudoso>`@source "../src"`</Dudoso>. Si una clase nueva no se aplica, para el servidor y vuelve a lanzarlo, o recarga sin caché.
+
+<Callout type="warn" title="La IA hace el diseño, tú lo revisas">
+  El 27/10 el diseño de las páginas se le pidió al agente de IA de Cursor ("decora de forma moderna el componente de posts"). La primera vez hizo CSS propio en lugar de usar Tailwind y hubo que corregirle. Revisa siempre lo que genera (Review, Keep, Undo) antes de aceptarlo.
+</Callout>
+
+## El entorno de clase
+
+- **VS Code conectado a WSL** (Ubuntu), con el proyecto dentro de Linux (`~/proj-lamp`). En algunas clases se usó **Cursor**, que es un VS Code con un agente de IA.
+- Extensiones: **Angular Language Service**, Prettier y GitLens / Git Graph.
+- **Chrome DevTools** (Elements, Styles, modo responsive, Sources con *breakpoints*, Console y Network) y la extensión **Angular DevTools**.
+- Cómo instalar WSL, Node con NVM y Angular 19 está en las guías 0 a 3 del [repositorio de guías](https://github.com/hokahey007/guides-angular).
+
+## Practica
+
+<Quiz titulo="Test: proyecto y CLI">
+  <Pregunta enunciado="¿Qué archivo es el punto de entrada que arranca la aplicación?" explicacion="`main.ts` llama a `bootstrapApplication(AppComponent, appConfig)`.">
+    <Opcion>`app.config.ts`</Opcion>
+    <Opcion correcta>`main.ts`</Opcion>
+    <Opcion>`app.routes.ts`</Opcion>
+    <Opcion>`angular.json`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Dónde se monta la aplicación en el HTML?" explicacion="`index.html` tiene la etiqueta `<app-root>`, que coincide con el `selector` de `AppComponent`.">
+    <Opcion>En el `<body>` directamente</Opcion>
+    <Opcion correcta>En la etiqueta `<app-root>` de `index.html`</Opcion>
+    <Opcion>En `app.component.html`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué archivos crea `ng g c components/lampara --skip-tests`?" explicacion="Crea la carpeta `src/app/components/lampara` con el `.ts`, el `.html` y el `.css`. `--skip-tests` evita el `.spec.ts`.">
+    <Opcion correcta>`lampara.component.ts`, `.html` y `.css`</Opcion>
+    <Opcion>`lampara.component.ts`, `.html`, `.css` y `.spec.ts`</Opcion>
+    <Opcion>Solo `lampara.component.ts`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="El aviso TS-998113 impide que la aplicación compile." respuesta={false} explicacion="Es un aviso: algo de `imports` no se usa en la plantilla. La aplicación compila igual." />
+  <Pregunta tipo="vf" enunciado='Con `"@angular/core": "^19.2.0"` npm puede instalar la versión 19.3.0.' respuesta={true} explicacion="`^` deja subir la versión menor y el parche, pero no la mayor: cualquier 19.x.y desde la 19.2.0." />
+  <Pregunta enunciado="¿Por qué falla `ng g pages/posts`?" explicacion="Falta el *schematic*: hay que decir qué se genera, por ejemplo `c` (componente): `ng g c pages/posts`.">
+    <Opcion>Porque la carpeta `pages` no existe</Opcion>
+    <Opcion correcta>Porque falta decir qué se genera (`c`, `s`, `i`…)</Opcion>
+    <Opcion>Porque hay que usar `ng new`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Dónde va `json-server`, que solo se usa para tener una API falsa mientras desarrollas?" explicacion="Es una herramienta de desarrollo: `npm install --save-dev json-server@0.17.4`.">
+    <Opcion>En `dependencies`</Opcion>
+    <Opcion correcta>En `devDependencies`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿En qué puerto sirve `ng serve` la aplicación por defecto?" respuesta="4200" explicacion="`http://localhost:4200`. Karma, el de `ng test`, usa el 9876." />
+</Quiz>
+
+<Flashcards titulo="Repaso: proyecto y CLI">
+  <Tarjeta frente="`ng serve -o`">Compila, sirve la aplicación en `localhost:4200`, abre el navegador y recarga al guardar (con HMR).</Tarjeta>
+  <Tarjeta frente="¿Qué es un componente standalone?">Uno que dice en su array `imports` lo que usa su plantilla, sin `NgModule`. Es lo normal en Angular 19.</Tarjeta>
+  <Tarjeta frente="`app.config.ts`">La configuración global: la lista de `providers` (router, `HttpClient`…).</Tarjeta>
+  <Tarjeta frente="`styles.css` frente a `app.component.css`">`styles.css` vale para toda la aplicación; el CSS de un componente, solo para ese componente.</Tarjeta>
+  <Tarjeta frente="`^` frente a `~`">`^19.2.0`: cualquier 19.x.y desde la 19.2.0. `~5.7.2`: solo parches 5.7.x.</Tarjeta>
+  <Tarjeta frente="`ng g s services/posts`">Crea `PostsService` en `src/app/services/posts.service.ts`, con su `.spec.ts`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Tu primer proyecto" dificultad="facil">
+  Crea un proyecto `mi-tienda` con CSS y sin SSR, genera un componente `components/cabecera` sin pruebas y haz que se vea dentro de `AppComponent`. Cambia el script `start` para que abra el navegador.
+
+  <Pista>Después de `ng g c`, el componente no aparece solo: hay que importarlo en el `imports` de `AppComponent` y escribir su selector en la plantilla.</Pista>
+  <Pista>El selector de un componente generado en `components/cabecera` es `app-cabecera`.</Pista>
+
+  <Solucion>
+
+```bash title="Terminal"
+ng new mi-tienda        # CSS, No a SSR
+cd mi-tienda
+ng g c components/cabecera --skip-tests
+```
+
+```ts title="src/app/app.component.ts"
+import { Component } from '@angular/core';
+import { CabeceraComponent } from './components/cabecera/cabecera.component';
+
+@Component({
+  selector: 'app-root',
+  imports: [CabeceraComponent],
+  templateUrl: './app.component.html',
+  styleUrl: './app.component.css'
+})
+export class AppComponent {}
+```
+
+```html title="src/app/app.component.html"
+<app-cabecera></app-cabecera>
+```
+
+```json title="package.json"
+"start": "ng serve -o"
+```
+
+Se quita `RouterOutlet` de `imports` porque la plantilla no lo usa (si no, sale el aviso TS-998113).
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Lee el package.json" dificultad="media">
+  Con estas líneas de un `package.json`, di qué versiones se podrían instalar de cada paquete al hacer `npm install` en un equipo nuevo, y si cada uno es de `dependencies` o de `devDependencies`: `"rxjs": "~7.8.0"`, `"@angular/router": "^19.2.0"`, `"karma": "~6.4.0"`.
+
+  <Pista>`~` solo deja cambiar el último número; `^`, los dos últimos.</Pista>
+
+  <Solucion>
+
+| Paquete | Versiones posibles | Sección |
+| --- | --- | --- |
+| `rxjs ~7.8.0` | `7.8.0` o un parche posterior (`7.8.x`) | `dependencies`: la aplicación lo usa al ejecutarse (los `Observable`). |
+| `@angular/router ^19.2.0` | Cualquier `19.x.y` desde la `19.2.0` | `dependencies` |
+| `karma ~6.4.0` | `6.4.x` desde la `6.4.0` | `devDependencies`: solo sirve para lanzar las pruebas. |
+
+Para que todos tengáis **exactamente** las mismas versiones está `package-lock.json`, que se sube a Git, y `npm ci`, que instala justo lo que pone ese archivo.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

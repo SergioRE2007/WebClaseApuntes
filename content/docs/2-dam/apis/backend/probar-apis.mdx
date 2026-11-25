@@ -1,0 +1,309 @@
+---
+title: "Probar APIs: Postman y JSON Server"
+description: "Cómo se prueban las APIs en clase: leer el contrato de la Fake Store API, colecciones y entornos de Postman con {{url_base}}, el error ENOTFOUND y una API falsa en local con JSON Server."
+icon: Send
+---
+
+Antes de programar contra una API (desde Angular o desde Android) hay que **saber qué responde**. El 28/10, en dos vídeos, el profesor exploró la Fake Store API con **Postman** y montó una API falsa en local con **JSON Server**, que son las herramientas de las actividades 8 y 9 de Angular. Nada de esto es código de servidor propio, pero lo vas a usar para probar el tuyo.
+
+<DeClase fecha="28/10" nota="dos vídeos; el 18/11 se vuelve a comprobar localhost:3000/games" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Leer la documentación de una API REST (su contrato) antes de usarla.
+  - Organizar peticiones en Postman con colecciones y entornos, y la variable `{{url_base}}`.
+  - Por qué sale `getaddrinfo ENOTFOUND {{url_base}}`.
+  - Montar una API REST falsa con JSON Server a partir de un `db.json`.
+</Callout>
+
+## Una API REST, vista desde fuera
+
+Una <Concepto termino="API REST" definicion="Un servidor al que se le piden datos por HTTP con URLs de recursos (/products/3) y verbos (GET, POST, PUT, PATCH, DELETE). Responde normalmente en JSON.">API REST</Concepto> se organiza en **recursos** (`/products`, `/users`, `/carts`) y se usa con los verbos de HTTP. Así lo documenta la Fake Store API (`https://fakestoreapi.com`, documentación en `/docs`, hecha con Redocly):
+
+| Operación | Petición | Respuesta |
+| --- | --- | --- |
+| Todos | `GET /products` | 200 con un array de productos |
+| Uno | `GET /products/{id}` | 200 con un producto |
+| Crear | `POST /products` | **201** *Product created successfully*, o 400 *Bad request* |
+| Actualizar | `PUT /products/{id}` | 200 |
+| Borrar | `DELETE /products/{id}` | 200 |
+
+`{id}` es un **parámetro de ruta** (entero y obligatorio, según la documentación). Es lo mismo que el `:id` de Express. La documentación trae ejemplos de cada petición en JavaScript (`fetch`), Node.js (Axios), PHP, cURL y Python:
+
+```js title="Ejemplo de la documentación"
+fetch('https://fakestoreapi.com/products/1')
+  .then(response => response.json())
+  .then(data => console.log(data));
+```
+
+La idea que repitió el profesor: **lee el contrato antes de consumir la API**. Así sabes qué campos trae cada respuesta y qué códigos puede devolver.
+
+```json title="GET /products/2"
+{
+  "id": 2,
+  "title": "Mens Casual Premium Slim Fit T-Shirts ",
+  "price": 22.3,
+  "description": "Slim-fitting style, ...",
+  "category": "men's clothing",
+  "image": "https://fakestoreapi.com/img/71-3HjGNDUL._AC_SY879._SX._UX._SY._UY_t.png",
+  "rating": { "rate": 4.1, "count": 259 }
+}
+```
+
+`rating` es un objeto anidado. Y `image` es una URL que se puede poner tal cual en un `<img>`: lo comprobó el profesor abriéndola en Postman.
+
+## Postman
+
+**Postman** es un programa para mandar peticiones HTTP a mano y ver la respuesta: el código, el tiempo, el tamaño y el cuerpo.
+
+### Colecciones y entornos
+
+- **Colección**: un grupo de peticiones guardadas de la misma API. En clase, `Fakestore` y, el segundo día, `GameService`. Conviene **renombrar** cada petición (por ejemplo, `games`) para tener la colección ordenada.
+- **Entorno**: un conjunto de variables. En vez de escribir la URL base en cada petición, se guarda en una variable y la petición solo añade la ruta.
+
+| Entorno | Variable | Valor |
+| --- | --- | --- |
+| Env FakeStore | `url_base` | `https://fakestoreapi.com` |
+| GameServiceEnv | `url_base` | `http://localhost:3000` |
+
+Las peticiones se escriben con la variable entre dobles llaves: `GET {{url_base}}/products`, `GET {{url_base}}/products/2`, `GET {{url_base}}/users`. Cambiando de entorno, las mismas peticiones van a otro servidor.
+
+Al escribir `{{` en la URL, Postman propone las variables del entorno y también sus **variables dinámicas**, que generan un valor nuevo en cada envío: `$guid`, `$isoTimestamp`, `$randomAdjective`… Sirven, por ejemplo, para crear datos de prueba distintos cada vez.
+
+### El error `ENOTFOUND`
+
+Al volver a abrir Postman, el entorno se quedó en **No Environment** y la petición falló:
+
+<Terminal titulo="Postman">
+{`GET {{url_base}}/products
+Error: getaddrinfo ENOTFOUND {{url_base}}`}
+</Terminal>
+
+Sin entorno activo, `{{url_base}}` no se sustituye por nada y Postman intenta conectarse a un servidor que se llama literalmente `{{url_base}}`. *ENOTFOUND* quiere decir que no encuentra ese nombre. Se arregla eligiendo el entorno correcto en el desplegable (y, si hace falta, editándolo para que `url_base` tenga valor). El profesor puso la variable como **Secure** y volvió a dar 200. El asistente de IA de Postman también lo diagnosticó.
+
+### Más cosas de Postman que salieron
+
+- La pestaña **Preview** de la respuesta enseña lo que no es JSON. Con la URL de una imagen de la Fake Store salía la imagen de la mochila.
+- La IA de Postman ("Visualize API Response") generó un panel con gráficos a partir de la respuesta de `/products`.
+- El desplegable de métodos: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` y `OPTIONS`.
+- **Insomnia** es una alternativa a Postman. Solo se mencionó (y se miraron sus precios).
+
+### Un ejemplo de lo que no hay que hacer
+
+`GET {{url_base}}/users` en la Fake Store devuelve usuarios con objetos anidados (`address.geolocation`, `name.firstname`) y un campo `__v`… y **también el campo `password`**:
+
+```json title="GET /users (un usuario)"
+{
+  "address": { "geolocation": { "lat": "-37.3159", "long": "81.1496" },
+               "city": "kilcoole", "street": "new road", "number": 7682, "zipcode": "12926-3874" },
+  "id": 1, "email": "john@gmail.com", "username": "johnd", "password": "...",
+  "name": { "firstname": "john", "lastname": "doe" },
+  "phone": "1-570-236-7033", "__v": 0
+}
+```
+
+Una API de verdad nunca debe devolver la contraseña (ni su hash). Es justo lo que evita el `select` de la API de clase ([CRUD de usuarios](/docs/2-dam/apis/backend/crud-usuarios)).
+
+## JSON Server
+
+**JSON Server** convierte un fichero `db.json` en una API REST completa, sin escribir código. Se usa para tener una API en local mientras se programa el frontend (la Act 9 de Angular, el proyecto `proj-game`).
+
+<Steps>
+  <Step>
+
+#### Instalarlo como dependencia de desarrollo
+
+`npm install --save-dev json-server@0.17.4`. Es la versión "clásica" que pide el documento de la actividad; npm avisa de que una de sus dependencias, `connect-pause@0.1.1`, está obsoleta.
+
+  </Step>
+  <Step>
+
+#### Crear el `db.json`
+
+Cada **clave de primer nivel** será un recurso. En clase, `games` con 15 juegos.
+
+  </Step>
+  <Step>
+
+#### Añadir un script
+
+En `package.json`: `"api": "json-server --watch db.json --port 3000"`.
+
+  </Step>
+  <Step>
+
+#### Arrancarlo
+
+`npm run api` y comprobar `http://localhost:3000/games` en el navegador.
+
+  </Step>
+</Steps>
+
+```json title="db.json (forma)"
+{
+  "games": [
+    { "id": 1, "title": "...", "genre": "Platform", "platform": "PlayStation", "price": 1, "stock": 2 },
+    { "id": 2, "title": "Space Colony", "genre": "Strategy", "platform": "PC", "price": 29.99 }
+  ]
+}
+```
+
+Con `"games"` en el `db.json`, JSON Server crea `GET /games`, `GET /games/:id`, `POST /games`, `PUT` y `PATCH /games/:id` y `DELETE /games/:id`.
+
+<NoSeVio titulo="El db.json de clase">
+  No se ve el `db.json` de juegos completo; los dos juegos de arriba son los que salen el 18/11 en el navegador. El documento de la Act 9 también proponía probar un filtro por género, pero la URL sale cortada.
+</NoSeVio>
+
+### El mismo error que con nodemon
+
+El profesor escribió el comando a mano y falló:
+
+<Terminal titulo="zsh">
+{`$ json-server --watch db.json --port 3000
+zsh: command not found: json-server
+$ npx json-server --watch db.json --port 3000
+
+  Resources
+  http://localhost:3000/games
+
+  Home
+  http://localhost:3000
+
+  Type s + enter at any time to create a snapshot of the database
+  Watching...
+
+GET / 404 4.967 ms - 2
+GET /games 200 4.560 ms - -`}
+</Terminal>
+
+Es lo mismo que pasó con nodemon ([Node, npm y TypeScript](/docs/2-dam/apis/backend/node-npm-typescript)): el paquete está instalado en el proyecto y su ejecutable no está en el PATH. Se lanza con `npx` o con el script (`npm run api`).
+
+| Opción | Qué hace |
+| --- | --- |
+| `--watch` | Vuelve a cargar los datos si cambia el `db.json`. |
+| `--port 3000` | El puerto. |
+| `s` + Intro | Guarda una copia (*snapshot*) de la base de datos. |
+
+- `GET /` da **404** porque en la raíz no hay ningún recurso; `GET /games` da **200** con el array.
+- En la colección `GameService` de Postman, `GET {{url_base}}` sin ruta también dio 404. Después se escribió `/products` por despiste (es la ruta de la Fake Store, que no existe en el `db.json`) y por último `/games`, que dio 200.
+- Varias capturas leen la URL como <Dudoso nota="Con un espacio entre la variable y la ruta. Primero salió 404 y en la captura siguiente 200; no se ve si el profesor corrigió el espacio.">`{{url_base}} /games`</Dudoso>.
+
+En Angular, el 12/11, se pidieron las páginas con `?_page=` y `_limit=` de JSON Server; eso está en [Acceso a Datos](/docs/2-dam/acceso-a-datos).
+
+## 18/11: comprobar la API antes del frontend
+
+<DeClase fecha="18/11" nota="vídeo; no se ve código de backend" />
+
+Antes de arrancar Angular, el profesor abrió `http://localhost:3000/games` en el navegador (con la vista *Pretty-print*) para comprobar que la API respondía. Por las clases de Angular, es el JSON Server de `proj-game`, no una API de Express. Cada lado tiene su puerto: **la API en el 3000 y Angular en el 4200**.
+
+Ese mismo día, al publicar la web en Vercel, salió un error de CORS: la web publicada intentaba llamar a `localhost:3000`, que es el ordenador de quien abre la web, no el del profesor. Se cuenta en [Acceso a Datos](/docs/2-dam/acceso-a-datos).
+
+## Probar tu propia API <NoDadoEnClase inline />
+
+En clase no se probó con Postman la API de Express, pero se hace igual que con JSON Server: un entorno con `url_base = http://localhost:3000` y peticiones como `GET {{url_base}}/api/users` o `POST {{url_base}}/api/auth/login`. Para mandar un body, en la pestaña **Body** elige **raw** y **JSON**; si no, `express.json()` no lo lee y `req.body` llega vacío.
+
+## Practica
+
+<Quiz titulo="Test: Postman y JSON Server" descripcion="7 preguntas">
+  <Pregunta enunciado="¿Para qué sirve la variable `{{url_base}}` de un entorno de Postman?" explicacion="Para no repetir la URL base en cada petición y poder cambiar de servidor cambiando de entorno.">
+    <Opcion correcta>Para no repetir la URL base y poder cambiar de servidor cambiando de entorno</Opcion>
+    <Opcion>Para guardar el token de sesión</Opcion>
+    <Opcion>Para generar un valor aleatorio en cada envío</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Una petición a `{{url_base}}/products` falla con `getaddrinfo ENOTFOUND {{url_base}}`. ¿Qué pasa?" explicacion="No hay entorno activo (o la variable no tiene valor), así que `{{url_base}}` no se sustituye y Postman busca un servidor con ese nombre.">
+    <Opcion>La Fake Store API está caída</Opcion>
+    <Opcion correcta>No hay entorno activo y la variable no se sustituye</Opcion>
+    <Opcion>Falta el `/` al final de la URL</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué código devuelve la Fake Store API al crear un producto correctamente con `POST /products`?" explicacion="201 Created, según su documentación; 400 si la petición está mal.">
+    <Opcion>200</Opcion>
+    <Opcion correcta>201</Opcion>
+    <Opcion>204</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Con este `db.json`, ¿qué URL devuelve el juego con id 3?" explicacion="Cada clave de primer nivel es un recurso: `/games` y `/games/:id`.">
+
+```json
+{ "games": [ { "id": 3, "title": "Neon Racer" } ] }
+```
+
+    <Opcion>`http://localhost:3000/db/games/3`</Opcion>
+    <Opcion correcta>`http://localhost:3000/games/3`</Opcion>
+    <Opcion>`http://localhost:3000/games?id=3`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="`json-server --watch db.json` da `command not found` aunque está instalado. ¿Cómo se arranca?" explicacion="Está instalado en el proyecto: se lanza con `npx json-server ...` o con un script de npm (`npm run api`).">
+    <Opcion>Reinstalándolo con `--force`</Opcion>
+    <Opcion correcta>Con `npx json-server --watch db.json --port 3000` o con `npm run api`</Opcion>
+    <Opcion>Abriendo el `db.json` en el navegador</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`GET http://localhost:3000/` devuelve la lista de recursos de JSON Server con un 200." respuesta={false} explicacion="En clase dio 404: en la raíz no hay ningún recurso. Los datos están en `/games`." />
+  <Pregunta enunciado="¿Qué tiene de malo la respuesta de `GET /users` de la Fake Store API?" explicacion="Devuelve el campo `password`. Una API nunca debe devolver contraseñas ni hashes.">
+    <Opcion>Que los objetos están anidados</Opcion>
+    <Opcion correcta>Que devuelve la contraseña de cada usuario</Opcion>
+    <Opcion>Que trae el campo `__v`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: probar APIs">
+  <Tarjeta frente="Colección de Postman">Un grupo de peticiones guardadas de la misma API (Fakestore, GameService).</Tarjeta>
+  <Tarjeta frente="Entorno de Postman">Un conjunto de variables, como `url_base`. Cambiando de entorno, las mismas peticiones van a otro servidor.</Tarjeta>
+  <Tarjeta frente="Variables dinámicas">`$guid`, `$isoTimestamp`, `$randomAdjective`…: un valor nuevo en cada envío.</Tarjeta>
+  <Tarjeta frente="`ENOTFOUND {{url_base}}`">No hay entorno activo: la variable no se sustituye.</Tarjeta>
+  <Tarjeta frente="Pestaña Preview">Enseña respuestas que no son JSON, como imágenes.</Tarjeta>
+  <Tarjeta frente="JSON Server">Convierte un `db.json` en una API REST: cada clave de primer nivel es un recurso.</Tarjeta>
+  <Tarjeta frente="Script de JSON Server de clase">`"api": "json-server --watch db.json --port 3000"`, con `json-server@0.17.4` como dependencia de desarrollo.</Tarjeta>
+  <Tarjeta frente="Puertos en el proyecto de Angular">La API (JSON Server) en el 3000 y Angular en el 4200.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Una API falsa de libros" dificultad="facil">
+  Monta con JSON Server una API de libros en el puerto 3001 con dos libros, y di qué URL usarías para listar todos y para ver el de id 2.
+
+  <Pista>La clave de primer nivel del `db.json` es el nombre del recurso.</Pista>
+
+  <Solucion>
+
+```json title="db.json"
+{
+  "books": [
+    { "id": 1, "title": "El Quijote", "author": "Cervantes" },
+    { "id": 2, "title": "La Regenta", "author": "Clarín" }
+  ]
+}
+```
+
+```bash
+npm install --save-dev json-server@0.17.4
+npx json-server --watch db.json --port 3001
+```
+
+Todos: `http://localhost:3001/books`. El 2: `http://localhost:3001/books/2`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Dos entornos, una colección" dificultad="media">
+  Tienes una colección de Postman con `GET {{url_base}}/games`. Quieres usarla tanto contra JSON Server en tu ordenador como contra la Fake Store API. ¿Qué entornos creas y qué cambia en las peticiones? ¿Funcionaría la misma petición en los dos?
+
+  <Pista>Cada entorno da un valor distinto a la misma variable.</Pista>
+  <Pista>¿Tienen los dos servidores el recurso `/games`?</Pista>
+
+  <Solucion>
+
+Dos entornos con la misma variable: `GameServiceEnv` con `url_base = http://localhost:3000` y `Env FakeStore` con `url_base = https://fakestoreapi.com`. Las peticiones no cambian: solo se elige el entorno en el desplegable.
+
+Pero la misma petición no vale en los dos: la Fake Store no tiene `/games` (tiene `/products`, `/users` y `/carts`) y respondería un error. Es el despiste contrario al de clase, donde se probó `/products` contra JSON Server. Los entornos cambian el servidor; las rutas tienen que existir en ese servidor.
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Contrato de la API">Su documentación: recursos, parámetros, cuerpos y códigos de respuesta.</Termino>
+  <Termino nombre="Postman">Programa para mandar peticiones HTTP a mano. Insomnia es una alternativa.</Termino>
+  <Termino nombre="{{url_base}}">Variable de entorno de Postman con la URL base del servidor.</Termino>
+  <Termino nombre="JSON Server">API REST falsa a partir de un `db.json`. En clase, la versión 0.17.4.</Termino>
+  <Termino nombre="Fake Store API">API pública de prueba (`fakestoreapi.com`) con productos, usuarios y carritos.</Termino>
+</Glosario>
+
+<MarcarCompletado />

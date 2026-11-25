@@ -3,7 +3,9 @@ title: Catálogo de componentes
 description: Ejemplo en vivo y código listo para copiar de cada componente que puedes usar en los apuntes, con todas sus props.
 ---
 
-Todos estos componentes están **registrados globalmente**: escríbelos en cualquier `.mdx` sin `import`. Cada sección tiene una demo en vivo, el código para copiar y la tabla de props.
+import { DemoEstado } from '@/components/temas/guia-autor/demo-estado';
+
+Todos estos componentes están **registrados globalmente**: escríbelos en cualquier `.mdx` sin `import`. Cada sección tiene una demo en vivo, el código para copiar y la tabla de props. Las únicas que se importan son las [demos a medida](#demos-a-medida-con-import).
 
 ## Componentes interactivos de DAM Apuntes
 
@@ -350,6 +352,445 @@ Botón para el final de cada tema. Guarda el progreso en el navegador del alumno
 
 Texto con un icono <Icono nombre="Rocket" className="inline size-4" /> en línea.
 ```
+
+## Marcas del material de clase
+
+El material de 2º sale de capturas de los vídeos de clase. Hay que **separar siempre lo que se dio en clase de lo que no**, que se vean las lecturas dudosas y que no se rellene el código que no se llegó a ver. Estas cuatro marcas sirven para eso. El buscador y el Tutor DAM también las tienen en cuenta.
+
+### NoDadoEnClase
+
+Marca contenido que **no se ha dado en clase** (lo que sale de los archivos "Lo que falta por dar"). Tiene dos formas:
+
+- **Bloque**: ponlo justo debajo del título de la sección. Sin hijos muestra el texto por defecto. Si le pones hijos, sustituyen a ese texto.
+- **En línea** (`inline`): una etiqueta pequeña para ponerla junto a un título o en una celda de tabla.
+
+<NoDadoEnClase titulo="Seed con Prisma" />
+
+<NoDadoEnClase>
+  Las relaciones con `@Relation` de Room 3 no salieron en clase. Ojo: casi todo lo que hay en internet es de Room 2 y no se escribe igual.
+</NoDadoEnClase>
+
+| Requisito | Dónde se dio |
+| --- | --- |
+| CRUD con Express y Prisma | 03/11 |
+| Paginación y filtros | <NoDadoEnClase inline /> |
+
+```mdx
+## Seed de la base de datos <NoDadoEnClase inline />
+
+<NoDadoEnClase titulo="Seed con Prisma" />
+
+<NoDadoEnClase>
+  Las relaciones con `@Relation` de Room 3 no salieron en clase. Ojo: casi todo lo que
+  hay en internet es de Room 2 y no se escribe igual.
+</NoDadoEnClase>
+
+| Requisito | Dónde se dio |
+| --- | --- |
+| Paginación y filtros | <NoDadoEnClase inline /> |
+```
+
+<TypeTable
+  type={{
+    inline: { type: 'boolean', default: 'false', description: 'Etiqueta pequeña en línea en vez de bloque (para títulos y tablas).' },
+    titulo: { type: 'string', description: 'Bloque: texto corto que sale junto a la etiqueta.' },
+    children: { type: 'Markdown', description: 'Bloque: sustituye al texto por defecto («No se ha visto en clase: es la forma más estándar…»).' },
+  }}
+/>
+
+<Callout type="warn" title="Una página entera que no es de clase">
+  Pon `<NoDadoEnClase />` como primer bloque de la página, antes de cualquier explicación. Si la página mezcla las dos cosas, pon además `<NoDadoEnClase inline />` en el título de cada sección que no sea de clase.
+</Callout>
+
+### Dudoso
+
+Marca **en línea** algo que no se leía bien en las capturas (lo que en el material va con `[dudoso]`). Subraya el texto con una línea discontinua, añade «[dudoso]» y, al pulsarlo, explica que puede no ser exacto. **No corrijas la lectura por tu cuenta**: márcala.
+
+El icono se lee como <Dudoso nota="Otra captura lee `add_24dp`.">`add_24px`</Dudoso> y el paquete como <Dudoso>`com.turingalan.room`</Dudoso>. Sin hijos solo sale la marca <Dudoso />.
+
+```mdx
+El icono se lee como <Dudoso nota="Otra captura lee `add_24dp`.">`add_24px`</Dudoso>.
+
+Sin hijos solo sale la marca <Dudoso />.
+```
+
+Dentro de un bloque de código no se pueden usar componentes. Para las dudas de un bloque, ponlas en una lista **debajo**, como en el material:
+
+```mdx
+- <Dudoso>`isLoading = true`</Dudoso> en la rama `Initial`: otra captura lee `false`.
+```
+
+<TypeTable
+  type={{
+    children: { type: 'Markdown en línea', description: 'El texto dudoso. Opcional.' },
+    nota: { type: 'string', description: 'Detalle que sale en el aviso: «Otra captura lee `add_24dp`». Admite `código`.' },
+  }}
+/>
+
+### NoSeVio
+
+Hueco para lo que **no se llega a ver en clase**: código que no sale en las capturas, una explicación que se corta… Describe qué falta y **no lo rellenes** con código inventado como si fuera del profesor. Si hay una forma estándar de hacerlo, va aparte, con `<NoDadoEnClase>`.
+
+<NoSeVio titulo="DataStoreModule">
+  No se ve el módulo de Hilt que provee `DataStore<Preferences>` ni cómo llega `darkMode` al tema (18/11).
+</NoSeVio>
+
+```mdx
+<NoSeVio titulo="DataStoreModule">
+  No se ve el módulo de Hilt que provee `DataStore<Preferences>` ni cómo llega `darkMode` al tema (18/11).
+</NoSeVio>
+
+{/* Sin hijos sale un texto genérico */}
+<NoSeVio />
+```
+
+<TypeTable
+  type={{
+    titulo: { type: 'string', description: 'Texto corto junto a la etiqueta: qué pieza falta.' },
+    children: { type: 'Markdown', description: 'Qué falta exactamente. Sin hijos sale un texto genérico.' },
+  }}
+/>
+
+### DeClase
+
+Línea discreta con **cuándo y en qué proyecto** se vio algo. Ponla bajo el título de la sección o justo antes del código del profesor.
+
+<DeClase fecha="13/11" proyecto="Room" />
+
+<DeClase fecha="09/10, 16/10, 23/10" proyecto="ToDoApp" rama="dev" />
+
+<DeClase fecha="16/11" proyecto="PokeApp2627" nota="solo un fragmento de 3 minutos" />
+
+```mdx
+<DeClase fecha="13/11" proyecto="Room" />
+<DeClase fecha="09/10, 16/10, 23/10" proyecto="ToDoApp" rama="dev" />
+<DeClase fecha="16/11" proyecto="PokeApp2627" nota="solo un fragmento de 3 minutos" />
+```
+
+<TypeTable
+  type={{
+    fecha: { type: 'string', description: 'Una fecha o varias separadas por comas. Vale "13/11", "13/11/2026" o "2026-11-13"; siempre se muestra dd/mm.' },
+    proyecto: { type: 'string', description: 'Proyecto de clase: ToDoApp, PokeApp2627…' },
+    rama: { type: 'string', description: 'Rama del repositorio, si importa.' },
+    nota: { type: 'string', description: 'Texto libre al final de la línea.' },
+  }}
+/>
+
+## Explicar código y flujos
+
+### Comparar y Lado
+
+Compara **la forma de clase con la buena** (las "prácticas raras" del código de clase) o dos alternativas. Cada `<Lado>` lleva bloques de código Markdown normales, que se resaltan como cualquier otro. Por defecto se cambia de lado con un conmutador (también con las flechas del teclado). Con `columnas`, en pantallas anchas se ven los dos lados a la vez y en móvil sigue el conmutador: úsalo solo con código corto.
+
+<Comparar titulo="Proveer la base de datos con Hilt">
+  <Lado tipo="evitar">
+
+```kotlin
+@Provides
+fun providesDatabase(@ApplicationContext context: Context): PokemonDatabase {
+    val db = Room.databaseBuilder<PokemonDatabase>(
+        context = context,
+        name = "pokemon_db"
+    ).build()
+    return db
+}
+```
+
+Sin `@Singleton`, Hilt crea una base de datos nueva cada vez que alguien la pide.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+@Provides
+@Singleton
+fun providesDatabase(@ApplicationContext context: Context): PokemonDatabase {
+    val db = Room.databaseBuilder<PokemonDatabase>(
+        context = context,
+        name = "pokemon_db"
+    ).build()
+    return db
+}
+```
+
+Con `@Singleton` hay una sola instancia para toda la app.
+
+  </Lado>
+</Comparar>
+
+````mdx
+<Comparar titulo="Proveer la base de datos con Hilt">
+  <Lado tipo="evitar">
+
+```kotlin
+@Provides
+fun providesDatabase(@ApplicationContext context: Context): PokemonDatabase { ... }
+```
+
+Sin `@Singleton`, Hilt crea una base de datos nueva cada vez que alguien la pide.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+@Provides
+@Singleton
+fun providesDatabase(@ApplicationContext context: Context): PokemonDatabase { ... }
+```
+
+  </Lado>
+</Comparar>
+
+{/* Dos alternativas, en columnas en pantallas anchas */}
+<Comparar columnas>
+  <Lado titulo="Kotlin">
+
+```kotlin
+val tareas = mutableListOf<Task>()
+```
+
+  </Lado>
+  <Lado titulo="TypeScript">
+
+```ts
+const tareas: Task[] = [];
+```
+
+  </Lado>
+</Comparar>
+````
+
+<TypeTable
+  type={{
+    'Comparar · titulo': { type: 'string', description: 'Título opcional del bloque.' },
+    'Comparar · columnas': { type: 'boolean', default: 'false', description: 'Dos columnas en pantallas anchas (solo si hay exactamente dos lados). En móvil, conmutador.' },
+    'Lado · tipo': { type: '"evitar" | "bien" | "neutro"', default: '"neutro"', description: '"evitar": se hizo así en clase pero no conviene copiarlo (marca roja). "bien": la forma recomendada (marca verde).' },
+    'Lado · titulo': { type: 'string', description: 'Por defecto: «Así se hizo en clase» (evitar), «Mejor así» (bien) u «Opción N».' },
+    'Lado · children': { type: 'Markdown', required: true, description: 'Bloques de código y texto. Deja líneas en blanco alrededor de cada bloque.' },
+  }}
+/>
+
+<Callout type="warn" title="Líneas en blanco dentro de cada Lado">
+  Como en `<Tab>`, el bloque de código tiene que ir separado de `<Lado>` y `</Lado>` por una línea en blanco, y sin sangría. Si no, MDX no lo reconoce como código.
+</Callout>
+
+### Recorrido y Paso (código paso a paso)
+
+Explica un trozo de código **paso a paso**: cada `<Paso>` ilumina unas líneas y muestra su explicación. Se avanza con Anterior/Siguiente, con las flechas ← → del teclado o pulsando un paso de la lista. El código se resalta con los mismos colores que los bloques normales.
+
+<Recorrido
+  titulo="TaskListViewModel.kt"
+  lenguaje="kotlin"
+  codigo={`@HiltViewModel
+class TaskListViewModel @Inject constructor(
+    private val _repository: TaskRepository
+) : ViewModel() {
+    private val _state = MutableStateFlow<TaskListScreenState>(TaskListScreenState.Loading)
+    val state: StateFlow<TaskListScreenState>
+        get() = _state.asStateFlow()
+
+    init { load() }
+
+    fun load() {
+        viewModelScope.launch {
+            _state.value = TaskListScreenState.Loading
+            val tasks = _repository.readAll()
+            _state.value = TaskListScreenState.Success(tasks)
+        }
+    }
+}`}
+>
+  <Paso lineas="1-4" titulo="Hilt crea el ViewModel">
+    `@HiltViewModel` y `@Inject constructor` le dicen a Hilt que construya el ViewModel y le pase el `TaskRepository` que tiene registrado.
+  </Paso>
+  <Paso lineas="5-7" titulo="Backing property">
+    `_state` es mutable y privado; fuera solo se ve `state`, de solo lectura. Así la pantalla no puede cambiar el estado.
+  </Paso>
+  <Paso lineas="9" titulo="Carga al crearse">
+    El bloque `init` llama a `load()` en cuanto se crea el ViewModel.
+  </Paso>
+  <Paso lineas="12" titulo="Una corrutina ligada al ViewModel">
+    `viewModelScope.launch` lanza una corrutina que se cancela sola cuando el ViewModel se destruye.
+  </Paso>
+  <Paso lineas="13-15" titulo="De Loading a Success">
+    Primero publica `Loading`, espera a `readAll()` (que es `suspend`) y publica `Success` con las tareas. La pantalla recompone en cada cambio.
+  </Paso>
+</Recorrido>
+
+````mdx
+<Recorrido
+  titulo="TaskListViewModel.kt"
+  lenguaje="kotlin"
+  codigo={`@HiltViewModel
+class TaskListViewModel @Inject constructor(
+    private val _repository: TaskRepository
+) : ViewModel() {
+    ...
+}`}
+>
+  <Paso lineas="1-4" titulo="Hilt crea el ViewModel">
+    `@HiltViewModel` y `@Inject constructor` le dicen a Hilt que construya el ViewModel.
+  </Paso>
+  <Paso lineas="5-7, 9" titulo="Estado e init">
+    Puedes iluminar varios rangos separados por comas.
+  </Paso>
+  <Paso titulo="Sin lineas no se ilumina nada">
+    Útil para un resumen final.
+  </Paso>
+</Recorrido>
+````
+
+<TypeTable
+  type={{
+    'Recorrido · codigo': { type: 'string', required: true, description: 'El código entre {`...`}. La sangría común se quita sola. Si el código lleva una comilla invertida o ${, escápalos con una barra invertida delante.' },
+    'Recorrido · lenguaje': { type: 'string', default: '"text"', description: 'Lenguaje de Shiki: kotlin, java, ts, typescript, html, json, bash, prisma, csharp, sql, xml…' },
+    'Recorrido · titulo': { type: 'string', description: 'Normalmente el nombre del archivo.' },
+    'Paso · lineas': { type: 'string', description: 'Líneas a iluminar, desde 1: "3", "3-5" o "3-5, 8". Sin lineas no se ilumina nada.' },
+    'Paso · titulo': { type: 'string', description: 'Título corto (sale en la lista de pasos). Admite `código`.' },
+    'Paso · children': { type: 'Markdown', description: 'La explicación del paso.' },
+  }}
+/>
+
+<Callout type="warn" title="Solo en MDX">
+  `<Recorrido>` se resalta en el servidor, así que úsalo directamente en el `.mdx` (también dentro de `<Tabs>`, `<Steps>`…), pero no dentro de una demo a medida con `'use client'`. Las líneas largas hacen scroll horizontal y el código, a partir de unas 17 líneas, scroll vertical: el recorrido se desplaza solo hasta las líneas del paso.
+</Callout>
+
+### Flujo y Mensaje (diagrama de secuencia animado)
+
+Diagrama con los participantes de un flujo y los mensajes que se pasan, **paso a paso**: un punto viaja de un nodo a otro, se iluminan los dos nodos y debajo sale la explicación. Se mueve con Reproducir/Pausa, Anterior/Siguiente, las flechas del teclado o los números. En escritorio los nodos van en fila (hasta 6; con 7 o más, en columna) y en móvil en columna. Sirve para una petición HTTP desde Compose o Angular, la inyección con Hilt, un `Flow` de Room hacia la UI, la cadena de *middlewares* de Express, la navegación…
+
+<Flujo
+  titulo="Cargar la lista desde la API"
+  nodos={["Pantalla", "ViewModel", "Repositorio", "Retrofit", "API"]}
+>
+  <Mensaje de="Pantalla" a="ViewModel" titulo="collectAsStateWithLifecycle()">
+    La pantalla empieza a observar el `state` del ViewModel.
+  </Mensaje>
+  <Mensaje de="ViewModel" a="Repositorio" titulo="readAll()">
+    Dentro de `viewModelScope.launch`, el ViewModel llama a la función `suspend` del repositorio.
+  </Mensaje>
+  <Mensaje de="Repositorio" a="Retrofit" titulo="api.readAllPokemon()">
+    El repositorio usa la interfaz de Retrofit que le ha inyectado Hilt.
+  </Mensaje>
+  <Mensaje de="Retrofit" a="API" titulo="GET pokemon">
+    Retrofit monta la petición con la `baseUrl` y la ruta de `@GET`.
+  </Mensaje>
+  <Mensaje de="API" a="Retrofit" tipo="respuesta" titulo="200 OK + JSON">
+    Gson convierte el JSON en los `data class` de la respuesta.
+  </Mensaje>
+  <Mensaje de="Retrofit" a="Repositorio" tipo="respuesta" titulo="Response">
+    El repositorio comprueba `isSuccessful` y pasa los datos al modelo con `toModel()`.
+  </Mensaje>
+  <Mensaje de="Repositorio" a="ViewModel" tipo="respuesta" titulo="La lista">
+    El ViewModel recibe la lista y cambia `_state` a `Success`.
+  </Mensaje>
+  <Mensaje de="ViewModel" a="Pantalla" tipo="respuesta" titulo="Nuevo estado">
+    El `StateFlow` emite y Compose vuelve a pintar la pantalla con la lista.
+  </Mensaje>
+</Flujo>
+
+```mdx
+<Flujo
+  titulo="Una petición a la API de Express"
+  nodos={["Cliente", "cors", "express.json", "Controlador", "Prisma"]}
+>
+  <Mensaje de="Cliente" a="cors" titulo="POST /api/tasks">
+    Llega la petición. El primer *middleware* añade las cabeceras CORS.
+  </Mensaje>
+  <Mensaje de="cors" a="express.json" titulo="next()">
+    Cada *middleware* llama a `next()` para pasar al siguiente.
+  </Mensaje>
+  <Mensaje de="Controlador" a="Controlador" titulo="Valida con Zod">
+    Si `de` y `a` son el mismo nodo, el nodo hace algo por su cuenta.
+  </Mensaje>
+  <Mensaje de="Prisma" a="Controlador" tipo="respuesta" titulo="Tarea creada">
+    `tipo="respuesta"` dibuja la flecha discontinua.
+  </Mensaje>
+</Flujo>
+```
+
+<TypeTable
+  type={{
+    'Flujo · nodos': { type: 'string[]', required: true, description: 'Participantes en orden, entre {[...]}. En la página normal caben hasta 6 en fila; con más, van en columna. Nombres cortos. Admiten `código`.' },
+    'Flujo · titulo': { type: 'string', description: 'Título del bloque.' },
+    'Flujo · intervalo': { type: 'number', default: '2800', description: 'Milisegundos entre pasos al reproducir (mínimo 800).' },
+    'Mensaje · de': { type: 'string', required: true, description: 'Nodo de origen, escrito igual que en `nodos` (no distingue mayúsculas).' },
+    'Mensaje · a': { type: 'string', required: true, description: 'Nodo de destino. Si es el mismo que `de`, el nodo hace algo por su cuenta.' },
+    'Mensaje · titulo': { type: 'string', description: 'Título corto: "cargar()", "GET /tasks"… Admite `código`.' },
+    'Mensaje · tipo': { type: '"llamada" | "respuesta"', default: '"llamada"', description: '"respuesta" dibuja la flecha discontinua.' },
+    'Mensaje · children': { type: 'Markdown', description: 'La explicación del paso.' },
+  }}
+/>
+
+Si un `<Mensaje>` usa un nodo que no está en `nodos`, no se dibuja la flecha y, en `npm run dev`, sale un aviso en la consola del navegador.
+
+## Demos a medida (con import)
+
+Cuando ningún componente del catálogo sirve (una pantalla de Compose simulada, un formulario de Angular que valida en vivo…), puedes escribir una **demo a medida** en React e importarla solo en el tema que la usa. Esta es una demo de ejemplo importada en esta misma página:
+
+<DemoEstado />
+
+<Steps>
+  <Step>
+
+#### Crea el componente
+
+  En `components/temas/<grupo>/<nombre>.tsx`, donde el grupo es el módulo (`kotlin`, `acceso-a-datos`, `apis`…). Si usa estado o eventos, empieza por `'use client'`. Exporta una función con nombre en PascalCase.
+
+  </Step>
+  <Step>
+
+#### Usa el estilo de la web
+
+  Reutiliza `bloque`, `cabecera`, `etiqueta`, `botonPrimario`, `botonSecundario`… de `@/components/interactive/estilos` y los colores `fd-*`. Nada de degradados, sombras de color ni emojis.
+
+  </Step>
+  <Step>
+
+#### Impórtalo en el MDX
+
+  Justo debajo del frontmatter, con una línea en blanco después. Las props que le pases tienen que ser datos simples (textos, números, listas), no funciones.
+
+  </Step>
+</Steps>
+
+```tsx title="components/temas/guia-autor/demo-estado.tsx"
+'use client';
+
+import { useState } from 'react';
+import { bloque, botonSecundario, cabecera, etiqueta } from '@/components/interactive/estilos';
+
+export function DemoEstado({ inicial = 0 }: { inicial?: number }) {
+  const [valor, setValor] = useState(inicial);
+  return (
+    <section className={bloque}>
+      <div className={cabecera}>
+        <span className={etiqueta}>Demo</span>
+      </div>
+      <button type="button" onClick={() => setValor(valor + 1)} className={botonSecundario}>
+        {valor}
+      </button>
+    </section>
+  );
+}
+```
+
+```mdx title="content/docs/2-dam/kotlin/estado.mdx"
+---
+title: Estado en Compose
+description: …
+---
+
+import { DemoEstado } from '@/components/temas/guia-autor/demo-estado';
+
+Texto del tema…
+
+<DemoEstado inicial={3} />
+```
+
+<Callout title="Lo que hay dentro de una demo no lo ve nadie más">
+  El buscador y el Tutor DAM leen el texto del MDX, no lo que pinta la demo. Explica siempre en el propio tema lo que la demo enseña.
+</Callout>
 
 ## Componentes de Fumadocs
 

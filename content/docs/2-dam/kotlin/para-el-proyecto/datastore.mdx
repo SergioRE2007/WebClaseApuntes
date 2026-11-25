@@ -1,0 +1,412 @@
+---
+title: DataStore para el proyecto
+description: Lo que se vio el 18/11 de DataStore, el módulo de Hilt que lo crea, cómo llega el modo oscuro al tema y cómo guardar el token del login.
+icon: Settings
+---
+
+El requisito de DataStore pide guardar **preferencias del usuario** (tema, idioma, ajustes personales). El 18/11 se hizo la pantalla de ajustes con el modo oscuro, pero se quedaron sin ver dos piezas: **de dónde sale el `DataStore`** y **cómo llega el modo oscuro al tema**. Aquí tienes lo de clase y lo que falta, más cómo guardar el token del login, que usa lo mismo.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Cómo se lee y se escribe una preferencia, como en clase.
+  - El módulo de Hilt que crea el `DataStore<Preferences>`.
+  - Cómo llega el modo oscuro hasta el tema de la app.
+  - Guardar y borrar el token del login.
+</Callout>
+
+## Lo que se vio en clase
+
+<DeClase fecha="18/11" proyecto="ToDoOfflineFirst" rama="datastore" />
+
+**DataStore Preferences** guarda pares clave-valor en un archivo de la app, como las `SharedPreferences` de Android de toda la vida, pero con corrutinas y `Flow`: leer no bloquea y te enteras solo cuando cambia un valor.
+
+<Recorrido
+  titulo="SettingsDataStore.kt (18/11)"
+  lenguaje="kotlin"
+  codigo={`class SettingsDataStore @Inject constructor(
+    private val dataStore: DataStore<Preferences>
+) : SettingsDatasource {
+    private val uiMode = booleanPreferencesKey(name = "ui_mode")
+
+    override val darkMode: Flow<Boolean>
+        get() = dataStore.data.map { preferences -> preferences[uiMode] ?: false }
+
+    override suspend fun setMode(mode: Boolean) {
+        dataStore.updateData { preferences ->
+            preferences.toMutablePreferences().also { it[uiMode] = mode }
+        }
+    }
+}`}
+>
+  <Paso lineas="1-3" titulo="Recibe el DataStore por Hilt">
+    La clase no crea el `DataStore`: se lo inyecta Hilt. Implementa la interfaz `SettingsDatasource`, que es lo único que conoce el repositorio.
+  </Paso>
+  <Paso lineas="4" titulo="Una clave tipada">
+    `booleanPreferencesKey("ui_mode")` crea una clave que solo guarda `Boolean`. Hay una por tipo: `stringPreferencesKey`, `intPreferencesKey`…
+  </Paso>
+  <Paso lineas="6-7" titulo="Leer: un Flow">
+    `dataStore.data` es un `Flow<Preferences>`. Con `map` se saca el valor de la clave; si no se ha guardado nunca, es `null` y el elvis `?:` pone `false`.
+  </Paso>
+  <Paso lineas="9-13" titulo="Escribir: suspend">
+    `updateData` recibe las preferencias actuales y **tiene que devolver** las nuevas. `toMutablePreferences()` hace una copia que se puede cambiar y `.also { }` la devuelve después de cambiarla.
+  </Paso>
+</Recorrido>
+
+En clase se probó primero a escribir `setMode` con una variable (`val mutable = preferences.toMutablePreferences()` y luego `mutable[uiMode] = mode`) y el IDE marcaba error: la lambda **no devolvía** nada. Con `.also { }` sí se devuelve el objeto.
+
+El resto de capas sigue el patrón de clase: `SettingsDatasource` → `SettingsRepository` → `SettingsViewModel`, con los `@Binds @Singleton` en el `AppModule`:
+
+```kotlin title="Settings (18/11)"
+class SettingsRepositoryImpl @Inject constructor(
+    private val settingsDS: SettingsDatasource
+) : SettingsRepository {
+    override val settings: Flow<Boolean>
+        get() = settingsDS.darkMode
+    override suspend fun setMode(mode: Boolean) { settingsDS.setMode(mode) }
+}
+
+@HiltViewModel
+class SettingsViewModel @Inject constructor(
+    private val settingsRepository: SettingsRepository,
+) : ViewModel() {
+    val uiState: StateFlow<SettingsUiState> = settingsRepository.settings
+        .map<Boolean, SettingsUiState> { SettingsUiState(it) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000L),
+            initialValue = SettingsUiState()
+        )
+
+    fun changeMode(mode: Boolean) {
+        viewModelScope.launch { settingsRepository.setMode(mode) }
+    }
+}
+
+data class SettingsUiState(val darkMode: Boolean = false)
+
+@Composable
+fun SettingsScreen(
+    modifier: Modifier = Modifier,
+    viewModel: SettingsViewModel = hiltViewModel(),
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    Scaffold { innerPadding ->
+        Row(modifier = Modifier.padding(innerPadding)) {
+            Text("Dark Mode")
+            Switch(checked = uiState.darkMode, onCheckedChange = { viewModel.changeMode(it) })
+        }
+    }
+}
+```
+
+- El DataSource aparece como <Dudoso nota="Las primeras capturas ponen `SettingsDatasource` y el árbol del proyecto, `SettingsDataSource`. Puede que se renombrara.">`SettingsDatasource`</Dudoso>.
+- Al conectar la pantalla, **la app se cayó** con `NoSuchMethodException` ("Cannot create an instance of class SettingsViewModel"). Faltaba `@HiltViewModel`: sin él, `hiltViewModel()` intenta crear el ViewModel con un constructor vacío.
+- `hiltViewModel` se importa de `androidx.hilt.lifecycle.viewmodel.compose`, el paquete nuevo, no del antiguo `androidx.hilt.navigation.compose`.
+
+Al final se abrió `Theme.kt`, que es el que crea Android Studio:
+
+```kotlin title="core/ui/theme/Theme.kt (18/11, sin cambios)"
+@Composable
+fun ToDoOfflineFirstTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    val colorScheme = when {
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            val context = LocalContext.current
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+        darkTheme -> DarkColorScheme
+        else -> LightColorScheme
+    }
+    MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
+}
+```
+
+Fíjate en el parámetro `darkTheme`: por defecto sigue al sistema (`isSystemInDarkTheme()`). Para que mande el ajuste guardado, hay que pasárselo.
+
+<NoSeVio titulo="DataStoreModule y el tema">
+  El `DataStoreModule` (en `core/di`) aparece en el árbol del proyecto, pero su código no se ve. Tampoco se ve cómo llega el `darkMode` guardado a `ToDoOfflineFirstTheme`: las capturas terminan justo después de abrir `MainActivity` y `Theme.kt` (18/11).
+</NoSeVio>
+
+Lo de clase lo tienes entero en [DataStore: guardar el modo oscuro](/docs/2-dam/kotlin/datos/datastore).
+
+## El módulo que crea el DataStore <NoDadoEnClase inline />
+
+<NoDadoEnClase />
+
+El `DataStore` se crea **una sola vez**, con una propiedad de extensión de `Context`, y Hilt lo reparte a quien lo pida:
+
+```kotlin title="core/di/DataStoreModule.kt"
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "ajustes")
+
+@Module
+@InstallIn(SingletonComponent::class)
+object DataStoreModule {
+    @Provides
+    @Singleton
+    fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
+        context.dataStore
+}
+```
+
+- `by preferencesDataStore(name = "ajustes")` es un **delegado**: crea el archivo `ajustes.preferences_pb` la primera vez que se usa y devuelve siempre el mismo objeto.
+- La línea `private val Context.dataStore` va **fuera de cualquier clase**, arriba del archivo. Si se crean dos DataStore con el mismo nombre, la app se cae.
+- Si dos módulos dan un `DataStore<Preferences>`, Hilt falla al compilar con `[Dagger/DuplicateBindings]`. Deja solo este.
+
+## El modo oscuro en el tema <NoDadoEnClase inline />
+
+El camino completo, desde que tocas el `Switch` hasta que cambian los colores:
+
+<Flujo
+  titulo="Del Switch al tema"
+  nodos={["Switch", "ViewModel", "DataStore", "MainActivity", "Tema"]}
+>
+  <Mensaje de="Switch" a="ViewModel" titulo="cambiarModoOscuro(true)">
+    Al tocar el `Switch`, la pantalla de ajustes llama al ViewModel.
+  </Mensaje>
+  <Mensaje de="ViewModel" a="DataStore" titulo="edit { }">
+    Dentro de `viewModelScope.launch`, se guarda el valor en el archivo.
+  </Mensaje>
+  <Mensaje de="DataStore" a="ViewModel" tipo="respuesta" titulo="data emite">
+    `dataStore.data` vuelve a emitir con el valor nuevo, y el `StateFlow` `modoOscuro` cambia a `true`.
+  </Mensaje>
+  <Mensaje de="ViewModel" a="MainActivity" tipo="respuesta" titulo="collectAsStateWithLifecycle()">
+    `MainActivity` está observando `modoOscuro` dentro de `setContent`, así que se recompone.
+  </Mensaje>
+  <Mensaje de="MainActivity" a="Tema" titulo="MiAppTheme(darkTheme = true)">
+    El tema recibe `darkTheme = true` y elige el esquema de colores oscuro. Toda la app se repinta.
+  </Mensaje>
+</Flujo>
+
+**El ViewModel.** Aquí lee el DataStore directamente para que el ejemplo sea corto. En clase iba con DataSource y repositorio, y es mejor que sigas así.
+
+```kotlin title="AjustesViewModel.kt"
+@HiltViewModel
+class AjustesViewModel @Inject constructor(
+    private val dataStore: DataStore<Preferences>
+) : ViewModel() {
+
+    private val modoOscuroKey = booleanPreferencesKey("modo_oscuro")
+
+    val modoOscuro: StateFlow<Boolean> = dataStore.data
+        .map { preferences -> preferences[modoOscuroKey] ?: false }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), false)
+
+    fun cambiarModoOscuro(activado: Boolean) {
+        viewModelScope.launch {
+            dataStore.edit { preferences -> preferences[modoOscuroKey] = activado }
+        }
+    }
+}
+```
+
+<Comparar titulo="Dos formas de escribir en DataStore" columnas>
+  <Lado titulo="Como en clase">
+
+```kotlin
+dataStore.updateData { prefs ->
+    prefs.toMutablePreferences()
+        .also { it[key] = valor }
+}
+```
+
+  </Lado>
+  <Lado titulo="Más corto">
+
+```kotlin
+dataStore.edit { prefs ->
+    prefs[key] = valor
+}
+```
+
+  </Lado>
+</Comparar>
+
+`edit { }` hace lo mismo que `updateData { toMutablePreferences().also { … } }`: te da una copia que puedes cambiar y la guarda al terminar el bloque. Las dos son correctas.
+
+**Cómo llega al tema.** En `MainActivity`, por encima de todo:
+
+```kotlin title="MainActivity.kt"
+@AndroidEntryPoint
+class MainActivity : ComponentActivity() {
+
+    private val ajustesViewModel: AjustesViewModel by viewModels()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            val modoOscuro by ajustesViewModel.modoOscuro.collectAsStateWithLifecycle()
+            MiAppTheme(darkTheme = modoOscuro) {
+                AppNavHost()
+            }
+        }
+    }
+}
+```
+
+- `MiAppTheme` es la función de `Theme.kt` que crea Android Studio (se llama como tu proyecto, como `ToDoOfflineFirstTheme` en clase). Ya trae el parámetro `darkTheme`.
+- `by viewModels()` es la forma de pedir un `@HiltViewModel` desde una Activity (en un composable se usa `hiltViewModel()`). Se usó igual el 13/11 para el splash.
+- La pantalla de ajustes puede pedir su propio `hiltViewModel<AjustesViewModel>()`: los dos ViewModels leen el mismo DataStore, así que el tema cambia nada más tocar el `Switch`.
+
+<Callout type="warn" title="Por defecto, claro">
+  Con `?: false`, la primera vez que se abre la app sale en modo claro aunque el móvil esté en oscuro, porque todavía no hay nada guardado. Si quieres que siga al sistema hasta que el usuario toque el `Switch`, el valor por defecto tendría que salir de `isSystemInDarkTheme()`, que solo se puede llamar dentro de un composable.
+</Callout>
+
+## Guardar el token del login <NoDadoEnClase inline />
+
+Es igual que el modo oscuro, pero con `stringPreferencesKey`:
+
+```kotlin title="SesionDataStore.kt"
+@Singleton
+class SesionDataStore @Inject constructor(
+    private val dataStore: DataStore<Preferences>
+) {
+    private val tokenKey = stringPreferencesKey("token")
+
+    val token: Flow<String?> = dataStore.data.map { preferences -> preferences[tokenKey] }
+
+    suspend fun guardarToken(token: String) {
+        dataStore.edit { preferences -> preferences[tokenKey] = token }
+    }
+
+    suspend fun borrarToken() {
+        dataStore.edit { preferences -> preferences.remove(tokenKey) }
+    }
+}
+```
+
+- `@Singleton` encima de la clase: como tiene `@Inject constructor`, Hilt la crea solo y, con esta anotación, una única vez para toda la app.
+- `token` es `Flow<String?>`: `null` si no hay sesión.
+- Después del login: `sesion.guardarToken(respuesta.token)`. Al cerrar sesión: `sesion.borrarToken()`.
+- Para mandar el token en cada petición, mira el interceptor de [Conectar con tu API](/docs/2-dam/kotlin/para-el-proyecto/conectar-con-tu-api).
+
+## Practica
+
+<CompletarCodigo
+  titulo="Leer y escribir una preferencia"
+  enunciado="Completa la lectura y la escritura del modo oscuro."
+  lenguaje="kotlin"
+  codigo={`private val modoOscuroKey = [[booleanPreferencesKey]]("modo_oscuro")
+
+val modoOscuro: Flow<Boolean> = dataStore.[[data]]
+    .map { preferences -> preferences[modoOscuroKey] [[?:]] false }
+
+suspend fun cambiar(activado: Boolean) {
+    dataStore.[[edit]] { preferences -> preferences[modoOscuroKey] = activado }
+}`}
+/>
+
+<Quiz titulo="Test: DataStore">
+  <Pregunta enunciado="¿Dónde va la línea `private val Context.dataStore by preferencesDataStore(...)`?" explicacion="Es una propiedad de extensión de nivel superior: va arriba del archivo, fuera de cualquier clase, para que solo haya una.">
+    <Opcion>Dentro de `MainActivity`</Opcion>
+    <Opcion correcta>Fuera de cualquier clase, arriba del archivo</Opcion>
+    <Opcion>Dentro del ViewModel</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En clase, ¿por qué fallaba `setMode` escrito con `val mutable = preferences.toMutablePreferences()` y `mutable[uiMode] = mode`?" explicacion="La lambda de `updateData` tiene que devolver las `Preferences`. Esa versión no devolvía nada; con `.also { }` sí.">
+    <Opcion>Porque `toMutablePreferences()` no existe</Opcion>
+    <Opcion correcta>Porque la lambda de `updateData` no devolvía las `Preferences`</Opcion>
+    <Opcion>Porque faltaba `suspend`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cómo pides un `@HiltViewModel` desde una Activity?" explicacion="En una Activity se usa el delegado `by viewModels()`; en un composable, `hiltViewModel()`.">
+    <Opcion>`val vm = hiltViewModel()`</Opcion>
+    <Opcion correcta>`private val vm: AjustesViewModel by viewModels()`</Opcion>
+    <Opcion>`val vm = AjustesViewModel()`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué tipo de clave usas para guardar el token?" explicacion="El token es un texto, así que la clave es `stringPreferencesKey`.">
+    <Opcion>`booleanPreferencesKey`</Opcion>
+    <Opcion correcta>`stringPreferencesKey`</Opcion>
+    <Opcion>`intPreferencesKey`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`dataStore.edit { it[key] = valor }` hace lo mismo que `updateData { it.toMutablePreferences().also { p -> p[key] = valor } }`." respuesta={true} explicacion="`edit` te da una copia mutable y la guarda al terminar. Es la forma corta." />
+  <Pregunta enunciado="Activas el modo oscuro, cierras la app del todo y la vuelves a abrir. ¿Qué pasa?" explicacion="DataStore lo guarda en un archivo de la app, así que al abrir se lee otra vez y el tema sale en oscuro.">
+    <Opcion>Vuelve a modo claro</Opcion>
+    <Opcion correcta>Sigue en oscuro, porque está guardado en un archivo</Opcion>
+    <Opcion>Depende de si giraste el móvil</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Hilt falla con `[Dagger/DuplicateBindings]` al compilar. ¿Qué es lo más probable?" explicacion="Dos módulos dan el mismo tipo, por ejemplo dos `@Provides` de `DataStore<Preferences>`. Deja uno.">
+    <Opcion>Falta `@HiltViewModel`</Opcion>
+    <Opcion correcta>Hay dos `@Provides` que dan `DataStore<Preferences>`</Opcion>
+    <Opcion>Falta el permiso de internet</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: DataStore">
+  <Tarjeta frente="Leer una preferencia">`dataStore.data.map { it[key] ?: valorPorDefecto }`: un `Flow` que emite cada vez que cambia.</Tarjeta>
+  <Tarjeta frente="Escribir una preferencia">Dentro de una corrutina: `dataStore.edit { it[key] = valor }` o, como en clase, `updateData { it.toMutablePreferences().also { p -> p[key] = valor } }`.</Tarjeta>
+  <Tarjeta frente="`preferencesDataStore(name = ...)`">Delegado que crea el archivo `nombre.preferences_pb` y da siempre el mismo `DataStore`. Va fuera de las clases.</Tarjeta>
+  <Tarjeta frente="Cómo llega el modo oscuro al tema">`MainActivity` observa el `StateFlow` con `collectAsStateWithLifecycle()` y lo pasa como `darkTheme` al tema.</Tarjeta>
+  <Tarjeta frente="`by viewModels()` frente a `hiltViewModel()`">El primero, en una Activity. El segundo, en un composable.</Tarjeta>
+  <Tarjeta frente="Borrar una preferencia">`dataStore.edit { it.remove(key) }`, por ejemplo para cerrar sesión.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="El modo oscuro de punta a punta" dificultad="media">
+  Haz que tu app guarde el modo oscuro y que el tema lo use. Si ya tienes `SettingsDataStore`, `SettingsRepository` y `SettingsViewModel` como en clase, no los cambies: solo te faltan el módulo y `MainActivity`.
+
+  <Pista>Primero el `DataStoreModule`. Sin él, Hilt no sabe crear el `DataStore<Preferences>` que recibe `SettingsDataStore`.</Pista>
+  <Pista>En `MainActivity`, pide el `SettingsViewModel` con `by viewModels()` y lee `uiState.darkMode`.</Pista>
+
+  <Solucion>
+
+```kotlin title="MainActivity.kt"
+@AndroidEntryPoint
+class MainActivity : ComponentActivity() {
+
+    private val settingsViewModel: SettingsViewModel by viewModels()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            val ajustes by settingsViewModel.uiState.collectAsStateWithLifecycle()
+            ToDoOfflineFirstTheme(darkTheme = ajustes.darkMode) {
+                MainNavigation()
+            }
+        }
+    }
+}
+```
+
+  Con el `DataStoreModule` de esta página, `SettingsDataStore` recibe el `DataStore` y todo lo de clase funciona sin cambios. `SettingsScreen` y `MainActivity` tienen cada una su `SettingsViewModel`, pero los dos leen el mismo archivo, así que el tema cambia al tocar el `Switch`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Recordar el último filtro" dificultad="dificil">
+  En la lista de productos, guarda en DataStore el id de la última categoría elegida en un filtro, para que al volver a abrir la app siga filtrada. Si no hay nada guardado, se ven todas.
+
+  <Pista>Es un `Int` que puede no existir: `intPreferencesKey` y un `Flow<Int?>`.</Pista>
+  <Pista>Para "quitar el filtro", borra la clave con `remove`.</Pista>
+
+  <Solucion>
+
+```kotlin title="FiltroDataStore.kt"
+@Singleton
+class FiltroDataStore @Inject constructor(
+    private val dataStore: DataStore<Preferences>
+) {
+    private val categoriaKey = intPreferencesKey("categoria_filtro")
+
+    val categoriaId: Flow<Int?> = dataStore.data.map { it[categoriaKey] }
+
+    suspend fun elegir(id: Int?) {
+        dataStore.edit { preferences ->
+            if (id == null) {
+                preferences.remove(categoriaKey)
+            } else {
+                preferences[categoriaKey] = id
+            }
+        }
+    }
+}
+```
+
+  En el ViewModel, junta `filtro.categoriaId` con `repository.productos` usando `combine` y filtra la lista: `if (id == null) productos else productos.filter { it.categoriaId == id }`.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

@@ -1,0 +1,16 @@
+{
+  "title": "Angular: componentes y servicios",
+  "icon": "Component",
+  "pages": [
+    "index",
+    "proyecto-y-cli",
+    "componentes",
+    "plantillas-y-binding",
+    "control-flow",
+    "flexbox",
+    "comunicacion-componentes",
+    "servicios-e-inyeccion",
+    "httpclient",
+    "pipes-y-directivas"
+  ]
+}

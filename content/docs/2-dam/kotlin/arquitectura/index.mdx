@@ -1,0 +1,96 @@
+---
+title: Arquitectura Android
+description: Cómo se organiza una app de Android tal como se dio en clase. Capas, ViewModel con StateFlow, estados de pantalla, inyección con Hilt y navegación con rutas tipadas, con la ToDoApp como hilo conductor.
+icon: Layers
+---
+
+Este bloque explica **cómo se monta una app de Android por dentro**, siguiendo lo que se hizo en clase de octubre a noviembre. No va de pintar botones (eso es Compose), sino de **dónde vive cada cosa**: quién guarda el estado, quién habla con los datos, quién crea los objetos y cómo se pasa de una pantalla a otra.
+
+El hilo conductor es la **ToDoApp** de clase (paquete `com.alanturing.todoapp`, rama `dev`), una lista de tareas que el profesor fue construyendo entre el 09/10 y el 23/10. Cuando algo se vio en otro proyecto (TipCalculator, PokeApp2627, Room o ToDoOfflineFirst), se dice.
+
+<Callout type="idea" title="Antes de empezar">
+  Se da por hecho que sabes Java y lo básico de Kotlin y Compose (`@Composable`, `Scaffold`, `LazyColumn`, `remember`). Si vienes de Java, cada página compara con lo que ya conoces cuando ayuda.
+</Callout>
+
+## Páginas del bloque
+
+<Cards>
+  <Card icon="Layers" title="Capas de la app" href="/docs/2-dam/kotlin/arquitectura/capas" description="UI, ViewModel, repositorio y DataSource. Interfaz más implementación y paquetes por feature." />
+  <Card icon="Activity" title="ViewModel y StateFlow" href="/docs/2-dam/kotlin/arquitectura/viewmodel-y-stateflow" description="Del estado en el composable al ViewModel. Backing property, collectAsStateWithLifecycle y formularios." />
+  <Card icon="GitBranch" title="Estados de pantalla" href="/docs/2-dam/kotlin/arquitectura/estados-de-pantalla" description="Loading, Success y Error con sealed class, when exhaustivo y pantalla con estado y sin estado." />
+  <Card icon="Syringe" title="Inyección con Hilt" href="/docs/2-dam/kotlin/arquitectura/hilt" description="@HiltAndroidApp, @AndroidEntryPoint, @Inject constructor, @HiltViewModel y hiltViewModel()." />
+  <Card icon="Boxes" title="Módulos de Hilt" href="/docs/2-dam/kotlin/arquitectura/hilt-modulos" description="@Module, @Binds, @Provides, @Singleton y los errores de Hilt que salen." />
+  <Card icon="Route" title="Navegación" href="/docs/2-dam/kotlin/arquitectura/navegacion" description="Rutas tipadas, NavHost, toRoute, callbacks en vez de navController y grafos anidados." />
+  <Card icon="ListTodo" title="La ToDoApp de principio a fin" href="/docs/2-dam/kotlin/arquitectura/todoapp" description="Cómo creció la app clase a clase, qué archivo hace qué y qué no se llegó a ver." />
+</Cards>
+
+## Qué clases cubre
+
+| Fecha | Proyecto | Lo que sale en este bloque |
+| --- | --- | --- |
+| 07/10 | TipCalculator | El estado pasa del composable a un `ViewModel` con una `data class`, `copy()` y backing property. |
+| 09/10 | ToDoApp | Rutas tipadas, `NavHost`, callbacks de navegación, `toRoute()`, módulo de Hilt con `@Binds`, `@HiltViewModel` y `hiltViewModel()`. |
+| 16/10 | ToDoApp | `MutableStateFlow` en el ViewModel, `collectAsStateWithLifecycle()` y el formulario con `TextFieldState`. |
+| 23/10 | ToDoApp | Estados sellados (`Initial`, `Loading`, `Success`, `Error`), `load()` con `viewModelScope.launch` y pantalla con estado y sin estado. |
+| 26/10 | PokeApp2627 | `@HiltAndroidApp` en la `Application`, `@Provides` para Retrofit y el módulo como `interface`. |
+| 09/11 | PokeApp2627 | `savedStateHandle.toRoute()` en el ViewModel y estado con `stateIn`. |
+| 13/11 | Room | `@Provides` con `@ApplicationContext`, `@Inject constructor()` vacío y `by viewModels()` en la Activity. |
+| 18/11 | ToDoOfflineFirst | Grafos anidados, `popBackStack()`, capas de ajustes y el fallo por olvidar `@HiltViewModel`. |
+
+Lo que va **por debajo** del repositorio (Retrofit, Room, DataStore, `Flow` y corrutinas en detalle) está en [Datos en Android](/docs/2-dam/kotlin/datos), y lo que no se dio en clase pero pide el proyecto, en [Android para el proyecto](/docs/2-dam/kotlin/para-el-proyecto). Aquí solo se nombra cuando hace falta para entender una capa.
+
+## Cómo leer las marcas
+
+El material sale de las capturas de los vídeos de clase, así que cada página separa lo que se vio de lo que no:
+
+- <DeClase fecha="09/10" proyecto="ToDoApp" /> dice cuándo y dónde se vio algo.
+- <NoDadoEnClase inline /> marca lo que **no se dio en clase**. Si lo usas en tu proyecto, di que lo has buscado tú.
+- <Dudoso>Así</Dudoso> se marca lo que no se leía bien en las capturas. No está corregido a propósito.
+- Los recuadros "Esto no se llega a ver en clase" señalan huecos: código que no sale en las capturas. No se rellenan con código inventado.
+- Los bloques con "Así se hizo en clase" y "Mejor así" son las **prácticas raras** del código de clase: cosas que se hicieron así en directo y que no conviene copiar.
+
+## Versiones
+
+El código de estas páginas es el de clase y usa estas versiones. No las cambies aunque veas otras más nuevas en internet:
+
+| Librería | Versión |
+| --- | --- |
+| Hilt (`com.google.dagger:hilt-android` y `hilt-android-compiler`) | 2.60.1 |
+| KSP (`com.google.devtools.ksp`) | 2.3.12 |
+| Navigation Compose (`androidx.navigation:navigation-compose`) | 2.10.2 |
+| `kotlinx-serialization-json` | 1.11.0 |
+| `lifecycle-viewmodel-ktx` | 2.11.0 |
+| `hilt-lifecycle-viewmodel-compose` (donde vive `hiltViewModel()`) | 1.4.0, vista en la documentación |
+
+## Orden de estudio
+
+<Steps>
+  <Step>
+
+#### Capas
+
+  Primero entiende qué piezas tiene la app y quién conoce a quién: [Capas de la app](/docs/2-dam/kotlin/arquitectura/capas).
+
+  </Step>
+  <Step>
+
+#### Estado
+
+  Después cómo guarda el ViewModel el estado y cómo lo pinta la pantalla: [ViewModel y StateFlow](/docs/2-dam/kotlin/arquitectura/viewmodel-y-stateflow) y [Estados de pantalla](/docs/2-dam/kotlin/arquitectura/estados-de-pantalla).
+
+  </Step>
+  <Step>
+
+#### Hilt
+
+  Luego quién crea todos esos objetos: [Inyección con Hilt](/docs/2-dam/kotlin/arquitectura/hilt) y [Módulos de Hilt](/docs/2-dam/kotlin/arquitectura/hilt-modulos).
+
+  </Step>
+  <Step>
+
+#### Navegación y repaso
+
+  Por último, cómo se pasa de una pantalla a otra ([Navegación](/docs/2-dam/kotlin/arquitectura/navegacion)) y el repaso de toda la app ([La ToDoApp de principio a fin](/docs/2-dam/kotlin/arquitectura/todoapp)).
+
+  </Step>
+</Steps>

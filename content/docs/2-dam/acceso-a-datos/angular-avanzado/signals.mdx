@@ -1,0 +1,395 @@
+---
+title: "Signals: signal, computed y effect"
+description: Qué es un signal en Angular 19, cómo se crea, se lee y se cambia (lo que se vio el 27/10), los inputs basados en signals del CRUD, y lo que está en la guía pero no se dio en clase, como computed, effect y toSignal.
+icon: Activity
+---
+
+import { GrafoSignals } from '@/components/temas/angular-avanzado/grafo-signals';
+
+Un **signal** es un contenedor de un valor que **avisa a quien lo lee cuando cambia**. Angular apunta qué partes de la plantilla leen cada signal y, cuando cambia, sabe exactamente qué tiene que repintar. Si vienes de Kotlin, se parece mucho a `mutableStateOf` de Compose o a un `MutableStateFlow`: guardas el estado ahí y la interfaz reacciona sola.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Crear un signal con `signal()`, leerlo con `()` y cambiarlo con `set()` (dado en clase).
+  - Ver que `input()` y `input.required()` también son signals (dado en clase).
+  - Derivar valores con `computed()` y lanzar efectos con `effect()` (no dado en clase).
+  - Convertir un `Observable` en signal con `toSignal()` (está en la guía, no se dio).
+</Callout>
+
+## Qué se dio en clase y qué no
+
+| Pieza | Estado | Dónde |
+| --- | --- | --- |
+| `signal<T>()`, `WritableSignal`, `.set()` y leer con `x()` | Dado | 27/10, `angular-http` (`PostsComponent`) |
+| Signals `loading` y `error` para los estados de la pantalla | A medias | 27/10: los generó la IA de Cursor y no se ve cómo se actualizan |
+| `input.required<T>()` y `output<T>()` | Dado | 12/11 y 18/11, `proj-game` |
+| `update()`, `computed()`, memoización y `toSignal()` | <NoDadoEnClase inline /> | Guía `7_Signals.md` |
+| `effect()` | <NoDadoEnClase inline /> | No sale ni en la guía |
+
+## Crear, leer y cambiar un signal
+
+<DeClase fecha="27/10" proyecto="angular-http" nota="PostsComponent, contra JSONPlaceholder" />
+
+Este es el componente de clase: pide los posts al servicio y los guarda en un signal.
+
+<Recorrido
+  titulo="src/app/pages/posts/posts.component.ts"
+  lenguaje="typescript"
+  codigo={`@Component({
+  selector: 'app-posts',
+  imports: [CommonModule, RouterLink],
+  templateUrl: './posts.component.html',
+  standalone: true,
+})
+export class PostsComponent implements OnInit {
+  private readonly postsService = inject(PostsService);
+  protected readonly posts: WritableSignal<Post[]> = signal<Post[]>([]);
+
+  ngOnInit(): void {
+    this.postsService.getAll().subscribe((posts) => this.posts.set(posts));
+  }
+}`}
+>
+  <Paso lineas="8" titulo="El servicio, con inject()">
+    `inject(PostsService)` en un campo: la forma preferida de inyectar en Angular moderno. `readonly` porque la referencia no va a cambiar.
+  </Paso>
+  <Paso lineas="9" titulo="Crear el signal">
+    `signal<Post[]>([])` crea un signal **escribible** con un array vacío como valor inicial. Su tipo es `WritableSignal<Post[]>` (aquí se escribe a mano, pero TypeScript lo deduce solo). Va `protected` para que la plantilla pueda leerlo: con `private` sale el error NG1.
+  </Paso>
+  <Paso lineas="11-13" titulo="Cambiar el valor con set()">
+    Cuando llega la respuesta, `this.posts.set(posts)` sustituye el valor. Angular avisa a la plantilla, que vuelve a pintar la lista.
+  </Paso>
+</Recorrido>
+
+En la plantilla, **un signal se lee llamándolo como una función**:
+
+```html title="posts.component.html"
+@for (post of posts(); track post.id) {
+  {{ post.title }} {{ post.body }}
+}
+```
+
+<Callout type="warn" title="Los paréntesis no son opcionales">
+  `posts` es el signal (una función) y `posts()` es su valor. Si escribes `{{ total }}` en vez de `{{ total() }}`, en la pantalla no sale el número sino la representación de la función (algo como `[Signal: 3]` o su código), y el compilador suele avisarte (diagnóstico NG8109, *signals must be invoked*). En TypeScript pasa lo mismo: `console.log(this.posts)` enseña el signal, no los posts.
+</Callout>
+
+El componente de comentarios del mismo día añade dos signals más para los estados de la pantalla:
+
+```ts title="comments.component.ts (fragmento)"
+protected readonly loading = signal(true);
+protected readonly error = signal<string | null>(null);
+```
+
+<Dudoso nota="Los generó la IA de Cursor y solo se ven fragmentos.">No se ve cómo se actualizan `loading` y `error`</Dudoso>: los generó la IA de Cursor y el profesor revisó lo que había hecho. Un listado completo con sus estados de carga, error y vacío está en [Listado con filtros, paginación y token](/docs/2-dam/acceso-a-datos/angular-avanzado/listado-filtros-y-token).
+
+### Signal o propiedad normal
+
+<Comparar titulo="Dos formas de guardar la lista (las dos salieron en clase)" columnas>
+  <Lado titulo="Propiedad normal (28/10)">
+
+```ts
+products?: Product[];
+
+ngOnInit(): void {
+  this.productService.getProducts()
+    .subscribe(products => {
+      this.products = products;
+    });
+}
+```
+
+  </Lado>
+  <Lado titulo="Signal (27/10)">
+
+```ts
+posts = signal<Post[]>([]);
+
+ngOnInit(): void {
+  this.postsService.getAll()
+    .subscribe(posts => {
+      this.posts.set(posts);
+    });
+}
+```
+
+  </Lado>
+</Comparar>
+
+Las dos funcionan en un proyecto creado con Angular 19. Con la propiedad normal, quien se entera del cambio es **zone.js** (viene en `app.config.ts` con `provideZoneChangeDetection`): después de cada evento o respuesta HTTP, Angular revisa todo el componente por si algo ha cambiado. Con un signal, Angular sabe **qué** ha cambiado y quién lo usa. Por eso las guías y las versiones nuevas de Angular van hacia signals.
+
+## Inputs y outputs con signals
+
+<DeClase fecha="12/11, 18/11" proyecto="proj-game" />
+
+En el CRUD de juegos, el hijo recibe el juego a editar con una **entrada basada en signals**:
+
+```ts title="crud.component.ts (fragmento)"
+editGame = input.required<Game | undefined>();
+actualizaGames = output<Game>();
+```
+
+- `input.required<T>()` devuelve un `InputSignal<T>`: es un signal de solo lectura que rellena el padre con `[editGame]="..."`. Se lee igual que cualquier signal, con paréntesis. La diapositiva del 18/11 lo hace así: `{ id: this.editGame()?.id, ...form.value }`.
+- `required` obliga al padre a pasarlo: si `<app-crud>` no lleva `[editGame]`, la plantilla del padre no compila.
+- `output<T>()` es la salida: el hijo llama a `this.actualizaGames.emit(juego)` y el padre lo recibe en `(actualizaGames)="..."`.
+- Aunque sean signals, `ngOnChanges` se sigue ejecutando cuando el padre cambia el valor. Es lo que se usa en clase para rellenar el formulario.
+
+El detalle de esta comunicación está en [CRUD con formulario: padre e hijo](/docs/2-dam/acceso-a-datos/angular-avanzado/crud-padre-hijo).
+
+## update(): cambiar a partir del valor anterior <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  `update()`, `computed()` y `toSignal()` están en la guía [7_Signals](https://github.com/hokahey007/guides-angular) (con su proyecto en [codebase-angular/07_señales](https://github.com/hokahey007/codebase-angular/tree/main/07_se%C3%B1ales)), pero no se trabajaron en las clases grabadas. Lo de esta sección y las siguientes es un resumen con nuestras palabras.
+</NoDadoEnClase>
+
+`set(valor)` sustituye el valor. `update(fn)` calcula el nuevo a partir del actual: recibe el valor de ahora y devuelve el siguiente.
+
+```ts title="contador.ts"
+counter = signal(0);
+
+increment(): void {
+  this.counter.update(value => value + 1);
+}
+
+resetCounter(): void {
+  this.counter.set(0);
+}
+```
+
+| Método | Cuándo |
+| --- | --- |
+| `set(valor)` | El nuevo valor no depende del anterior: vaciar una cesta, poner un nombre, guardar lo que llega de la API |
+| `update(fn)` | Depende del anterior: sumar uno, añadir un elemento a una lista |
+
+Con listas, `update` tiene que devolver **un array nuevo**: `this.games.update(lista => [...lista, nuevo])`. Si haces `lista.push(nuevo)` y devuelves la misma lista, el signal compara con `Object.is`, ve que es el mismo objeto y no avisa a nadie.
+
+## computed(): valores derivados <NoDadoEnClase inline />
+
+Un `computed` es un signal **de solo lectura** que se calcula a partir de otros signals. No tiene `set` ni `update`: cambia solo cuando cambia algo de lo que lee.
+
+```ts title="product-list.component.ts"
+products = signal<Product[]>([]);
+searchText = signal('');
+
+filteredProducts = computed(() => {
+  const text = this.searchText().trim().toLowerCase();
+  return this.products().filter(p => p.title.toLowerCase().includes(text));
+});
+
+productCount = computed(() => this.filteredProducts().length);
+```
+
+- **Las dependencias se descubren solas**: Angular apunta qué signals se leen dentro de la función. `filteredProducts` lee `products` y `searchText`; `productCount` lee `filteredProducts`.
+- Una propiedad normal (que no es signal) leída dentro de un `computed` **no** es una dependencia: si cambia, nadie se entera.
+- **Memoización**: el valor se guarda. Se calcula la primera vez que alguien lo lee y solo se recalcula cuando cambia una dependencia. Leerlo diez veces en la plantilla no lo calcula diez veces.
+- **No guardes a mano datos derivados**: en vez de una propiedad `total` que actualizas en cada sitio, un `computed` que siempre está bien.
+
+Pruébalo. Escribe un texto y pulsa `searchText.set(...)`, añade productos o cambia la propiedad normal, y mira qué nodos se recalculan:
+
+<GrafoSignals />
+
+Lo que enseña el grafo:
+
+- Al cambiar `searchText` se recalculan `filteredProducts` y `visibleCount`, pero `catalogCount` no, porque solo lee `products`.
+- Si haces `set` con el mismo texto que ya había, no se recalcula nada: el signal no ha cambiado.
+- Al añadir un producto cambia la fuente de todo y se recalculan los tres `computed`.
+- El `effect` solo se ejecuta si cambia el número de visibles: si filtras y siguen saliendo los mismos, `visibleCount` vale lo mismo y el efecto no se repite.
+- La propiedad normal no avisa a nadie.
+
+<Callout type="error" title="Un computed no se puede cambiar">
+  `this.title.set('Otro')` sobre un `computed` no compila: su tipo es `Signal<string>`, que no tiene `set`. Si necesitas cambiarlo, cambia los signals de los que depende.
+</Callout>
+
+### En proj-game <NoDadoEnClase inline />
+
+El estado del listado paginado encaja muy bien con signals: el total de páginas es un dato derivado.
+
+```ts title="app.component.ts (versión con signals, no es la de clase)"
+protected pag = signal(1);
+protected tamanoPagina = signal(5);
+protected totalCount = signal(0);
+protected games = signal<Game[]>([]);
+protected totalPag = computed(() => Math.ceil(this.totalCount() / this.tamanoPagina()));
+
+loadGames(): void {
+  this.gameService.getGamesPyPage(this.pag(), this.tamanoPagina()).subscribe(resp => {
+    this.games.set(resp.body ?? []);
+    this.totalCount.set(Number(resp.headers.get('X-Total-Count') ?? 0));
+  });
+}
+
+onSigPag(): void {
+  if (this.pag() < this.totalPag()) {
+    this.pag.update(p => p + 1);
+    this.loadGames();
+  }
+}
+```
+
+En la plantilla, todo con paréntesis: `{{ pag() }} de {{ totalPag() }}` y `[disabled]="pag() === totalPag()"`.
+
+## effect(): reaccionar a un cambio <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  `effect()` no sale en las clases ni en las guías de Angular. En Angular 19 todavía está en *developer preview* (su API puede cambiar). Úsalo poco.
+</NoDadoEnClase>
+
+Un `effect` ejecuta una función cada vez que cambia algún signal que lee. A diferencia de `computed`, **no devuelve nada**: sirve para efectos secundarios, como escribir en la consola o guardar algo en `localStorage`.
+
+```ts title="buscador.component.ts"
+import { Component, effect, signal } from '@angular/core';
+
+@Component({ selector: 'app-buscador', templateUrl: './buscador.component.html' })
+export class BuscadorComponent {
+  protected searchText = signal(localStorage.getItem('busqueda') ?? '');
+
+  constructor() {
+    effect(() => {
+      localStorage.setItem('busqueda', this.searchText());
+    });
+  }
+}
+```
+
+- Se crea en el constructor (o al declarar un campo): necesita el *contexto de inyección*, como `inject()`.
+- Se ejecuta una vez al crearse y otra cada vez que cambia `searchText`. Se destruye solo con el componente.
+- **No lo uses para calcular valores**: si quieres un dato que depende de otros, es un `computed`. Un `effect` que hace `set` en otro signal suele ser una señal de que querías un `computed`.
+
+## toSignal(): de Observable a signal <NoDadoEnClase inline />
+
+`HttpClient` y el router devuelven `Observable`. `toSignal()` (de `@angular/core/rxjs-interop`) se suscribe por ti y guarda en un signal el último valor que llega:
+
+```ts title="product-list.component.ts"
+import { toSignal } from '@angular/core/rxjs-interop';
+
+export class ProductListComponent {
+  products = toSignal(inject(ProductsService).getProducts(), { initialValue: [] });
+}
+```
+
+- Desaparecen el `ngOnInit`, el `subscribe` y el `set`. La suscripción se cancela sola al destruir el componente.
+- `initialValue` es el valor mientras no llega la respuesta. Sin él, el tipo es `Product[] | undefined` y la plantilla tiene que contemplar el `undefined`.
+- Signals no sustituye a RxJS: RxJS sigue siendo el que maneja lo asíncrono (HTTP, router, eventos) y los signals guardan el estado que pinta la plantilla.
+
+## Practica
+
+<CompletarCodigo
+  titulo="Signal con su valor derivado"
+  enunciado="Completa el componente: un signal con la lista y un valor derivado con el número de juegos."
+  lenguaje="typescript"
+  codigo={`games = [[signal]]<Game[]>([]);
+total = [[computed]](() => this.games().[[length]]);
+
+cargar(lista: Game[]) {
+  this.games.[[set]](lista);
+}`}
+/>
+
+<Quiz titulo="Test: signals">
+  <Pregunta enunciado="Tienes `posts = signal<Post[]>([])`. ¿Cómo lees su valor en la plantilla?" explicacion="Un signal es una función: se lee llamándola, `posts()`.">
+    <Opcion>`{{ posts }}`</Opcion>
+    <Opcion correcta>`{{ posts() }}`</Opcion>
+    <Opcion>`{{ posts.value }}`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué tipo tiene `signal<Post[]>([])`?" explicacion="`signal()` crea un signal escribible: `WritableSignal<Post[]>`, que tiene `set` y `update`.">
+    <Opcion correcta>`WritableSignal<Post[]>`</Opcion>
+    <Opcion>`Observable<Post[]>`</Opcion>
+    <Opcion>`Post[]`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="En el `PostsComponent` de clase, `posts` podría ser `private` porque solo se usa en su propia plantilla." respuesta={false} explicacion="Lo que lee la plantilla no puede ser `private` (error NG1). En clase se usa `protected`." />
+  <Pregunta enunciado="Quieres sumar 1 a `counter = signal(0)`. ¿Qué método expresa mejor la intención?" explicacion="`update` recibe el valor actual y devuelve el siguiente. `set` también funcionaría con `set(this.counter() + 1)`, pero `update` es el pensado para esto.">
+    <Opcion>`counter.set(1)`</Opcion>
+    <Opcion correcta>`counter.update(v => v + 1)`</Opcion>
+    <Opcion>`counter++`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="`productCount = computed(() => this.products().length)`. ¿Cuándo se recalcula?" explicacion="Un computed se recalcula solo cuando cambia un signal que lee; si nadie cambia `products`, devuelve el valor guardado.">
+    <Opcion>Cada vez que la plantilla lo lee</Opcion>
+    <Opcion correcta>Solo cuando cambia `products`</Opcion>
+    <Opcion>Cada vez que hay un clic en la página</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Sobre un `computed` se puede hacer `set()` para corregir su valor." respuesta={false} explicacion="Un computed es de solo lectura (`Signal<T>`): no tiene `set` ni `update`. Se cambia cambiando sus dependencias." />
+  <Pregunta enunciado="¿Qué devuelve `editGame = input.required<Game | undefined>()` y cómo se lee?" explicacion="Es un `InputSignal`: un signal de solo lectura que rellena el padre. Se lee con `this.editGame()`.">
+    <Opcion>Un `EventEmitter`; se lee con `subscribe`</Opcion>
+    <Opcion correcta>Un signal de solo lectura; se lee con `this.editGame()`</Opcion>
+    <Opcion>Un `Game` normal; se lee con `this.editGame`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Para qué sirve `initialValue` en `toSignal(obs$, { initialValue: [] })`?" explicacion="Es el valor del signal antes de que el Observable emita. Sin él, el tipo incluye `undefined`.">
+    <Opcion correcta>Para que el signal tenga un valor mientras no llega la primera emisión</Opcion>
+    <Opcion>Para repetir la petición si falla</Opcion>
+    <Opcion>Para cancelar la suscripción</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: signals">
+  <Tarjeta frente="¿Qué es un signal?">Un contenedor de un valor que avisa a quienes lo leen cuando cambia. Angular sabe así qué tiene que repintar.</Tarjeta>
+  <Tarjeta frente="Crear, leer y cambiar">`x = signal(0)`, se lee con `x()` y se cambia con `x.set(5)` o `x.update(v => v + 1)`.</Tarjeta>
+  <Tarjeta frente="`set` frente a `update`">`set` sustituye el valor; `update` calcula el nuevo a partir del actual.</Tarjeta>
+  <Tarjeta frente="¿Qué es `computed`?">Un signal de solo lectura calculado a partir de otros. Guarda su valor (memoización) y solo se recalcula cuando cambia una dependencia.</Tarjeta>
+  <Tarjeta frente="`computed` frente a `effect`">`computed` devuelve un valor derivado; `effect` no devuelve nada y sirve para efectos secundarios (log, `localStorage`).</Tarjeta>
+  <Tarjeta frente="`input.required<T>()`">Una entrada del componente basada en signals: la rellena el padre y se lee con paréntesis. El padre está obligado a pasarla.</Tarjeta>
+  <Tarjeta frente="`toSignal()`">Convierte un `Observable` en signal: se suscribe, guarda el último valor y se desuscribe al destruir el componente.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Del 28/10 a signals" dificultad="facil">
+  En `proj-fakestore` (28/10) los productos se guardaban en `products?: Product[]`. Cámbialo para que use un signal, igual que el `PostsComponent` del 27/10, y adapta el `@for` de la plantilla.
+
+  <Pista>El valor inicial puede ser un array vacío, así te ahorras el `?`.</Pista>
+
+  <Solucion>
+
+```ts
+protected products = signal<Product[]>([]);
+
+ngOnInit(): void {
+  this.productService.getProducts().subscribe(products => this.products.set(products));
+}
+```
+
+```html
+@for (product of products(); track product.id) {
+  {{ product.title }}, precio {{ product.price }}
+  <br/>
+}
+```
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Filtro reactivo de juegos" dificultad="media">
+  Con signals, haz que el listado de juegos se filtre por plataforma en el propio navegador: un `select` con PC, PlayStation y XBox (y "Todas") y una lista que solo enseñe los de esa plataforma, con el número de juegos visibles. No guardes a mano ni la lista filtrada ni el número.
+
+  <Pista>Necesitas dos signals fuente (`games` y `plataforma`) y dos `computed`.</Pista>
+  <Pista>En el `select`, `(change)="plataforma.set(sel.value)"` con una referencia `#sel`.</Pista>
+
+  <Solucion>
+
+Esta solución usa `computed`, que no se dio en clase:
+
+```ts
+protected games = signal<Game[]>([]);
+protected plataforma = signal('');
+
+protected visibles = computed(() => {
+  const p = this.plataforma();
+  return p === '' ? this.games() : this.games().filter(g => g.platform === p);
+});
+protected numVisibles = computed(() => this.visibles().length);
+```
+
+```html
+<select #sel (change)="plataforma.set(sel.value)">
+  <option value="">Todas</option>
+  <option value="PC">PC</option>
+  <option value="PlayStation">PlayStation</option>
+  <option value="XBox">XBox</option>
+</select>
+<p>{{ numVisibles() }} juegos</p>
+@for (game of visibles(); track game.id) {
+  <p>{{ game.title }} ({{ game.platform }})</p>
+}
+```
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

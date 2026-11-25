@@ -1,0 +1,485 @@
+---
+title: "CRUD con formulario: padre e hijo"
+description: El CRUD de juegos de la Act 10 con formularios template-driven, la comunicación entre el listado y el formulario con input.required, output y ngOnChanges, y cómo se decide entre crear y editar.
+icon: ArrowLeftRight
+---
+
+La Act 10, *"Gestión de videojuegos: formularios Template-Driven, validación reactiva y JSON Server"*, añade a `proj-game` un formulario para crear y editar juegos. Se hizo el 05/11 y el 12/11, y es el punto de partida de la [migración a formularios reactivos](/docs/2-dam/acceso-a-datos/angular-avanzado/formularios-reactivos) del 18/11. En esta página tienes el formulario tal como quedó y, sobre todo, cómo hablan el listado (padre) y el formulario (hijo).
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Montar un formulario *template-driven* con `ngModel`, validadores en el HTML y mensajes de error.
+  - Enviar con `(ngSubmit)` y filtrar con `if (form.invalid) return`.
+  - Pasar datos del padre al hijo con `input.required()` y del hijo al padre con `output()`.
+  - Reaccionar a la entrada con `ngOnChanges` y decidir entre crear (POST) y editar (PUT).
+</Callout>
+
+<Callout title="Validación reactiva no es formulario reactivo">
+  En el título de la Act 10, "validación reactiva" solo significa que la interfaz reacciona sola al estado del formulario. La guía avisa de que **no** se usan `ReactiveFormsModule`, `FormControl`, `FormGroup`, `FormBuilder` ni `Validators`: eso llega en la Act 11.
+</Callout>
+
+## El componente crud
+
+<DeClase fecha="05/11" proyecto="proj-game" />
+
+<Terminal titulo="WSL Ubuntu">
+{`$ ng g c crud --skip-tests
+CREATE src/app/crud/crud.component.css (0 bytes)
+CREATE src/app/crud/crud.component.html (19 bytes)
+CREATE src/app/crud/crud.component.ts (206 bytes)
+$ ng serve -o`}
+</Terminal>
+
+Para usarlo dentro de `AppComponent` hacen falta dos cosas: poner su selector `<app-crud></app-crud>` en la plantilla del padre y añadir `CrudComponent` al `imports` del `@Component` padre. Al arrancar sale el aviso **TS-998113**: `RouterOutlet` está en `imports` pero no se usa en la plantilla. Es un aviso, no un error.
+
+## El formulario template-driven
+
+<DeClase fecha="05/11, 12/11" proyecto="proj-game" />
+
+En un formulario *template-driven* casi todo vive en la **plantilla**: el enlace con el modelo (`ngModel`), las reglas (atributos `required`, `minlength`…) y el estado. En la clase solo está el objeto que se edita.
+
+```ts title="crud.component.ts (05/11)"
+@Component({
+  selector: 'app-crud',
+  imports: [ FormsModule ],
+  templateUrl: './crud.component.html',
+  styleUrl: './crud.component.css'
+})
+export class CrudComponent {
+  private gameService = inject(GameService);
+
+  game: Game = { title: '', genre: '', platform: '', price: 0, stock: 0 };
+}
+```
+
+Dos errores que se enseñaron al montarlo:
+
+- **-992011**: `NgModel` no es *standalone*, así que no se puede poner suelto en `imports: [FormsModule, NgModel]`. Llega a través de `FormsModule`, que es lo único que hay que importar.
+- **-995002** *"Empty expressions are not allowed"*: `[(ngModel)]=""` con la expresión vacía. Hay que enlazarlo a algo, como `this.game.title`.
+
+Así queda la plantilla el 12/11. Recórrela paso a paso:
+
+<Recorrido
+  titulo="crud.component.html (12/11)"
+  lenguaje="html"
+  codigo={`<form #gameForm="ngForm" (ngSubmit)="onSaveGame(gameForm)" novalidate>
+  <label for="titleId">Título</label>
+  <input id="titleId" type="text" name="title"
+         [(ngModel)]="this.game.title" required minlength="3" #title="ngModel" />
+  @if (title.invalid && (title.touched || title.dirty)) {
+    @if (title.errors?.['required']) { <p>Título obligatorio...</p> }
+    @if (title.errors?.['minlength']) { <p>Longitud minima 3...</p> }
+  }
+
+  <select id="genreId" name="genre" [(ngModel)]="this.game.genre" required #genre="ngModel">
+    <option value="">Selecciona un género</option>
+    <option value="Platform">Platform</option>
+  </select>
+
+  <label for="stockId">Stock: </label>
+  @let invalidStock = stock.invalid && (stock.touched || stock.dirty || gameForm.submitted);
+  <input [class.invalid-control]="invalidStock" id="stockId" type="number" name="stock"
+         [(ngModel)]="game.stock" required min="0" max="999" #stock="ngModel">
+  @if (invalidStock) {
+    @if (stock.errors?.['required']) { <p>Precio es obligatorio...</p> }
+    @if (stock.errors?.['min'] || stock.errors?.['max']) { <p>Precio fuera de rango permitido [0-999]</p> }
+  }
+
+  <button>Guardar</button>
+  <p>Válido: {{ gameForm.valid }}</p>
+  <p>Modificado: {{ gameForm.dirty }}</p>
+</form>
+{{ this.game | json }}`}
+>
+  <Paso lineas="1" titulo="El formulario entero">
+    `#gameForm="ngForm"` guarda en `gameForm` el objeto `NgForm`, con el estado de todo el formulario. `(ngSubmit)` se lanza al enviar (pulsar Guardar o Intro) y le pasa el formulario al método. `novalidate` apaga la validación nativa del navegador para que solo valide Angular.
+  </Paso>
+  <Paso lineas="2-4" titulo="Un campo con ngModel">
+    `[(ngModel)]` es el enlace en las dos direcciones (*banana in a box*): lo que escribes va a `this.game.title` y al revés. Dentro de un `<form>`, un campo con `ngModel` **necesita `name`**. `required` y `minlength="3"` son los validadores, escritos como atributos. `#title="ngModel"` da acceso al estado de ese control. El `for` del `label` coincide con el `id` del input.
+  </Paso>
+  <Paso lineas="5-8" titulo="Mensajes de error">
+    Solo se enseñan si el control es inválido **y** el usuario ya lo ha tocado o modificado. Dentro, un `@if` por cada error. Los corchetes de `errors?.['required']` son obligatorios: `errors` tiene una *index signature* y la notación con punto da el error ngtsc 4111.
+  </Paso>
+  <Paso lineas="10-13" titulo="Un select obligatorio">
+    La primera opción tiene `value=""`: como es una cadena vacía, `required` falla hasta que se elige un género. Además de Platform están Strategy, Racing, RPG, Action, Adventure, Simulation y Sports.
+  </Paso>
+  <Paso lineas="16-17" titulo="@let y class binding">
+    `@let` guarda la condición en una variable de plantilla para no repetirla. Incluye `gameForm.submitted`, así los errores también salen al pulsar Guardar sin haber tocado el campo. `[class.invalid-control]="invalidStock"` pone la clase CSS solo cuando la condición es verdadera.
+  </Paso>
+  <Paso lineas="18-22" titulo="Un número con rango">
+    Con `type="number"`, `ngModel` guarda un número (o `null` si se vacía). `min` y `max` generan los errores `min` y `max`. Los mensajes dicen "Precio…" aunque el campo es Stock: es un fallo de copiar y pegar del código de clase.
+  </Paso>
+  <Paso lineas="24-28" titulo="Depurar en pantalla">
+    `gameForm.valid` y `gameForm.dirty` enseñan el estado global, y `game | json` el objeto que se está editando (con `JsonPipe` en `imports`). Ojo: `gameForm | json` da el error *"circular structure"*, porque `NgForm` tiene referencias a sí mismo.
+  </Paso>
+</Recorrido>
+
+### Estados de un control
+
+| Estado | Verdadero cuando… | Clase CSS que pone Angular |
+| --- | --- | --- |
+| `valid` / `invalid` | Cumple (o no) todos sus validadores | `ng-valid` / `ng-invalid` |
+| `pristine` / `dirty` | No se ha modificado / ya se ha modificado | `ng-pristine` / `ng-dirty` |
+| `untouched` / `touched` | Todavía no ha perdido el foco / ya lo ha perdido una vez | `ng-untouched` / `ng-touched` |
+| `errors` | Objeto con un error por validador que falla, o `null` | |
+| `pending` | Hay un validador asíncrono en marcha | `ng-pending` |
+| `submitted` (del formulario) | Se ha enviado al menos una vez | `ng-submitted` |
+
+Con esas clases se puede marcar el campo solo con CSS:
+
+```css title="crud.component.css (de clase)"
+.invalid-control { border: 2px solid; }
+#priceId.ng-invalid { border: 2px solid; }
+```
+
+La segunda regla tiene un problema: sin `.ng-dirty` (o `.ng-touched`), el precio sale marcado nada más cargar la página, antes de que el usuario haga nada. En clase no se corrigió; una forma de evitarlo es `#priceId.ng-invalid.ng-touched` <NoDadoEnClase inline />.
+
+## Guardar: botón desactivado o filtro
+
+<DeClase fecha="05/11, 12/11" proyecto="proj-game" nota="cambio de criterio en clase" />
+
+<Comparar titulo="Cómo se impide guardar un formulario inválido">
+  <Lado titulo="05/11: botón desactivado">
+
+```html
+<form #gameForm="ngForm" (ngSubmit)="onSaveGame()">
+  ...
+  <button [disabled]="gameForm.invalid">Guardar</button>
+</form>
+```
+
+El botón no se puede pulsar mientras el formulario sea inválido. Es lo que proponía la guía de la Act 10 (apartado 22). Ese día `onSaveGame()` aún no recibía el formulario: solo hacía `console.log(this.game)`.
+
+  </Lado>
+  <Lado titulo="12/11: filtro en el componente">
+
+```html
+<form #gameForm="ngForm" (ngSubmit)="onSaveGame(gameForm)" novalidate>
+  ...
+  <button>Guardar</button>
+</form>
+```
+
+```ts
+onSaveGame(form: NgForm) {
+  if (form.invalid) {
+    return;
+  }
+  // ... crear o actualizar
+}
+```
+
+El botón siempre se puede pulsar. Al enviar, `gameForm.submitted` pasa a `true` y salen los errores; el componente filtra con `if (form.invalid) return`. Es lo que se queda y lo que pide la Act 11.
+
+  </Lado>
+</Comparar>
+
+En la pizarra de Excalidraw del 12/11 quedó anotado así: *"Quitamos bloqueo de botón por `[disabled]="gameForm.invalid"`; ahora se controla desde el componente mediante filtrado en caso de `form.invalid`"*, y junto al `if`: *"Pasas este filtro -> Form OK"*.
+
+## Del padre al hijo y vuelta
+
+<DeClase fecha="12/11, 18/11" proyecto="proj-game" />
+
+El listado (en `AppComponent`) y el formulario (en `CrudComponent`) son componentes distintos. Para editar, el padre le pasa un juego al hijo; cuando el hijo guarda, avisa al padre para que recargue la lista. Lo básico de `input()` y `output()` está en [Comunicación padre e hijo](/docs/2-dam/acceso-a-datos/angular/comunicacion-componentes); aquí lo ves aplicado al CRUD. Reproduce el recorrido completo:
+
+<Flujo
+  titulo="Editar un juego"
+  nodos={["Usuario", "AppComponent", "CrudComponent", "GameService", "JSON Server"]}
+>
+  <Mensaje de="Usuario" a="AppComponent" titulo="Clic en Editar">
+    El botón de la lista hace `(click)="this.editGame = game"`: guarda en el padre el juego de esa fila.
+  </Mensaje>
+  <Mensaje de="AppComponent" a="CrudComponent" titulo="[editGame]">
+    La plantilla del padre tiene `<app-crud [editGame]="this.editGame">`. Al cambiar `editGame`, el nuevo valor llega a la entrada `editGame = input.required<Game | undefined>()` del hijo.
+  </Mensaje>
+  <Mensaje de="CrudComponent" a="CrudComponent" titulo="ngOnChanges">
+    Angular llama a `ngOnChanges(changes)`. Si `changes['editGame']?.currentValue` trae un juego, el hijo lo copia con `{ ...juego }` en `this.game` y pone `edit = true`. El formulario se rellena solo gracias a `ngModel`.
+  </Mensaje>
+  <Mensaje de="Usuario" a="CrudComponent" titulo="Cambia el precio y pulsa Guardar">
+    `(ngSubmit)` llama a `onSaveGame(gameForm)`. Si el formulario es inválido, se para ahí.
+  </Mensaje>
+  <Mensaje de="CrudComponent" a="GameService" titulo="update(this.game)">
+    Como `edit` es `true`, llama a `update`, que comprueba que el juego tiene `id`.
+  </Mensaje>
+  <Mensaje de="GameService" a="JSON Server" titulo="PUT /games/1">
+    `HttpClient` manda el juego entero. JSON Server lo guarda en `db.json`.
+  </Mensaje>
+  <Mensaje de="JSON Server" a="GameService" tipo="respuesta" titulo="200 + juego actualizado">
+    La respuesta llega al `subscribe` del componente.
+  </Mensaje>
+  <Mensaje de="GameService" a="CrudComponent" tipo="respuesta" titulo="subscribe(gameUpdated)">
+    El hijo hace `form.resetForm()`, pone `edit = false` y emite el juego guardado.
+  </Mensaje>
+  <Mensaje de="CrudComponent" a="AppComponent" tipo="respuesta" titulo="actualizaGames.emit()">
+    El padre lo recibe en `(actualizaGames)="onActualizaGames($event)"` (el `$event` es una suposición: sale cortado). El código de `onActualizaGames` no se ve; en clase se dice que el aviso sirve para que el padre recargue la lista.
+  </Mensaje>
+</Flujo>
+
+### El hijo completo
+
+<Recorrido
+  titulo="crud.component.ts (12/11)"
+  lenguaje="typescript"
+  codigo={`@Component({
+  selector: 'app-crud',
+  imports: [FormsModule, JsonPipe],
+  templateUrl: './crud.component.html',
+  styleUrl: './crud.component.css'
+})
+export class CrudComponent implements OnChanges {
+  private gameService = inject(GameService);
+
+  edit = false;
+  editGame = input.required<Game | undefined>();
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['editGame']?.currentValue) {
+      this.game = { ...changes['editGame'].currentValue };
+      this.edit = true;
+    }
+  }
+
+  actualizaGames = output<Game>();
+
+  game: Game = { title: '', genre: '', platform: '', price: 0, stock: 0 };
+
+  onSaveGame(form: NgForm) {
+    if (form.invalid) {
+      return;
+    }
+    //Traza...
+    console.log(this.game);
+    console.log(form.value);
+
+    if (this.edit) {
+      //if (this.game.id) {}
+      this.gameService.update(this.game).subscribe(gameUpdated => {
+        console.log(\`Game updated: \${gameUpdated}\`);
+        form.resetForm();
+        //delete this.game.id;
+        this.edit = false;
+        this.actualizaGames.emit(gameUpdated);
+      });
+    } else {
+      //CREAR - POST
+      this.gameService.create(this.game).subscribe(gameSaved => {
+        console.log(\`Game saved: \${gameSaved}\`);
+        form.resetForm();
+        this.actualizaGames.emit(gameSaved);
+      });
+    }
+  }
+}`}
+>
+  <Paso lineas="3, 7-8" titulo="Imports e inyección">
+    `FormsModule` para `ngModel` y `JsonPipe` para el pipe `json`. `implements OnChanges` obliga a escribir `ngOnChanges`. El servicio llega con `inject()`.
+  </Paso>
+  <Paso lineas="10-11" titulo="La bandera y la entrada">
+    `edit` dice si se está editando. `editGame` es la entrada del padre: `required` porque el padre siempre tiene que pasarla, y `Game | undefined` porque al principio no hay ningún juego elegido.
+  </Paso>
+  <Paso lineas="13-18" titulo="ngOnChanges">
+    Se ejecuta cada vez que el padre cambia una entrada. `changes['editGame']` es un `SimpleChange` con `previousValue`, `currentValue` y `firstChange`. Si llega un juego, se **copia** con *spread*: así, lo que escribas en el formulario no cambia la fila de la lista hasta que se guarde.
+  </Paso>
+  <Paso lineas="20, 22" titulo="La salida y el modelo">
+    `output<Game>()` es la salida hacia el padre. `game` es el objeto que edita el formulario, con valores iniciales vacíos.
+  </Paso>
+  <Paso lineas="24-30" titulo="Filtro y trazas">
+    Si el formulario no es válido, no se hace nada. Las trazas enseñan el objeto y `form.value` (lo que tiene el formulario).
+  </Paso>
+  <Paso lineas="32-40" titulo="Editar (PUT)">
+    `update` y, cuando responde, se reinicia el formulario, se apaga la bandera y se avisa al padre con `emit`. Las líneas comentadas son el experimento con `game.id` (más abajo).
+  </Paso>
+  <Paso lineas="41-47" titulo="Crear (POST)">
+    Igual, pero con `create`. La respuesta trae el juego con el `id` que le ha puesto JSON Server.
+  </Paso>
+</Recorrido>
+
+- En las capturas aparece `onSaveGame(form: gameForm)` en la plantilla: ese `form:` es la pista de parámetro que pinta VS Code (*inlay hint*), no código escrito. Pasa lo mismo con `onActualizaGames(game: $event)`.
+- En el padre, `editGame?: Game | undefined` es una propiedad opcional normal (no un signal), y la entrada del hijo se rellena con `[editGame]="this.editGame"`.
+- `` `Game updated: ${gameUpdated}` `` escribe `[object Object]` en la consola, porque un objeto dentro de una plantilla de texto se convierte con `toString()`. Para ver el contenido, `console.log('Game updated', gameUpdated)`.
+
+## Crear o editar: bandera o id
+
+<DeClase fecha="12/11" proyecto="proj-game" />
+
+La guía de la Act 10 decide por el `id`: sin `id` es un alta (POST) y con `id` es una edición (PUT). En clase se probaron las dos formas y se volvió a la bandera.
+
+<Steps>
+  <Step>
+
+#### Con la bandera `edit`
+
+  `ngOnChanges` la pone a `true` al recibir un juego; `onSaveGame` mira `if (this.edit)`.
+
+  </Step>
+  <Step>
+
+#### Se prueba con `if (this.game.id)`
+
+  El tooltip enseña `Game.id?: number | undefined`. Con breakpoints se comprueba que un juego nuevo ("nuevo sin id") va por `create` y uno editado ("Pixel Runner", `id: 1`) va por `update`.
+
+  </Step>
+  <Step>
+
+#### Aparece el problema
+
+  Después de editar, el `id` se queda en `this.game`: `form.resetForm()` solo limpia los campos que tienen `ngModel`, y el `id` no es uno de ellos. El siguiente alta se trataría como edición. Se prueba a quitarlo con `delete this.game.id` después del `resetForm()` (este razonamiento es una interpretación de lo que se ve en las capturas).
+
+  </Step>
+  <Step>
+
+#### Se vuelve a la bandera
+
+  `//if (this.game.id) {}` y `//delete this.game.id;` quedan comentados y se añade `this.edit = false` después de actualizar. Es la versión del código de arriba.
+
+  </Step>
+</Steps>
+
+`form.resetForm()` reinicia los valores **y** el estado (el formulario vuelve a *pristine* y *untouched*, y `submitted` a `false`). Vaciar el objeto a mano solo cambiaría los valores, y los mensajes de error seguirían saliendo.
+
+El documento de la Act 10 proponía además que el botón cambie de texto y un botón Cancelar:
+
+```html title="Del documento de la Act 10 (apartados 33 a 35)"
+<button type="submit" [disabled]="gameForm.invalid">
+  @if (game.id) { Actualizar } @else { Crear }
+</button>
+<button type="button" (click)="cancelEdit(gameForm)">Cancelar</button>
+```
+
+<NoSeVio titulo="cancelEdit">
+  El contenido de `cancelEdit` sale cortado en el documento y no se escribe en clase. Tampoco se ve el apartado 27 del documento.
+</NoSeVio>
+
+## Depurar con breakpoints
+
+<DeClase fecha="12/11" proyecto="proj-game" />
+
+- En **VS Code** o en **DevTools → Sources** se pueden poner breakpoints en el `.ts` y también en el `.html`. En clase se paró en la línea del `if (this.edit)` para ver qué rama tomaba cada guardado.
+- En el panel **Scope** se ven `this.game` y los objetos de Angular (`_CrudComponent`, `_NgForm`), y en **Call Stack** quién ha llamado a quién.
+- El profesor explicó el recorrido padre → hijo dibujando encima del código en **Excalidraw** y publicó la pizarra en el Tablón.
+
+## Lo que no cuadra en el código de clase
+
+- La etiqueta pone "Plataformma" (errata de la propia app).
+- Los mensajes del campo stock dicen "Precio es obligatorio" y "Precio fuera de rango": copiados del precio. Los rangos sí son los de stock.
+- Falta el `maxlength="40"` del título que pide el enunciado.
+- En el formulario template-driven no se llega a escribir el campo plataforma; en el reactivo, sí.
+
+## Practica
+
+<CompletarCodigo
+  titulo="Comunicación padre e hijo"
+  enunciado="Completa la entrada, la salida y el aviso al padre del CrudComponent."
+  lenguaje="typescript"
+  codigo={`editGame = [[input]].required<Game | undefined>();
+actualizaGames = [[output]]<Game>();
+
+ngOnChanges(changes: [[SimpleChanges]]): void {
+  if (changes['editGame']?.[[currentValue]]) {
+    this.game = { [[...]]changes['editGame'].currentValue };
+  }
+}
+
+guardado(game: Game) {
+  this.actualizaGames.[[emit]](game);
+}`}
+/>
+
+<Quiz titulo="Test: CRUD template-driven y padre e hijo">
+  <Pregunta enunciado="Pones `imports: [FormsModule, NgModel]` en el componente. ¿Qué pasa?" explicacion="`NgModel` no es standalone: no se puede importar suelto (error -992011). Llega con `FormsModule`.">
+    <Opcion>Nada: sobra pero funciona</Opcion>
+    <Opcion correcta>Error: `NgModel` no es standalone y tiene que llegar a través de `FormsModule`</Opcion>
+    <Opcion>Error: hay que importar también `ReactiveFormsModule`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado={'Dentro de un `<form>`, un `<input [(ngModel)]="game.title">` sin atributo `name` funciona igual.'} respuesta={false} explicacion="Con `ngModel` dentro de un formulario, Angular necesita `name` para registrar el control en el `NgForm`; si no, da error." />
+  <Pregunta enunciado="¿Por qué se escribe `title.errors?.['minlength']` y no `title.errors?.minlength`?" explicacion="`errors` es un `ValidationErrors`, con *index signature*. La configuración estricta de Angular obliga a usar corchetes (error ngtsc 4111).">
+    <Opcion>Porque `minlength` es una palabra reservada</Opcion>
+    <Opcion correcta>Porque `errors` tiene una index signature y con punto sale el error ngtsc 4111</Opcion>
+    <Opcion>Porque así se lee más rápido</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Para que los errores de un campo salgan también al pulsar Guardar sin haberlo tocado, ¿qué se añade a la condición?" explicacion="`gameForm.submitted` es `true` en cuanto se envía el formulario.">
+    <Opcion>`title.pristine`</Opcion>
+    <Opcion correcta>`gameForm.submitted`</Opcion>
+    <Opcion>`gameForm.valid`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué hace `novalidate` en el `<form>`?" explicacion="Desactiva la validación nativa del navegador (sus globos de aviso); valida solo Angular.">
+    <Opcion correcta>Apaga la validación nativa del navegador y deja solo la de Angular</Opcion>
+    <Opcion>Desactiva todos los validadores de Angular</Opcion>
+    <Opcion>Impide que se envíe el formulario</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cuándo se ejecuta `ngOnChanges` en el CrudComponent?" explicacion="Cuando el padre cambia el valor de una entrada (aquí, `[editGame]`).">
+    <Opcion>Cada vez que el usuario escribe en el formulario</Opcion>
+    <Opcion correcta>Cuando el padre cambia el valor de una entrada, como `editGame`</Opcion>
+    <Opcion>Solo una vez, al crear el componente</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué `ngOnChanges` copia el juego con `{ ...juego }`?" explicacion="Sin copia, `this.game` y la fila de la lista serían el mismo objeto: lo que escribieras en el formulario cambiaría la lista antes de guardar.">
+    <Opcion>Porque `currentValue` es de solo lectura</Opcion>
+    <Opcion correcta>Para no modificar el objeto de la lista mientras se edita</Opcion>
+    <Opcion>Porque JSON Server no acepta el objeto original</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="En clase, al final, el componente decide entre crear y editar mirando si `this.game.id` existe." respuesta={false} explicacion="Se probó con `this.game.id`, pero el `id` se quedaba en el objeto después de editar. Se volvió a la bandera `this.edit`." />
+</Quiz>
+
+<Flashcards titulo="Repaso: CRUD y padre e hijo">
+  <Tarjeta frente="`[(ngModel)]`">Enlace en las dos direcciones entre un campo y una propiedad. Dentro de un `<form>` necesita `name`. Viene con `FormsModule`.</Tarjeta>
+  <Tarjeta frente={'`#gameForm="ngForm"`'}>Guarda en `gameForm` el `NgForm`: estado global (`valid`, `dirty`, `submitted`) y `resetForm()`.</Tarjeta>
+  <Tarjeta frente="`touched` frente a `dirty`">`touched`: el campo ha perdido el foco alguna vez. `dirty`: el valor se ha cambiado.</Tarjeta>
+  <Tarjeta frente="`(ngSubmit)`">Evento del formulario al enviarse. Se usa en vez de `(click)` en el botón.</Tarjeta>
+  <Tarjeta frente="`input.required<T>()` y `output<T>()`">Entrada que el padre tiene que pasar con `[x]` y salida que el hijo emite con `.emit()` y el padre recibe con `(x)`.</Tarjeta>
+  <Tarjeta frente="`SimpleChanges`">Objeto de `ngOnChanges` con un `SimpleChange` por entrada cambiada: `previousValue`, `currentValue` y `firstChange`.</Tarjeta>
+  <Tarjeta frente="`resetForm()` frente a vaciar el objeto">`resetForm()` limpia valores y estado (pristine, untouched, no enviado). Vaciar el objeto solo cambia los valores.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Longitud máxima del título" dificultad="facil">
+  El enunciado pide que el título tenga como máximo 40 caracteres y en clase no se puso. Añade el validador al input de plantilla y su mensaje de error.
+
+  <Pista>El atributo es `maxlength` y el error se llama igual, en minúsculas.</Pista>
+
+  <Solucion>
+
+```html
+<input id="titleId" type="text" name="title"
+       [(ngModel)]="this.game.title" required minlength="3" maxlength="40" #title="ngModel" />
+@if (title.invalid && (title.touched || title.dirty)) {
+  @if (title.errors?.['required']) { <p>Título obligatorio...</p> }
+  @if (title.errors?.['minlength']) { <p>Longitud mínima 3...</p> }
+  @if (title.errors?.['maxlength']) { <p>Longitud máxima 40...</p> }
+}
+```
+
+  Ojo: el atributo `maxlength` también hace que el navegador no deje escribir más de 40 caracteres, así que el mensaje casi nunca llegará a salir.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Botón Cancelar" dificultad="media">
+  Añade el botón Cancelar que proponía la Act 10: deja el formulario vacío, sale del modo edición y no guarda nada.
+
+  <Pista>Tiene que ser `type="button"`; si no, también envía el formulario.</Pista>
+  <Pista>Pásale el formulario para poder llamar a `resetForm()`.</Pista>
+
+  <Solucion>
+
+Esta es una solución propia: el `cancelEdit` de la actividad no se llega a ver.
+
+```html
+<button type="button" (click)="cancelEdit(gameForm)">Cancelar</button>
+```
+
+```ts
+cancelEdit(form: NgForm): void {
+  form.resetForm();
+  this.game = { title: '', genre: '', platform: '', price: 0, stock: 0 };
+  this.edit = false;
+}
+```
+
+  Se vuelve a crear `this.game` para que no se quede el `id` del juego que se estaba editando.
+
+  Ojo: el padre sigue teniendo en `editGame` el juego que mandó. Si después pulsas Editar en esa misma fila, la entrada no cambia de referencia y `ngOnChanges` no salta. Para que funcione también en ese caso, el hijo tendría que avisar al padre (con otro `output`) para que vacíe `editGame`.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

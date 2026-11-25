@@ -1,0 +1,430 @@
+---
+title: Validación con Zod 4
+description: "Los schemas de users.schema.ts, z.infer, parse frente a safeParse, el middleware validate y lo que cambió en Zod 4: z.email(), z.treeifyError() y ZodType."
+icon: ShieldCheck
+---
+
+import { PlaygroundZod } from '@/components/temas/backend/playground-zod';
+
+Lo que llega en `req.body` lo manda el cliente, y puede ser cualquier cosa: un email mal escrito, un nombre vacío, campos de más o directamente nada. **Zod** describe cómo tienen que ser los datos y los comprueba antes de que lleguen al controlador. El proyecto usa **Zod 4** (la versión instalada es la 4.1.12), y el código de la referencia estaba escrito con la API de Zod 3: el 27/10 se pasó a Zod 4 en directo.
+
+<DeClase fecha="27/10, 03/11" proyecto="node-server-26-27" nota="v0.4.0 (validate y schemas) y v1.0.0 (validate en las rutas de auth)" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Cómo se escribe un schema con `z.object`, `z.string().min()`, `z.email()` y `.optional()`.
+  - Cómo se sacan los tipos de TypeScript con `z.infer`.
+  - La diferencia entre `parse` y `safeParse`.
+  - Cómo funciona el middleware "fábrica" `validate(schema)`.
+  - Qué cambió en Zod 4 y cómo se investigaron los avisos de obsoleto.
+</Callout>
+
+## Qué es Zod
+
+Un **schema** de Zod es un objeto que describe la forma de unos datos. Con él puedes validar cualquier valor y, además, sacar su tipo de TypeScript sin escribirlo dos veces. Si vienes de Java, es la idea de Bean Validation, pero sin anotaciones:
+
+| Bean Validation (Java) | Zod |
+| --- | --- |
+| `@NotNull String name` | `name: z.string()` (obligatorio por defecto) |
+| `@Size(min = 2)` | `z.string().min(2, 'mensaje')` |
+| `@Email` | `z.email('mensaje')` |
+| Campo que puede faltar | `.optional()` |
+| `@Valid` en el controlador | El middleware `validate(schema)` en la ruta |
+
+## Los schemas de `users.schema.ts`
+
+Así quedó el fichero después de los cambios de la clase del 27/10:
+
+```ts title="src/modules/users/users.schema.ts"
+import { z } from 'zod';
+
+export const registerSchema = z.object({
+  email: z.string().email('Email inválido'),
+  name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres'),
+  password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
+});
+
+export const loginSchema = z.object({
+  email: z.email('Email inválido'),
+  password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
+});
+
+export const updateUserSchema = z.object({
+  name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres').optional(),
+  email: z.email('Email inválido').optional(),
+});
+
+export type RegisterInput = z.infer<typeof registerSchema>;
+export type LoginInput = z.infer<typeof loginSchema>;
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+```
+
+- **`z.object({...})`**: un objeto con esas claves.
+- **`z.string().min(n, 'mensaje')`**: texto de al menos `n` caracteres. El segundo argumento es el mensaje de error (en español, como los de clase).
+- **`z.email('mensaje')`**: texto con formato de email.
+- **`.optional()`**: el campo puede no venir. En `updateUserSchema` **todo** es opcional para que el `PATCH` sea parcial: puedes mandar solo el nombre, solo el email o los dos.
+- Los tres schemas están en el módulo `users`, y el módulo `auth` los importa de ahí.
+
+Ojo: `loginSchema` y `updateUserSchema` ya usan `z.email()`, pero `registerSchema` <Dudoso nota="No se sabe si se quedó sin cambiar o si no se llegó a ver. En el repositorio (v0.5.0 y v1.0.0) los tres siguen con z.string().email().">sigue con `z.string().email()`</Dudoso>. En Zod 4 funciona igual, pero está obsoleto.
+
+## Tipos con `z.infer`
+
+`z.infer<typeof schema>` saca el tipo de TypeScript del schema. Así el tipo y la validación no se pueden desincronizar:
+
+```ts title="Lo que vale cada tipo"
+type RegisterInput = { email: string; name: string; password: string };
+type LoginInput = { email: string; password: string };
+type UpdateUserInput = { name?: string | undefined; email?: string | undefined };
+```
+
+El último es el que salió en el tooltip el 27/10. Ese `| undefined` es el que choca con los tipos de Prisma por `exactOptionalPropertyTypes`, y por eso el servicio acaba con un tipo escrito a mano ([CRUD de usuarios](/docs/2-dam/apis/backend/crud-usuarios)).
+
+## `parse` frente a `safeParse`
+
+Los dos validan; la diferencia es qué hacen cuando los datos no valen:
+
+| | Si vale | Si no vale | Dónde sale en clase |
+| --- | --- | --- | --- |
+| `schema.parse(datos)` | Devuelve los datos | **Lanza** un `ZodError` | El controlador de auth (v0.5.0), dentro de un `try` |
+| `schema.safeParse(datos)` | `{ success: true, data }` | `{ success: false, error }`, **sin lanzar** | El middleware `validate` |
+
+```ts title="Uso de los dos"
+const r = updateUserSchema.safeParse(req.body);
+if (!r.success) {
+  // r.error es un ZodError con los fallos
+} else {
+  // r.data son los datos ya validados
+}
+
+const { email, password } = loginSchema.parse(req.body); // si falla, salta al catch
+```
+
+## El middleware `validate`
+
+En vez de validar en cada controlador, la referencia tiene **un solo middleware** que sirve para cualquier ruta. Se le pasa el schema y devuelve el middleware que valida con ese schema: por eso se le llama middleware "fábrica".
+
+<Recorrido
+  titulo="src/middleware/validate.ts (versión de clase para Zod 4)"
+  lenguaje="ts"
+  codigo={`import type { Request, Response, NextFunction } from 'express';
+import type { ZodType } from 'zod';
+import { z } from 'zod';
+
+export const validate = (schema: ZodType) => (req: Request, res: Response, next: NextFunction) => {
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ errors: z.treeifyError(parsed.error) });
+  }
+  req.body = parsed.data;
+  next();
+};`}
+>
+  <Paso lineas="1-2" titulo="Solo tipos">
+    `Request`, `Response`, `NextFunction` y `ZodType` son tipos: van con `import type`.
+  </Paso>
+  <Paso lineas="3" titulo="z es un valor">
+    `z.treeifyError` se **ejecuta**, así que `z` necesita un `import` normal. Con `import type { z }` sale el error `'z' cannot be used as a value because it was imported using 'import type'`.
+  </Paso>
+  <Paso lineas="5" titulo="Una función que devuelve un middleware">
+    `validate(schema)` devuelve `(req, res, next) => ...`. La función de dentro "recuerda" el `schema` (es una *closure*). Por eso en la ruta se escribe `validate(updateUserSchema)`, con paréntesis.
+  </Paso>
+  <Paso lineas="6" titulo="safeParse">
+    Valida el body sin lanzar excepciones.
+  </Paso>
+  <Paso lineas="7-9" titulo="Si no vale: 400">
+    Responde 400 con los errores ordenados por campo (`z.treeifyError`). El `return` corta la cadena: el controlador no se ejecuta.
+  </Paso>
+  <Paso lineas="10-11" titulo="Si vale: datos limpios y next()">
+    Cambia `req.body` por los datos que devuelve Zod y pasa al controlador. El controlador ya puede fiarse de `req.body`.
+  </Paso>
+</Recorrido>
+
+En la ruta se pone delante del controlador:
+
+```ts title="src/modules/users/users.routes.ts"
+router.patch('/:id', validate(updateUserSchema), updateUserCtrl);
+```
+
+El tooltip del editor da su firma: `validate(schema: ZodType): (req, res, next) => Response | undefined`.
+
+### Cómo estaba y cómo quedó
+
+La referencia venía con la API de Zod 3. Con Zod 4 instalado, el editor tachaba `ZodSchema` y `.flatten()` como obsoletos (aviso `ts(6387)`):
+
+<Comparar titulo="validate.ts antes y después del 27/10">
+  <Lado tipo="evitar" titulo="Original (API de Zod 3)">
+
+```ts
+import type { Request, Response, NextFunction } from 'express';
+import type { ZodSchema } from 'zod';
+
+export const validate = (schema: ZodSchema<any>) => (req: Request, res: Response, next: NextFunction) => {
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ errors: parsed.error.flatten() });
+  }
+  req.body = parsed.data;
+  next();
+};
+```
+
+`ZodSchema` y `.flatten()` están obsoletos en Zod 4.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Versión de clase para Zod 4">
+
+```ts
+import type { Request, Response, NextFunction } from 'express';
+import type { ZodType } from 'zod';
+import { z } from 'zod';
+
+export const validate = (schema: ZodType) => (req: Request, res: Response, next: NextFunction) => {
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ errors: z.treeifyError(parsed.error) });
+  }
+  req.body = parsed.data;
+  next();
+};
+```
+
+  </Lado>
+</Comparar>
+
+## Lo que cambió en Zod 4
+
+| Zod 3 (obsoleto en Zod 4) | Zod 4 |
+| --- | --- |
+| `z.string().email('...')` | `z.email('...')` |
+| `parsed.error.flatten()` | `z.treeifyError(parsed.error)` |
+| `ZodSchema` | `ZodType` (en Zod 4, `ZodSchema` es solo un alias de compatibilidad) |
+| `import ... from 'zod/v3'` | No se recomienda: es la capa de compatibilidad con Zod 3 |
+
+### Cómo se investigó en clase
+
+Es un buen ejemplo de qué hacer cuando el editor tacha algo:
+
+<Steps>
+  <Step>
+
+#### Leer el aviso
+
+El editor tacha lo obsoleto (avisos `ts(6385)` y `ts(6387)`) y el tooltip suele decir qué usar: *"Use z.email() instead"*.
+
+  </Step>
+  <Step>
+
+#### Mirar qué versión hay instalada
+
+En `node_modules/zod/package.json`: era la **4.1.12**. El `package.json` del proyecto dice `^4.1.12` (en otra captura, <Dudoso nota="Puede que se quitara el ^ para fijar la versión, pero no se ve el cambio.">`4.1.12` sin `^`</Dudoso>).
+
+  </Step>
+  <Step>
+
+#### Buscar en la documentación y en los issues
+
+Se buscó "ZodSchema deprecated" y se leyó el issue #4877 del repositorio de Zod en GitHub: en Zod 4, `ZodSchema` es un alias de `z.ZodType`.
+
+  </Step>
+  <Step>
+
+#### Preguntar al agente del editor y revisar lo que propone
+
+El agente de Cursor comprobó la versión, buscó los usos con `rg` y propuso `ZodType`. El profesor revisó el cambio antes de aceptarlo.
+
+  </Step>
+</Steps>
+
+Por el camino salieron varios intentos que fallaron. **No los copies**:
+
+- `z.treeifyError(err)`: `err` no existe; el error está en `parsed.error`.
+- `import type { z, ZodSchema }`: `z` no se puede usar como valor si se importa como tipo.
+- `import type { ZodSchema } from 'zod/v3'`: da `No overload matches this call`, porque mezcla tipos de Zod 3 con funciones de Zod 4.
+- Los *casts* `as $ZodError<unknown>` y `z.treeifyError(parsed.error.flatten().fieldErrors)`.
+
+## Qué responde el 400 <NoDadoEnClase inline />
+
+En clase no se llegó a enviar una petición mala, pero esto es lo que devuelve de verdad `validate` con Zod 4 si mandas `{ "name": "A", "email": "ana@" }` a `PATCH /api/users/1`:
+
+```json title="Respuesta 400"
+{
+  "errors": {
+    "errors": [],
+    "properties": {
+      "name": { "errors": ["El nombre debe tener al menos 2 caracteres"] },
+      "email": { "errors": ["Email inválido"] }
+    }
+  }
+}
+```
+
+`z.treeifyError` ordena los errores con la misma forma que el objeto: los del objeto entero en `errors` y los de cada campo dentro de `properties`. Y si `req.body` llega `undefined` (por ejemplo, porque falta `express.json()`), sale `{ "errors": { "errors": ["Invalid input: expected object, received undefined"] } }`.
+
+Otra cosa que conviene saber: `z.object` **quita las claves que no están en el schema**. Como `validate` hace `req.body = parsed.data`, si alguien manda `{ "name": "Ana", "rol": "admin" }`, al controlador solo le llega `{ "name": "Ana" }`.
+
+Pruébalo con los tres schemas de clase (esta demo usa la librería Zod de verdad):
+
+<PlaygroundZod />
+
+## Dónde se valida en el proyecto
+
+| Ruta | Validación | Versión |
+| --- | --- | --- |
+| `PATCH /api/users/:id` | `validate(updateUserSchema)` | v0.4.0 |
+| `POST /api/auth/register` | `registerSchema.parse` en el controlador | v0.5.0 |
+| `POST /api/auth/register` | `validate(registerSchema)` en la ruta | v1.0.0 |
+| `POST /api/auth/login` | `validate(loginSchema)` en la ruta | v1.0.0 |
+
+<Callout type="warn" title="Validación doble en auth">
+  En la v1.0.0 las rutas de auth llevan `validate(schema)`, y el controlador de la v0.5.0 vuelve a hacer `registerSchema.parse(req.body)`. <Dudoso nota="No se ve el controlador de auth de la v1.0.0.">No se ve si se quitó el `parse`</Dudoso>. Si los dos están, los datos se validan dos veces (no rompe nada, pero sobra uno).
+</Callout>
+
+Y una contradicción del repositorio: en clase se cambió a `z.email()`, `ZodType` y `z.treeifyError`, pero en el repositorio (v0.5.0 y v1.0.0) los schemas siguen con `z.string().email()`. El 27/10 la terminal decía `git:(v0.4.0)`, la barra de estado `v0.5.0`, y había 3 archivos sin commit (`validate.ts`, `users.controller.ts` y `users.schema.ts`): parece que se cambió de versión sin guardar esos cambios. <Dudoso nota="No se ve qué se hizo con esos tres archivos.">No se sabe si `validate.ts` quedó así en el repositorio</Dudoso>. Usa la versión de clase, la de Zod 4.
+
+## Practica
+
+<CompletarCodigo
+  titulo="El middleware validate para Zod 4"
+  enunciado="Completa el middleware con la API de Zod 4."
+  lenguaje="typescript"
+  codigo={`import type { Request, Response, NextFunction } from 'express';
+import type { [[ZodType]] } from 'zod';
+import { z } from 'zod';
+
+export const validate = (schema: ZodType) => (req: Request, res: Response, next: NextFunction) => {
+  const parsed = schema.[[safeParse]](req.body);
+  if (!parsed.[[success]]) {
+    return res.status([[400]]).json({ errors: z.[[treeifyError]](parsed.error) });
+  }
+  req.body = parsed.[[data]];
+  [[next()]];
+};`}
+/>
+
+<Quiz titulo="Test: Zod 4" descripcion="8 preguntas">
+  <Pregunta enunciado="¿Qué diferencia hay entre `parse` y `safeParse`?" explicacion="`parse` lanza un ZodError si los datos no valen; `safeParse` devuelve un objeto con `success` y no lanza.">
+    <Opcion>`safeParse` es más rápido</Opcion>
+    <Opcion correcta>`parse` lanza un error si no valen; `safeParse` devuelve `{ success, data | error }`</Opcion>
+    <Opcion>`safeParse` no valida los tipos, solo la forma</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En Zod 4, ¿cómo se escribe un email obligatorio con mensaje propio?" explicacion="`z.email('Email inválido')`. `z.string().email()` funciona pero está obsoleto.">
+    <Opcion correcta>`z.email('Email inválido')`</Opcion>
+    <Opcion>`z.string().isEmail('Email inválido')`</Opcion>
+    <Opcion>`z.string({ email: true })`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué en `updateUserSchema` todos los campos llevan `.optional()`?" explicacion="Porque el `PATCH` es parcial: puedes mandar solo los campos que cambian.">
+    <Opcion>Porque Zod 4 lo exige en los `PATCH`</Opcion>
+    <Opcion correcta>Para que se pueda actualizar solo una parte (el PATCH es parcial)</Opcion>
+    <Opcion>Para que admitan `null`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué escribes en la ruta para validar el body con `updateUserSchema`?" explicacion="`validate` es una fábrica: hay que llamarla con el schema para obtener el middleware.">
+    <Opcion>`router.patch('/:id', validate, updateUserCtrl)`</Opcion>
+    <Opcion correcta>`router.patch('/:id', validate(updateUserSchema), updateUserCtrl)`</Opcion>
+    <Opcion>`router.patch('/:id', updateUserCtrl(validate))`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Escribes `import type { z } from 'zod'` y usas `z.treeifyError(...)`. ¿Qué pasa?" explicacion="`import type` solo importa tipos, que desaparecen al compilar. `z` se usa como valor y necesita un `import` normal.">
+    <Opcion>Funciona igual</Opcion>
+    <Opcion correcta>Error: `'z' cannot be used as a value because it was imported using 'import type'`</Opcion>
+    <Opcion>Funciona, pero solo en desarrollo</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Si el body no pasa la validación, `validate` llama a `next()` y el controlador responde el error." respuesta={false} explicacion="`validate` responde él mismo 400 con `return res.status(400)...` y no llama a `next()`: el controlador no se ejecuta." />
+  <Pregunta enunciado='Mandas `{ "name": "Ana", "rol": "admin" }` a una ruta con `validate(updateUserSchema)`. ¿Qué llega al controlador en `req.body`?' explicacion="`z.object` quita las claves que no conoce y `validate` cambia `req.body` por `parsed.data`.">
+    <Opcion>`{ "name": "Ana", "rol": "admin" }`</Opcion>
+    <Opcion correcta>`{ "name": "Ana" }`</Opcion>
+    <Opcion>Nada: responde 400 por la clave de más</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué sustituye a `ZodSchema` en Zod 4?" explicacion="`ZodType`. En Zod 4, `ZodSchema` es solo un alias de compatibilidad (issue #4877).">
+    <Opcion correcta>`ZodType`</Opcion>
+    <Opcion>`ZodObject`</Opcion>
+    <Opcion>`z.schema`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: Zod 4">
+  <Tarjeta frente="`z.infer<typeof schema>`">Saca el tipo de TypeScript del schema, para no escribirlo dos veces.</Tarjeta>
+  <Tarjeta frente="`parse` frente a `safeParse`">`parse` lanza `ZodError`; `safeParse` devuelve `{ success: true, data }` o `{ success: false, error }`.</Tarjeta>
+  <Tarjeta frente="¿Qué hace `validate(schema)`?">Devuelve un middleware que hace `safeParse(req.body)`: si falla responde 400 con `z.treeifyError`; si vale, `req.body = parsed.data` y `next()`.</Tarjeta>
+  <Tarjeta frente="Middleware fábrica">Una función que recibe la configuración (el schema) y devuelve el middleware `(req, res, next)`.</Tarjeta>
+  <Tarjeta frente="Tres cambios de Zod 4 de clase">`z.string().email()` → `z.email()`; `.flatten()` → `z.treeifyError()`; `ZodSchema` → `ZodType`.</Tarjeta>
+  <Tarjeta frente="¿Por qué `import { z }` y no `import type { z }`?">Porque `z` se usa como valor (`z.treeifyError`). `import type` solo vale para tipos.</Tarjeta>
+  <Tarjeta frente="Claves de más en el body">`z.object` las quita; como `validate` reemplaza `req.body`, el controlador no las ve.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Un schema para cambiar la contraseña" dificultad="facil">
+  En la v0.7.0 existe `PATCH /api/users/me/password`, que recibe `{ currentPassword, newPassword }` (se sabe por los tests). Escribe un `changePasswordSchema` con los dos campos obligatorios y de al menos 8 caracteres, y su tipo con `z.infer`.
+
+  <Pista>Es como `loginSchema` pero con dos contraseñas.</Pista>
+
+  <Solucion>
+
+<NoDadoEnClase>El schema de la v0.7.0 no se vio en clase. Esta es una forma de escribirlo con el estilo de `users.schema.ts`.</NoDadoEnClase>
+
+```ts title="src/modules/users/users.schema.ts"
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
+  newPassword: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
+});
+
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+```
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Pasa este schema a Zod 4" dificultad="media">
+  Este fichero está escrito con la API de Zod 3. Reescríbelo para Zod 4 sin avisos de obsoleto.
+
+```ts title="validate.ts y schema"
+import type { ZodSchema } from 'zod';
+
+export const contactSchema = z.object({
+  email: z.string().email('Email inválido'),
+  mensaje: z.string().min(10, 'Mínimo 10 caracteres'),
+});
+
+export const validate = (schema: ZodSchema<any>) => (req: Request, res: Response, next: NextFunction) => {
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ errors: parsed.error.flatten() });
+  req.body = parsed.data;
+  next();
+};
+```
+
+  <Pista>Son tres cambios, más los imports: `z` hace falta como valor.</Pista>
+
+  <Solucion>
+
+```ts title="validate.ts y schema (Zod 4)"
+import type { Request, Response, NextFunction } from 'express';
+import type { ZodType } from 'zod';
+import { z } from 'zod';
+
+export const contactSchema = z.object({
+  email: z.email('Email inválido'),
+  mensaje: z.string().min(10, 'Mínimo 10 caracteres'),
+});
+
+export const validate = (schema: ZodType) => (req: Request, res: Response, next: NextFunction) => {
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ errors: z.treeifyError(parsed.error) });
+  req.body = parsed.data;
+  next();
+};
+```
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Schema de Zod">Describe la forma de unos datos y los valida.</Termino>
+  <Termino nombre="z.infer">Saca el tipo de TypeScript de un schema.</Termino>
+  <Termino nombre="safeParse">Valida sin lanzar: `{ success, data }` o `{ success, error }`.</Termino>
+  <Termino nombre="validate(schema)">Middleware fábrica de clase: 400 si no vale; si vale, `req.body` limpio y `next()`.</Termino>
+  <Termino nombre="z.treeifyError">Zod 4: los errores ordenados como el objeto. Sustituye a `.flatten()`.</Termino>
+  <Termino nombre="ZodType">El tipo de un schema cualquiera en Zod 4. Sustituye a `ZodSchema`.</Termino>
+</Glosario>
+
+<MarcarCompletado />

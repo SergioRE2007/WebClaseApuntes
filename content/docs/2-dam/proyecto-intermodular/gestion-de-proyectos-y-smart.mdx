@@ -1,0 +1,309 @@
+---
+title: Gestión de proyectos y objetivos SMART
+description: "Qué es gestionar un proyecto, por qué importa en DAM y cómo escribir objetivos SMART que se puedan comprobar, con los ejemplos y los errores comunes que se vieron en clase."
+icon: Target
+---
+
+import { ObjetivoSmart } from '@/components/temas/proyecto/objetivo-smart';
+
+<DeClase fecha="09/10" proyecto="Proyecto Intermodular" nota="teoría con el documento «Introducción a la Gestión de Proyectos»; no se programó" />
+
+La primera clase del Proyecto Intermodular fue de teoría. El profesor siguió el documento **"Introducción a la Gestión de Proyectos"** (en Classroom, sección "Gestión de proyectos") y, antes, enseñó en directo cómo lleva un proyecto real en Jira y Confluence. Esa demostración y el desarrollo ágil están en [Desarrollo ágil con Scrum y Jira](/docs/2-dam/proyecto-intermodular/desarrollo-agil-y-jira). Aquí tienes la parte de gestión y de objetivos SMART.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué es gestionar un proyecto y por qué no basta con programar bien.
+  - Qué significa cada letra de **SMART** y la regla de oro.
+  - Rellenar la plantilla de objetivo que se dio en clase.
+  - Pasar un objetivo vago a uno SMART y evitar los cinco errores comunes.
+</Callout>
+
+## Qué es gestionar un proyecto
+
+Gestionar un proyecto es **planificar, organizar, ejecutar y controlar** el desarrollo de un producto o un servicio.
+
+La idea que más se repitió en clase: un buen programador solo puede escribir código brillante, pero en el software profesional hace falta **coordinarse, documentar, cumplir plazos y mantener la calidad**. Un equipo bien gestionado hace soluciones completas que aguantan en el tiempo.
+
+Lo que promete el manual de clase:
+
+- Aprender a definir objetivos **SMART**.
+- **Delimitar el alcance** del proyecto y definir sus **entregables**.
+- Usar **Jira** con un *backlog* e historias de usuario con **criterios de aceptación**.
+- Unir la teoría con la práctica del proyecto.
+
+El documento también enlaza gestión de proyectos con la realidad profesional y con las **metodologías ágiles** (Scrum, Kanban, tableros y *backlogs*), que se cuentan en la página siguiente.
+
+<NoSeVio titulo="Lean Startup">
+  En Classroom hay una sección "Lean Startup" (exposición de Lean Canvas, un manual de Lean Startup y una plantilla de Lean Canvas), pero no se explicó en esta clase.
+</NoSeVio>
+
+## Objetivos SMART
+
+Un objetivo SMART cumple cinco condiciones. Las siglas vienen del inglés:
+
+| Letra | En inglés | Qué quiere decir |
+| --- | --- | --- |
+| **S** | *Specific* | Concreto: qué se entrega y para quién. |
+| **M** | *Measurable* | Medible: una métrica con su umbral. |
+| **A** | *Achievable* | Alcanzable: con qué tecnologías y cuántas horas. |
+| **R** | *Relevant* | Relevante: por qué importa al proyecto. |
+| **T** | *Time-bound* | Con plazo: un sprint o una fecha concretos. |
+
+<Callout type="success" title="La regla de oro">
+  **Un objetivo tiene que poder comprobarse.** Si al terminar el plazo no puedes decir con un dato si se ha cumplido o no, no es SMART.
+</Callout>
+
+### La plantilla de clase
+
+Para escribir un objetivo, el documento da esta plantilla. Es la que te conviene usar en las historias de tu proyecto:
+
+```txt title="Plantilla de objetivo SMART"
+Qué / Para quién (S):
+Medida de éxito (M): métrica + umbral
+Viabilidad (A): tecnologías + horas estimadas
+Relevancia (R):
+Plazo (T): sprint concreto
+Entregables:
+Riesgos y mitigación (opcional):
+```
+
+- **Medida de éxito**: la métrica y el número que hay que alcanzar (por ejemplo, "≥ 95 % de logins correctos").
+- **Viabilidad**: con qué lo vas a hacer y el esfuerzo estimado **en horas**.
+- **Plazo**: normalmente un sprint concreto ("antes del Sprint 2").
+- **Entregables**: la **prueba** de que se ha conseguido (endpoints, tests, un informe, una captura...).
+
+Prueba a rellenarla aquí. La demo comprueba lo que pide la regla de oro: que la medida tenga un número, que haya horas estimadas y que el plazo sea concreto y no "para más adelante". Puedes cargar el ejemplo de autenticación de clase o una frase vaga para ver qué le falta.
+
+<ObjetivoSmart />
+
+## Los ejemplos del documento
+
+El documento trae seis ejemplos. Están pensados para **Java con Spring** y para una app de "prácticas" de alumnos y profesores: cada equipo los tiene que pasar a su tecnología (en tu caso, Angular, Express, Prisma, Kotlin...).
+
+<Accordions type="multiple">
+  <Accordion title="Autenticación segura (Backend/API)">
+    - **S:** login con OAuth2 + JWT para Alumno y Profesor.
+    - **M:** ≥ 95 % de logins correctos con datos válidos, rechazos con mensajes coherentes y 0 endpoints críticos sin proteger.
+    - **A:** Spring Boot + Spring Security; 12-14 h.
+    - **R:** acceso a recursos y protección de datos (RGPD/OWASP).
+    - **T:** antes del Sprint 2.
+    - **Entregables:** endpoints `/auth/login` y `/auth/refresh`, ≥ 15 pruebas unitarias y de integración, documentación OpenAPI y un ADR con la decisión de autenticación.
+  </Accordion>
+  <Accordion title="Accesibilidad en la interfaz (Frontend)">
+    - **S:** una SPA accesible para quien usa lector de pantalla.
+    - **M:** WCAG 2.2 nivel AA, Lighthouse ≥ 90 en Accessibility y navegación completa por teclado.
+    - **A:** Angular 18 + Playwright; 10 h.
+    - **R:** requisito institucional y mejor experiencia de usuario.
+    - **T:** fin del Sprint 3.
+    - **Entregables:** informe de Lighthouse, checklist WCAG y pruebas E2E de foco y teclado.
+  </Accordion>
+  <Accordion title="Persistencia y rendimiento (Datos)">
+    - **S:** optimizar las consultas de los listados de prácticas.
+    - **M:** p95 de respuesta ≤ 300 ms con 10.000 registros e índices comprobados.
+    - **A:** PostgreSQL con índices compuestos y el plan de ejecución analizado; 8 h.
+    - **R:** no se lee en las capturas.
+    - **T:** <Dudoso nota="Otras capturas dicen «fin del Sprint 2»; lo más probable es que el Sprint 2 sea el de CI/CD, que sale en la misma pantalla.">mitad del Sprint 4</Dudoso>.
+    - **Entregables:** script de migración, salidas de `EXPLAIN ANALYZE` y un test de rendimiento repetible.
+  </Accordion>
+  <Accordion title="CI/CD mínimo viable (DevOps)">
+    - **S:** un *pipeline* automático de build, test y despliegue a *staging*.
+    - **M:** *pipeline* en verde en menos de 8 min, cobertura ≥ 70 % en el núcleo y despliegue reproducible con tag.
+    - **A:** GitHub Actions + Docker + Compose; 12 h.
+    - **R:** no se lee en las capturas.
+    - **T:** fin del Sprint 2.
+    - **Entregables:** `workflow.yml`, `Dockerfile`, guía de despliegue y *badges* en el README.
+  </Accordion>
+  <Accordion title="Validación con usuarios (Producto)">
+    - **S:** validar la propuesta de valor con ≥ 5 entrevistas estructuradas.
+    - **M:** una síntesis con 3 hallazgos clave y decisiones de *roadmap*, y *task success* ≥ 80 % en el prototipo.
+    - **A:** prototipo navegable (Figma o Angular) y guion de test; 6 h.
+    - **R:** no se lee en las capturas.
+    - **T:** dos semanas antes de la defensa intermedia.
+    - **Entregables:** informe de validación, grabaciones o anotaciones y el *backlog* actualizado.
+  </Accordion>
+  <Accordion title="Observabilidad básica (logs, métricas y trazas)">
+    - **S:** no se lee en las capturas.
+    - **M:** 100 % de los endpoints con log de inicio y fin, latencia expuesta en `/metrics` y alerta si p95 > 500 ms.
+    - **A:** Micrometer + Actuator; 6 h.
+    - **R:** imprescindible para diagnosticar y para la defensa.
+    - **T:** fin del Sprint 3.
+    - **Entregables:** un panel básico en Grafana o una captura de `/metrics`, y la documentación de los indicadores.
+  </Accordion>
+</Accordions>
+
+<Concepto termino="p95" definicion="Percentil 95: el 95 % de las peticiones tarda eso o menos. Es más exigente que la media, porque no esconde las peticiones lentas.">p95</Concepto>, WCAG, Lighthouse u OWASP salen en los ejemplos porque son **estándares o medidas que se pueden comprobar**: eso es lo que convierte un deseo en un objetivo.
+
+<NoSeVio titulo="Partes tapadas">
+  La barra de Meet tapa parte del documento: no se leen la **R** de Persistencia, de CI/CD y de Validación, ni el **Qué/Para quién** de Observabilidad.
+</NoSeVio>
+
+## Vago frente a SMART
+
+El documento compara frases vagas con su versión SMART, que siempre lleva **métrica, umbral y sprint**:
+
+| Vago | Versión SMART (lo que se lee) |
+| --- | --- |
+| "Mejorar la seguridad" | Implantar OAuth2 + JWT, con métrica y sprint. |
+| "La app será rápida" | p95 medido con pruebas de carga (se nombra Gatling). |
+| "Hacer la interfaz accesible" | WCAG y Lighthouse con un umbral. |
+
+<NoSeVio>
+  Las celdas SMART de "rápida" y "accesible" no se leen enteras en las capturas: solo se ven Gatling, Lighthouse, p95 y WCAG.
+</NoSeVio>
+
+### Un ejemplo con la tecnología de tu proyecto <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Este ejemplo no es del documento de clase: es la misma plantilla aplicada al proyecto de Acceso a Datos (Angular, Express, Prisma y PostgreSQL).
+</NoDadoEnClase>
+
+<Comparar titulo="«El listado será cómodo de usar»">
+  <Lado tipo="evitar" titulo="Vago">
+
+"El listado de productos será cómodo de usar y rápido."
+
+No dice qué se entrega, no tiene ningún número y no tiene plazo: al final del sprint no puedes comprobar si se ha cumplido.
+
+  </Lado>
+  <Lado tipo="bien" titulo="SMART">
+
+```txt
+Qué / Para quién (S): listado de productos con búsqueda, filtro por
+  categoría, orden y paginación para el usuario de la tienda.
+Medida de éxito (M): la API devuelve 10 elementos por página y el
+  total; respuesta ≤ 300 ms con 10.000 productos del seed.
+Viabilidad (A): Prisma (where, orderBy, skip, take) + Angular; 10 h.
+Relevancia (R): es el listado que piden los requisitos de Acceso a Datos.
+Plazo (T): hito H10.
+Entregables: endpoint GET /api/productos con query params validados
+  con Zod, pantalla en Angular y captura de la pestaña Red.
+```
+
+  </Lado>
+</Comparar>
+
+## Errores comunes y cómo evitarlos
+
+<Steps>
+  <Step>
+
+#### Confundir el objetivo con una tarea
+
+  El objetivo es **valor que se entrega**, no una actividad. "Programar el login" es una tarea; "que Alumno y Profesor entren con JWT y 0 endpoints críticos sin proteger" es un objetivo.
+
+  </Step>
+  <Step>
+
+#### No medir
+
+  Sin métrica ni umbral no se puede comprobar. Es saltarse la regla de oro.
+
+  </Step>
+  <Step>
+
+#### Fechas elásticas
+
+  "Para más adelante" no vale: pon un sprint o una fecha.
+
+  </Step>
+  <Step>
+
+#### Ambición desalineada
+
+  Un objetivo enorme que no cabe en el plazo. Mejor objetivos **incrementales**, uno detrás de otro.
+
+  </Step>
+  <Step>
+
+#### Vaguedad técnica
+
+  Cita estándares concretos: OWASP para la seguridad, WCAG para la accesibilidad.
+
+  </Step>
+</Steps>
+
+## Comprueba lo que sabes
+
+<Quiz titulo="Test: gestión de proyectos y SMART">
+  <Pregunta enunciado="¿Qué significa la T de SMART?" explicacion="*Time-bound*: el objetivo tiene un plazo concreto, normalmente un sprint.">
+    <Opcion>Testeable</Opcion>
+    <Opcion correcta>Con plazo (*time-bound*)</Opcion>
+    <Opcion>Técnico</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cuál es la regla de oro de los objetivos SMART?" explicacion="Tiene que poder comprobarse con un dato al acabar el plazo.">
+    <Opcion>Que sea ambicioso</Opcion>
+    <Opcion correcta>Que se pueda comprobar</Opcion>
+    <Opcion>Que lo apruebe todo el equipo</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En la plantilla de clase, ¿qué va en «Viabilidad (A)»?" explicacion="Las tecnologías y el esfuerzo estimado en horas, por ejemplo «Spring Boot + Spring Security; 12-14 h».">
+    <Opcion>La métrica y su umbral</Opcion>
+    <Opcion correcta>Las tecnologías y las horas estimadas</Opcion>
+    <Opcion>El sprint de entrega</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="«Hacer la interfaz accesible para más adelante». ¿Qué errores comunes tiene?" explicacion="No tiene métrica (no medir), «más adelante» es una fecha elástica y no cita ningún estándar como WCAG (vaguedad técnica).">
+    <Opcion correcta>No medir</Opcion>
+    <Opcion correcta>Fecha elástica</Opcion>
+    <Opcion correcta>Vaguedad técnica</Opcion>
+    <Opcion>Ambición desalineada</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="«Programar el endpoint de login» es un buen objetivo SMART." respuesta={false} explicacion="Es una tarea, no un objetivo: no dice qué valor se entrega, ni cómo se mide, ni cuándo." />
+  <Pregunta tipo="vf" enunciado="Los ejemplos SMART del documento hay que copiarlos tal cual, aunque uses otra tecnología." respuesta={false} explicacion="Están pensados para Java/Spring: cada equipo los pasa a su tecnología." />
+  <Pregunta enunciado="¿Para qué sirven los «Entregables» en la plantilla?" explicacion="Son la prueba de que el objetivo se ha conseguido: endpoints, tests, un informe, una captura...">
+    <Opcion>Para repartir el trabajo</Opcion>
+    <Opcion correcta>Para demostrar que se ha conseguido</Opcion>
+    <Opcion>Para estimar las horas</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: gestión y SMART">
+  <Tarjeta frente="Gestionar un proyecto es...">Planificar, organizar, ejecutar y controlar el desarrollo de un producto o servicio.</Tarjeta>
+  <Tarjeta frente="Las cinco letras de SMART">*Specific* (concreto), *Measurable* (medible), *Achievable* (alcanzable), *Relevant* (relevante) y *Time-bound* (con plazo).</Tarjeta>
+  <Tarjeta frente="Regla de oro">Un objetivo tiene que poder comprobarse.</Tarjeta>
+  <Tarjeta frente="Campos de la plantilla">Qué/Para quién, Medida de éxito (métrica + umbral), Viabilidad (tecnologías + horas), Relevancia, Plazo (sprint), Entregables y, opcional, Riesgos y mitigación.</Tarjeta>
+  <Tarjeta frente="Los cinco errores comunes">Confundir objetivo con tarea, no medir, fechas elásticas, ambición desalineada y vaguedad técnica.</Tarjeta>
+  <Tarjeta frente="«La app será rápida» en versión SMART">Un p95 medido con pruebas de carga (Gatling) con un umbral y un sprint.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="De vago a SMART" dificultad="facil">
+  Convierte "Mejorar la seguridad" en un objetivo SMART **para tu proyecto** (Express con JWT, no Spring), con la plantilla de clase.
+
+  <Pista>Empieza por la M: ¿qué número te diría que la seguridad ha mejorado? Por ejemplo, cuántos endpoints quedan sin proteger.</Pista>
+  <Pista>En la A pon las librerías que usarás (`jsonwebtoken`, `bcrypt`...) y las horas.</Pista>
+
+  <Solucion>
+
+```txt
+Qué / Para quién (S): proteger con JWT las rutas de escritura de la API
+  para los usuarios registrados.
+Medida de éxito (M): 0 rutas POST, PUT, PATCH o DELETE sin token;
+  401 en el 100 % de las peticiones sin token o con token inválido.
+Viabilidad (A): Express + jsonwebtoken + bcrypt; 8 h.
+Relevancia (R): sin esto cualquiera puede modificar los datos (OWASP).
+Plazo (T): hito H9.
+Entregables: middleware de autenticación, tests con Supertest de los
+  casos sin token y con token inválido, y la sección del README.
+```
+
+Comprueba la regla de oro: al final de H9 puedes contar las rutas sin proteger y lanzar los tests.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Encuentra los fallos" dificultad="media">
+  Un compañero ha escrito este objetivo: "Hacer el CRUD de pedidos con Angular y Express. Medida: que funcione bien. Plazo: cuando acabemos el login". Di qué errores comunes tiene y reescríbelo.
+
+  <Pista>Mira la medida y el plazo con la regla de oro en la cabeza.</Pista>
+
+  <Solucion>
+
+- **Confunde objetivo con tarea:** "hacer el CRUD" es una actividad.
+- **No mide:** "que funcione bien" no tiene ni métrica ni umbral.
+- **Fecha elástica:** "cuando acabemos el login" depende de otra cosa; no es un sprint ni una fecha.
+
+Una versión SMART: "Qué: que el usuario pueda crear, ver, editar y borrar sus pedidos desde Angular. Medida: las 4 operaciones devuelven el código correcto (201, 200, 200 y 204) y los errores 400, 404 y 409 se ven en pantalla. Viabilidad: Angular con formularios reactivos + Express + Prisma; 14 h. Relevancia: es uno de los CRUD que piden los requisitos. Plazo: hito H9. Entregables: endpoints, pantalla y colección de Postman."
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

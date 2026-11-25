@@ -7,3 +7,8 @@ export { Terminal } from './terminal';
 export { Concepto, Glosario, Termino } from './concepto';
 export { MarcarCompletado } from './marcar-completado';
 export { Icono, Card, Cards } from './icono';
+export { NoDadoEnClase, NoSeVio, DeClase } from './marcas';
+export { Dudoso } from './dudoso';
+export { Comparar, Lado } from './comparar';
+export { Recorrido, Paso } from './recorrido';
+export { Flujo, Mensaje } from './flujo';

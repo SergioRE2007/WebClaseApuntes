@@ -1,0 +1,294 @@
+---
+title: Desarrollo ágil con Scrum y Jira
+description: "Épicas, historias de usuario, tareas, Kanban con límite WIP y burndown, contados como una serie de televisión, y cómo se ve un proyecto real organizado en Jira y Confluence."
+icon: KanbanSquare
+---
+
+import { TableroKanban } from '@/components/temas/proyecto/tablero-kanban';
+
+<DeClase fecha="09/10" proyecto="Proyecto Intermodular" nota="documento «Introducción a la Gestión de Proyectos» y demostración de un proyecto real en Jira y Confluence" />
+
+En la misma clase que los [objetivos SMART](/docs/2-dam/proyecto-intermodular/gestion-de-proyectos-y-smart), el profesor contó el desarrollo ágil **como si fuera una serie de televisión** y enseñó en directo un proyecto real (un ERP que lleva él) organizado en Jira y documentado en Confluence. Esta página junta las dos cosas: la teoría y el modelo de cómo hacerlo.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué son las épicas, las historias de usuario, las tareas y las subtareas.
+  - Cómo funciona un tablero Kanban con límite de trabajo en curso (WIP) y qué cuenta un *burndown*.
+  - Qué partes tiene una historia bien escrita en Jira.
+  - Qué se documenta en Confluence.
+</Callout>
+
+## Scrum es el mapa, Jira la herramienta
+
+**Scrum** es el **mapa común** del equipo: todos saben qué se hace, en qué orden y quién lo hace. **Jira** es la herramienta donde se apunta ese mapa. El documento lo cuenta con una serie:
+
+| En la serie | En el desarrollo ágil | Ejemplo de clase |
+| --- | --- | --- |
+| Los grandes capítulos (los arcos de la temporada) | **Épicas** | "Gestión de usuarios", "Entrega de prácticas" |
+| Las escenas vistas por el protagonista | **Historias de usuario** | "Como alumno, quiero subir mis prácticas para que el profesor las corrija" |
+| El trabajo de rodaje detrás de cada escena | **Tareas y subtareas** | Las tareas y subtareas de Jira |
+| El río que fluye | **Kanban**, con un límite de trabajo en curso (WIP) | El tablero del sprint |
+| La gráfica que cuenta la historia | **Burndown chart** | Cuánto queda del sprint y la velocidad del equipo |
+
+<Mermaid
+  titulo="Del capítulo a la escena y al rodaje"
+  chart={`flowchart TD
+    E1["Épica: Entrega de prácticas"] --> H1["Historia: Como alumno, quiero subir mis prácticas para que el profesor las corrija"]
+    E1 --> H2["Historia: Como profesor, quiero recibir notificaciones cuando un alumno entrega su trabajo"]
+    H1 --> T1[Tarea]
+    H1 --> T2[Tarea]
+    T1 --> S1[Subtarea]
+    T1 --> S2[Subtarea]`}
+/>
+
+### Historias de usuario
+
+Una historia de usuario es una escena **vista por quien usa la app**. Tiene siempre la misma forma:
+
+```txt title="Formato de una historia de usuario"
+Como [rol], quiero [acción], para [beneficio].
+```
+
+Los dos ejemplos de clase:
+
+- "Como **alumno**, quiero **subir mis prácticas** para que **el profesor las corrija**".
+- "Como **profesor**, quiero **recibir notificaciones** cuando un alumno entrega su trabajo".
+
+La idea que hay detrás: **"no programamos por programar"**. Cada línea de código responde a una necesidad real de alguien, y la historia lo deja escrito.
+
+<NoSeVio titulo="Tareas y subtareas">
+  El vídeo de la clase se corta en el minuto 54, justo cuando se hablaba de las tareas y las subtareas: la explicación seguramente continuaba.
+</NoSeVio>
+
+## Kanban, WIP y burndown
+
+- **Kanban** es un tablero por columnas (Por hacer, En curso, En revisión, Listo) por el que las tarjetas "fluyen como un río".
+- El **límite WIP** (*work in progress*, trabajo en curso) dice cuántas tarjetas puede haber a la vez en una columna. Si "En curso" está llena, no se empieza nada nuevo: primero se termina algo.
+- El **burndown chart** pinta el trabajo que **queda** en el sprint día a día. Si la línea real va por encima de la ideal, el equipo va con retraso; su pendiente es la **velocidad del equipo**.
+
+En esta demo tienes un sprint de 10 días con seis historias (21 puntos). Mueve las tarjetas entre columnas con las flechas: "En curso" no admite más de 2. Al pulsar "Terminar el día" se apuntan los puntos que no están en Listo y la línea real se compara con la ideal. Prueba a empezarlo todo a la vez y verás que el límite WIP te frena; prueba también a no terminar nada durante tres días y mira cómo se queda plana la línea.
+
+<TableroKanban />
+
+<Callout title="Story points y horas">
+  En las tarjetas de Jira que se enseñaron había **story points** (el tamaño relativo de la historia) y **horas estimadas** (una historia tenía 32). Los puntos son los que suele usar el *burndown*; las horas encajan con la "A" de la plantilla SMART.
+</Callout>
+
+## Un proyecto real en Jira
+
+Antes de la teoría, el profesor abrió Jira con su cuenta de Atlassian y enseñó un proyecto real. Es el modelo de cómo organizar el tuyo.
+
+<Tabs items={['Tablero', 'Backlog', 'Resumen', 'Cronograma']}>
+  <Tab value="Tablero">
+
+El tablero Kanban del sprint **"S0 - Plataforma"**, con las columnas **Por hacer (10)**, **En curso (0)**, **En revisión (8)** y **Listo (40)**. Cada tarjeta lleva etiquetas y subtareas.
+
+</Tab>
+  <Tab value="Backlog">
+
+La lista de todo el trabajo pendiente: el sprint tenía **62 actividades**, cada una con su estado, prioridad y puntos.
+
+</Tab>
+  <Tab value="Resumen">
+
+Gráficos que enlazan a búsquedas **JQL** (el lenguaje de búsqueda de Jira):
+
+- Un anillo por estado: **150 actividades**, de las que 80 están en Listo, 46 en Por hacer, 21 en En revisión y 3 en En curso.
+- El desglose por prioridad.
+- Los tipos de trabajo: Subtask 43 %, Historia 34 %, Epic 16 %, y algunas Tarea y Error.
+- La carga del equipo, con un 70 % "Sin asignar" (40 de 70).
+- El progreso de las épicas.
+
+</Tab>
+  <Tab value="Cronograma">
+
+Una línea de tiempo por trimestres con las épicas: sirve para ver de un vistazo qué va antes y qué después.
+
+</Tab>
+</Tabs>
+
+### Cómo se organiza el trabajo
+
+- **Etiquetas por área:** `frontend`, `backend`, `migration`, `security`, `no-regression`, `deuda-tecnica`, `cluster-global`...
+- **Prefijos en el título:** `[PLATAFORMA]`, `[AUTH]`, `[GLOBAL]`. Así se ve de qué parte es una tarjeta sin abrirla.
+
+### Una historia bien escrita
+
+El profesor abrió una historia (ETE-1284) y una de sus subtareas (ETE-1292) para enseñar cómo se escribe una incidencia completa. Estas son sus partes, en orden:
+
+<Steps>
+  <Step>
+
+#### Motivo y Contexto
+
+  Por qué existe la historia y en qué situación está el proyecto.
+
+  </Step>
+  <Step>
+
+#### Goal e Inventario de consumidores
+
+  Qué se quiere conseguir y quién va a usar lo que se haga.
+
+  </Step>
+  <Step>
+
+#### Acceptance criteria
+
+  Los criterios de aceptación, escritos como escenarios (*Scenario*).
+
+  </Step>
+  <Step>
+
+#### Definition of Done
+
+  Una lista de casillas que hay que marcar para dar la historia por terminada, por ejemplo "typecheck / tests / boundaries en verde".
+
+  </Step>
+  <Step>
+
+#### Objetivo SMART y Criterios transversales
+
+  El [objetivo SMART](/docs/2-dam/proyecto-intermodular/gestion-de-proyectos-y-smart) de la historia y unos criterios que se aplican a todas (CT-1, CT-2...).
+
+  </Step>
+  <Step>
+
+#### Entregables y Alcance
+
+  Qué se entrega y qué entra y qué no entra en la historia.
+
+  </Step>
+</Steps>
+
+A la derecha, la historia tiene los campos de Jira: **persona asignada**, **etiquetas**, **sprint**, **informador**, **story points** y **horas estimadas**.
+
+<NoSeVio titulo="Acceptance criteria">
+  De los criterios de aceptación de ETE-1284 solo se lee el comienzo de un *Scenario*: no se ve cómo están escritos enteros.
+</NoSeVio>
+
+#### Cómo se suele escribir un Scenario <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  En clase no se llega a leer ningún escenario completo. La forma más extendida es la de Gherkin: **Dado** (*Given*) un contexto, **Cuando** (*When*) pasa algo, **Entonces** (*Then*) el resultado esperado.
+</NoDadoEnClase>
+
+```txt title="Ejemplo de criterio de aceptación (no es de clase)"
+Scenario: subir una práctica dentro de plazo
+  Dado que soy un alumno con sesión iniciada
+  Cuando subo un PDF en una práctica abierta
+  Entonces la práctica queda como "Entregada" y el profesor la ve en su lista
+```
+
+## Confluence: dónde se documenta
+
+Confluence es el wiki de Atlassian. En el proyecto real se vieron:
+
+- La página "Para ti" y los espacios favoritos.
+- Páginas de **Changelog** por mes.
+- Un espacio con página de inicio (descripción, buscador, filtro por etiquetas y árbol de contenido) y una página de **arquitectura** en Google Cloud con una tabla de variables (`project_id`, `region`, `environment`, `project_name`).
+- Un espacio de migración con páginas numeradas: catálogo de casos de uso, catálogo de reglas de negocio, estrategia de migración, estrategia de pruebas, resumen ejecutivo, mapa del sistema antiguo, clústeres de dominio, **modelo de datos**, **ADR**, **registro de riesgos**, **plan de releases** y un manual de operación del agente.
+
+Lo que tienes que quedarte como modelo para tu documentación: **Changelog**, <Concepto termino="ADR" definicion="Architecture Decision Record: una página corta por cada decisión de arquitectura importante, con el contexto, la decisión y sus consecuencias.">ADR</Concepto>, **registro de riesgos**, **plan de releases** y **modelo de datos**.
+
+<Callout type="idea" title="En tu proyecto">
+  El `CHANGELOG.md` y el README por versiones del backend de referencia hacen el mismo papel que el Changelog de Confluence: lo tienes en [Git: ramas, tags y Git Graph](/docs/2-dam/proyecto-intermodular/git-ramas-y-tags).
+</Callout>
+
+## Comprueba lo que sabes
+
+<Quiz titulo="Test: desarrollo ágil y Jira">
+  <Pregunta enunciado="En la comparación con una serie, ¿qué son las épicas?" explicacion="Las épicas son los grandes capítulos (los arcos). Las historias son las escenas y las tareas, el rodaje.">
+    <Opcion correcta>Los grandes capítulos</Opcion>
+    <Opcion>Las escenas vistas por el protagonista</Opcion>
+    <Opcion>El trabajo de rodaje</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cuál está bien escrita como historia de usuario?" explicacion="Sigue el formato «Como [rol], quiero [acción], para [beneficio]». Las otras son tareas técnicas.">
+    <Opcion>Crear la tabla `practicas` en PostgreSQL</Opcion>
+    <Opcion correcta>Como alumno, quiero subir mis prácticas para que el profesor las corrija</Opcion>
+    <Opcion>Endpoint POST /practicas</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="La columna «En curso» tiene un límite WIP de 2 y ya hay 2 tarjetas. ¿Qué haces?" explicacion="El límite WIP sirve para eso: terminar antes de empezar. Primero mueves una de las que están en curso.">
+    <Opcion>Empiezo una tercera; el límite es orientativo</Opcion>
+    <Opcion correcta>Termino una (o la paso a revisión) antes de empezar otra</Opcion>
+    <Opcion>Subo el límite a 3</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué muestra un burndown chart?" explicacion="El trabajo que queda en el sprint, día a día. Sirve para ver la velocidad del equipo.">
+    <Opcion>El trabajo terminado por cada persona</Opcion>
+    <Opcion correcta>El trabajo que queda en el sprint</Opcion>
+    <Opcion>Los errores encontrados</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cuáles son partes de la historia bien escrita que se enseñó en Jira?" explicacion="Motivo, Contexto, Goal, Inventario de consumidores, Acceptance criteria, Definition of Done, Objetivo SMART, Criterios transversales, Entregables y Alcance. El burndown no es parte de una historia.">
+    <Opcion correcta>Definition of Done en casillas</Opcion>
+    <Opcion correcta>Acceptance criteria</Opcion>
+    <Opcion correcta>Objetivo SMART</Opcion>
+    <Opcion>Burndown chart</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Los prefijos como `[AUTH]` o `[PLATAFORMA]` en el título sirven para ver de qué parte del proyecto es una tarjeta sin abrirla." respuesta={true} explicacion="Junto con las etiquetas por área (`frontend`, `backend`, `security`...), organizan el trabajo." />
+  <Pregunta enunciado="¿Qué es un ADR?" explicacion="Architecture Decision Record: el registro de una decisión de arquitectura. Se guardaban en Confluence.">
+    <Opcion>Un tipo de tarea de Jira</Opcion>
+    <Opcion correcta>El registro de una decisión de arquitectura</Opcion>
+    <Opcion>Una búsqueda JQL</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: ágil y Jira">
+  <Tarjeta frente="Scrum frente a Jira">Scrum es el mapa común del equipo; Jira es la herramienta donde se apunta.</Tarjeta>
+  <Tarjeta frente="Épica, historia y tarea en la serie">Épica = gran capítulo. Historia = escena vista por el protagonista. Tarea y subtarea = el trabajo de rodaje.</Tarjeta>
+  <Tarjeta frente="Formato de una historia de usuario">Como [rol], quiero [acción], para [beneficio].</Tarjeta>
+  <Tarjeta frente="Límite WIP">Cuántas tarjetas puede haber a la vez en curso. Si está lleno, se termina algo antes de empezar otra cosa.</Tarjeta>
+  <Tarjeta frente="Burndown chart">El trabajo que queda en el sprint día a día. Su pendiente es la velocidad del equipo.</Tarjeta>
+  <Tarjeta frente="Definition of Done">Lista de casillas que hay que cumplir para dar una historia por terminada (por ejemplo, typecheck y tests en verde).</Tarjeta>
+  <Tarjeta frente="Vistas de Jira que se enseñaron">Tablero, Backlog, Resumen (gráficos que enlazan a búsquedas JQL) y Cronograma.</Tarjeta>
+  <Tarjeta frente="Qué documentar en Confluence">Changelog por mes, ADR, registro de riesgos, plan de releases y modelo de datos.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Escribe una historia completa" dificultad="media">
+  Elige una funcionalidad de tu proyecto y escribe su historia de usuario con la estructura del proyecto real: el formato "Como..., quiero..., para...", un motivo, dos criterios de aceptación, una Definition of Done con casillas, un objetivo SMART, los entregables y la estimación (story points y horas).
+
+  <Pista>La Definition of Done es igual para casi todas las historias: código revisado, tests en verde, documentación actualizada...</Pista>
+  <Pista>Para el objetivo SMART, usa la plantilla de [la página anterior](/docs/2-dam/proyecto-intermodular/gestion-de-proyectos-y-smart).</Pista>
+
+  <Solucion>
+
+```txt
+[AUTH] Como usuario registrado, quiero iniciar sesión, para ver y
+editar solo mis pedidos.
+
+Motivo: sin login cualquiera ve y cambia los datos de los demás.
+
+Acceptance criteria:
+- Con email y contraseña correctos, la API devuelve un token y la
+  web me lleva a "Mis pedidos".
+- Con datos incorrectos, sale "Credenciales inválidas" (401) sin
+  decir cuál de los dos falla.
+
+Definition of Done:
+[ ] Compila (npm run build) sin errores
+[ ] Tests de login correcto e incorrecto en verde
+[ ] README actualizado
+[ ] Revisado por otro miembro del equipo
+
+Objetivo SMART: 0 rutas de pedidos accesibles sin token; Express +
+jsonwebtoken + bcrypt; 8 h; hito H9.
+Entregables: POST /api/auth/login, guard en Angular y tests.
+Story points: 5 · Horas estimadas: 8
+```
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Monta tu tablero" dificultad="facil">
+  Crea en Jira (o en el tablero de GitHub Projects, si tu equipo lo prefiere) un tablero con las columnas Por hacer, En curso, En revisión y Listo, un límite WIP en "En curso" y al menos una épica con tres historias de tu proyecto. Pon etiquetas por área y un prefijo en cada título.
+
+  <Pista>Empieza por las épicas: suelen coincidir con las grandes partes del proyecto (usuarios, el CRUD principal, la operación de negocio...).</Pista>
+
+  <Solucion>
+
+No hay una única solución. Comprueba que: cada historia sigue el formato "Como..., quiero..., para..."; cada una cuelga de una épica; tiene etiqueta de área (`frontend`, `backend`...) y prefijo (`[AUTH]`, `[PEDIDOS]`...); y el límite WIP no deja tener más de 2 o 3 tarjetas en curso a la vez.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

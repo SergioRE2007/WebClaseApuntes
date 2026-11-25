@@ -1,0 +1,378 @@
+---
+title: "Componentes: padre, hijo y estilos"
+description: "Qué es un componente de Angular, cómo se usa uno dentro de otro, cómo funcionan los estilos encapsulados (:host, _ngcontent, _nghost) y el ciclo de vida con ngOnInit."
+icon: Component
+---
+
+import { EncapsulacionEstilos } from '@/components/temas/angular/encapsulacion-estilos';
+
+Una aplicación de Angular es un **árbol de componentes**. Cada componente se encarga de un trozo de la pantalla (una cabecera, una tarjeta de producto, un formulario) y puede tener otros componentes dentro.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Las cuatro piezas de un componente: clase, decorador `@Component`, plantilla y estilos.
+  - Meter un componente hijo dentro del padre (`imports` + selector).
+  - Guardar el estado en la clase y mostrarlo en la plantilla.
+  - Cómo encapsula Angular los estilos: `_ngcontent`, `_nghost` y `:host`.
+  - Qué es `ngOnInit` y por qué los datos se cargan ahí.
+</Callout>
+
+## Las piezas de un componente
+
+Un componente son **tres archivos** (más el de pruebas) unidos por un decorador:
+
+| Archivo | Qué tiene |
+| --- | --- |
+| `lampara.component.ts` | La **clase** en TypeScript, con el estado (propiedades) y la lógica (métodos). |
+| `lampara.component.html` | La **plantilla**: el HTML que pinta el componente. |
+| `lampara.component.css` | Los **estilos** del componente, que solo le afectan a él. |
+
+El decorador `@Component` es lo que convierte una clase normal en un componente. Es parecido a una anotación de Java (`@Entity`, `@Override`): metadatos encima de la clase.
+
+<Recorrido
+  titulo="src/app/app.component.ts"
+  lenguaje="ts"
+  codigo={`import { Component } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
+import { LamparaComponent } from './components/lampara/lampara.component';
+
+@Component({
+  selector: 'app-root',
+  imports: [RouterOutlet, LamparaComponent],
+  templateUrl: './app.component.html',
+  styleUrl: './app.component.css'
+})
+export class AppComponent {
+  title = 'proj-lamp';
+
+  enchufado = false;
+
+  estadoLampara = false;
+}`}
+>
+  <Paso lineas="1-3" titulo="Imports de TypeScript">
+    Como en Java, antes de usar una clase hay que importarla. `Component` viene de `@angular/core` y `LamparaComponent` del archivo del hijo (la ruta va sin `.ts`).
+  </Paso>
+  <Paso lineas="5" titulo="El decorador">
+    `@Component({...})` recibe un objeto con la configuración del componente.
+  </Paso>
+  <Paso lineas="6" titulo="selector">
+    El nombre de la etiqueta HTML del componente. `app-root` es la etiqueta de `index.html`; el hijo se usará como `<app-lampara>`.
+  </Paso>
+  <Paso lineas="7" titulo="imports">
+    Lo que usa la **plantilla** de este componente: otros componentes, directivas o pipes. Si `LamparaComponent` no está aquí, no puedes escribir `<app-lampara>`.
+  </Paso>
+  <Paso lineas="8-9" titulo="Plantilla y estilos">
+    `templateUrl` apunta al HTML y `styleUrl` (en singular, desde Angular 17) al CSS.
+  </Paso>
+  <Paso lineas="11-17" titulo="El estado">
+    Las propiedades de la clase son el estado del componente. TypeScript infiere el tipo: `enchufado` es `boolean` (el *tooltip* de VS Code lo enseña como `AppComponent.enchufado: boolean`). La plantilla puede leerlas y Angular la repinta cuando cambian.
+  </Paso>
+</Recorrido>
+
+| Propiedad de `@Component` | Para qué sirve |
+| --- | --- |
+| `selector` | La etiqueta con la que se usa el componente: `<app-lampara>`. |
+| `imports` | Lo que necesita la plantilla (componentes standalone, `RouterOutlet`, `JsonPipe`, `FormsModule`…). |
+| `templateUrl` | La ruta de la plantilla. Con `template: '...'` la escribes en línea. |
+| `styleUrl` | La ruta del CSS. Con `styles: '...'` lo escribes en línea. |
+
+## Un componente dentro de otro
+
+<DeClase fecha="14/10" proyecto="proj-lamp" nota="Act Eval 4, Control de una lámpara" />
+
+El enunciado de la Act Eval 4 dibuja dos componentes: el **padre** enseña "Estado de conexión: DESENCHUFADA", un botón "Enchufar lámpara" y "Último estado recibido: APAGADA"; el **hijo** es la bombilla, con el texto "APAGADA". En clase se montó la parte visual del padre.
+
+<Steps>
+  <Step>
+
+#### Generar el hijo
+
+```bash title="Terminal"
+ng g c --skip-tests components/lampara
+```
+
+  </Step>
+  <Step>
+
+#### Importarlo en el padre
+
+Se importa la clase arriba del archivo y se añade al array `imports` de `@Component`, como en el código de arriba.
+
+  </Step>
+  <Step>
+
+#### Usar su selector en la plantilla del padre
+
+```html title="src/app/app.component.html"
+<div class="cab">
+  <div class="estado">
+    @if (enchufado) {
+      <span>Estado conexión eléctrica: ENCHUFADO</span>
+    } @else {
+      <span>Estado conexión eléctrica: DESENCHUFADO</span>
+    }
+  </div>
+  <div class="boton">
+    @if (enchufado) {
+      <button>DESENCHUFAR</button>
+    } @else {
+      <button>ENCHUFAR</button>
+    }
+  </div>
+</div>
+
+<app-lampara></app-lampara>
+```
+
+  </Step>
+</Steps>
+
+En el navegador sale la cabecera con "DESENCHUFADO" y el botón "ENCHUFAR", y debajo el hijo con su plantilla por defecto, **"lampara works!"**. El `@if / @else` se explica en [control flow](/docs/2-dam/acceso-a-datos/angular/control-flow).
+
+- La etiqueta del hijo también se puede cerrar sola: `<app-lampara />`.
+- Al terminar la clase, los botones todavía no tenían `(click)`: `enchufado` no cambia nunca y siempre sale DESENCHUFADO.
+
+<NoSeVio titulo="El resto de la lámpara">
+  En clase no se llegó a usar `estadoLampara`, ni a tocar la plantilla y el CSS de `LamparaComponent`, ni a hacer que el hijo le mande su estado al padre (con `output()`). Cómo se haría está en [comunicación padre e hijo](/docs/2-dam/acceso-a-datos/angular/comunicacion-componentes).
+</NoSeVio>
+
+### Si se te olvida importarlo <NoDadoEnClase inline />
+
+Si escribes `<app-lampara>` sin haber puesto `LamparaComponent` en `imports`, el compilador da el error `NG8001: 'app-lampara' is not a known element`. Es el primer error que sale casi siempre al empezar con componentes standalone. Viene en la unidad 3 de componentes del [repositorio de guías](https://github.com/hokahey007/guides-angular).
+
+## Estilos del componente
+
+<DeClase fecha="14/10" proyecto="proj-lamp" />
+
+El CSS de `styleUrl` **solo afecta a la plantilla de ese componente**. Si en `app.component.css` escribes `span { color: white; }`, se ponen blancos los `<span>` de la plantilla de `AppComponent`, pero no los que haya dentro de `<app-lampara>`. Esto se llama **encapsulación de estilos**.
+
+### Cómo lo hace Angular
+
+Angular marca cada elemento con un atributo propio del componente y reescribe los selectores del CSS para que solo coincidan con esos elementos. En clase se vio en DevTools (Elements):
+
+```html title="Lo que se ve en DevTools"
+<app-root ng-version="19.2.25" _nghost-ng-c3538846781>
+  <div _ngcontent-ng-c3538846781 class="cab">Comp padre</div>
+  <app-lampara _ngcontent-ng-c3538846781>…</app-lampara>
+```
+
+```css title="Panel Styles de DevTools"
+.cab[_ngcontent-ng-c3538846781] { background-color: blue; flex: 0 0 250px; }
+```
+
+- **`_ngcontent-…`**: lo llevan los elementos de la plantilla del componente.
+- **`_nghost-…`**: lo lleva el elemento *host*, es decir, la etiqueta del propio componente (`<app-root>`).
+- Tú escribes `.cab` y al navegador le llega `.cab[_ngcontent-ng-c3538846781]`.
+
+Prueba en esta demo a qué elementos llega cada regla de `app.component.css`:
+
+<EncapsulacionEstilos />
+
+Lo que enseña la demo:
+
+- `span { color: white; }` en `app.component.css` pasa a ser `span[_ngcontent-ng-c1]`: le llega al `<span>` del padre, pero no al del hijo, que lleva el atributo del hijo.
+- `app-lampara { flex: 1; }` **sí** le llega al hijo: la etiqueta `<app-lampara>` está escrita en la plantilla del padre y lleva su `_ngcontent`. Por eso el padre puede decidir cuánto espacio ocupa el hijo, pero no cómo es por dentro.
+- `:host` se reescribe con el atributo `_nghost`: es la forma de dar estilo a la etiqueta del propio componente.
+
+### `:host`: el propio componente
+
+`:host` es la etiqueta del componente desde su propio CSS. En la lámpara, `:host` en `app.component.css` es `<app-root>`, y se convirtió en un contenedor flex que ocupa toda la ventana:
+
+```css title="src/app/app.component.css"
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.cab {
+  background-color: blue;
+  flex: 0 0 30%;
+}
+
+app-lampara {
+  background-color: chartreuse;
+  flex: 1;
+}
+```
+
+Qué significa cada `flex` está en [Flexbox](/docs/2-dam/acceso-a-datos/angular/flexbox).
+
+### Estilos globales
+
+`src/styles.css` **no** está encapsulado: vale para toda la aplicación. Ahí van las fuentes, el reset del `body` o las clases que quieras usar en cualquier componente (como `@import "tailwindcss";`). En clase se probó a poner reglas al `body` (`min-height: 100vh`, `height: 100%`…) y al final se dejó `styles.css` vacío; seguramente porque `:host` ya usaba `100vh` y no hacía falta tocar el `body`.
+
+| | `src/styles.css` | `app.component.css` |
+| --- | --- | --- |
+| A qué afecta | A toda la aplicación | Solo a la plantilla de ese componente |
+| Selectores | Tal cual | Reescritos con `[_ngcontent-…]` |
+| Para qué | Reset, fuentes, Tailwind, clases comunes | La maqueta y el aspecto del componente |
+
+### Cambiar la encapsulación <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Esto viene en la unidad 3 de componentes de las guías, pero no salió en las clases grabadas.
+</NoDadoEnClase>
+
+La opción `encapsulation` de `@Component` decide cómo se aíslan los estilos:
+
+| Valor | Qué hace |
+| --- | --- |
+| `ViewEncapsulation.Emulated` | El de por defecto: los atributos `_ngcontent` / `_nghost` de antes. |
+| `ViewEncapsulation.ShadowDom` | Usa el Shadow DOM del navegador. |
+| `ViewEncapsulation.None` | Sin encapsulación: el CSS del componente vale para toda la página. |
+
+```ts title="lampara.component.ts"
+import { Component, ViewEncapsulation } from '@angular/core';
+
+@Component({
+  selector: 'app-lampara',
+  templateUrl: './lampara.component.html',
+  styleUrl: './lampara.component.css',
+  encapsulation: ViewEncapsulation.None
+})
+export class LamparaComponent {}
+```
+
+Con `None`, un `div { ... }` de este componente afectaría a todos los `div` de la aplicación. Casi nunca hace falta cambiarlo. En guías antiguas puede salir `ViewEncapsulation.Native`, que ya no existe: es `ShadowDom`.
+
+## Ciclo de vida: `ngOnInit`
+
+<DeClase fecha="27/10, 28/10" proyecto="angular-http y proj-fakestore" />
+
+Angular crea el componente, lo pinta y lo destruye cuando desaparece de la pantalla. En cada fase llama a unos métodos (*hooks*) si la clase los tiene. El que más se usó en clase es **`ngOnInit`**: se ejecuta una vez, después de crear el componente y de recibir sus datos de entrada. **Ahí se cargan los datos** del servicio:
+
+```ts title="app.component.ts (proj-fakestore)"
+export class AppComponent implements OnInit {
+  products?: Product[];
+  private productService = inject(ProductService);
+
+  ngOnInit(): void {
+    this.productService.getProducts().subscribe(products => {
+      console.log(products);
+      this.products = products;
+    });
+  }
+}
+```
+
+- `implements OnInit` es como implementar una interfaz en Java: obliga a escribir `ngOnInit()` y el editor te avisa si te equivocas (en clase se escribió `Oninit` y dio error).
+- El constructor se deja para inyectar dependencias. La guía recomienda **no meter lógica en el constructor**: los datos de entrada (`input()`) todavía no están listos ahí, y en `ngOnInit` sí.
+- El `inject()` y el `subscribe` se explican en [servicios](/docs/2-dam/acceso-a-datos/angular/servicios-e-inyeccion) y en [HttpClient](/docs/2-dam/acceso-a-datos/angular/httpclient).
+
+| Hook | Cuándo se llama | En clase |
+| --- | --- | --- |
+| `ngOnInit` | Una vez, al iniciarse el componente. | Sí (27/10, 28/10) |
+| `ngOnChanges` | Cada vez que cambia un dato de entrada (`input()`). | Sí, el 12/11 (ver [comunicación](/docs/2-dam/acceso-a-datos/angular/comunicacion-componentes)) |
+| `ngOnDestroy` | Justo antes de destruirse (por ejemplo, al salir de un `@if`). Para cancelar *timers* o suscripciones. | <NoDadoEnClase inline /> |
+| `ngAfterViewInit` | Cuando ya están pintadas su vista y las de sus hijos. | <NoDadoEnClase inline /> |
+
+## Practica
+
+<Quiz titulo="Test: componentes">
+  <Pregunta enunciado="¿Qué hay que hacer para usar `<app-lampara>` en la plantilla de `AppComponent`?" explicacion="En un componente standalone, lo que usa la plantilla tiene que estar en su array `imports` (y la clase, importada con `import` arriba del archivo).">
+    <Opcion>Nada: Angular lo encuentra solo</Opcion>
+    <Opcion correcta>Importar `LamparaComponent` y añadirlo al array `imports` de `AppComponent`</Opcion>
+    <Opcion>Declararlo en `app.config.ts`</Opcion>
+    <Opcion>Añadirlo a `index.html`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué es el elemento *host* de un componente?" explicacion="Es la etiqueta del propio componente (`<app-root>`, `<app-lampara>`). Lleva el atributo `_nghost-…` y en su CSS se selecciona con `:host`.">
+    <Opcion correcta>La etiqueta del propio componente, por ejemplo `<app-lampara>`</Opcion>
+    <Opcion>El primer `div` de su plantilla</Opcion>
+    <Opcion>El `body` de la página</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Un `span { color: white; }` en `app.component.css` pone blancos también los `span` de la plantilla de `LamparaComponent`." respuesta={false} explicacion="Con la encapsulación por defecto, el selector se reescribe como `span[_ngcontent-…]` con el atributo del padre, y los `span` del hijo llevan otro atributo." />
+  <Pregunta tipo="vf" enunciado="Desde el CSS del padre se puede dar `flex: 1` a `app-lampara`." respuesta={true} explicacion="La etiqueta `<app-lampara>` está en la plantilla del padre y lleva su `_ngcontent`, así que la regla le llega. Fue lo que se hizo el 14/10." />
+  <Pregunta enunciado="¿Dónde pondrías una regla para quitar el margen del `body` en toda la aplicación?" explicacion="`styles.css` es global y no se encapsula.">
+    <Opcion>En `app.component.css`</Opcion>
+    <Opcion correcta>En `src/styles.css`</Opcion>
+    <Opcion>En `lampara.component.css` con `:host`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿En qué método se cargan los datos del servicio al abrir el componente?" explicacion="`ngOnInit` se ejecuta una vez al iniciarse el componente, cuando ya tiene sus datos de entrada.">
+    <Opcion>En el constructor</Opcion>
+    <Opcion correcta>En `ngOnInit`</Opcion>
+    <Opcion>En `ngOnDestroy`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿Qué propiedad de `@Component` dice el nombre de la etiqueta del componente?" respuesta="selector" explicacion="`selector: 'app-lampara'` hace que el componente se use como `<app-lampara>`." />
+</Quiz>
+
+<Flashcards titulo="Repaso: componentes">
+  <Tarjeta frente="Las piezas de un componente">Clase `.ts` con `@Component`, plantilla `.html`, estilos `.css` (y pruebas `.spec.ts`).</Tarjeta>
+  <Tarjeta frente="`imports` de `@Component`">Lo que usa la plantilla: componentes hijos, `RouterOutlet`, pipes, `FormsModule`…</Tarjeta>
+  <Tarjeta frente="`_ngcontent-…`">Atributo que Angular pone a los elementos de la plantilla de un componente para encapsular sus estilos.</Tarjeta>
+  <Tarjeta frente="`_nghost-…`">Atributo que lleva la etiqueta del propio componente. `:host` se reescribe con él.</Tarjeta>
+  <Tarjeta frente="`:host`">Selector para dar estilo a la etiqueta del propio componente desde su CSS.</Tarjeta>
+  <Tarjeta frente="`ngOnInit`">Hook que se ejecuta una vez al iniciar el componente: aquí se piden los datos.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Una tarjeta de producto" dificultad="facil">
+  Crea un componente `components/tarjeta` con una propiedad `nombre = 'Teclado'` y `precio = 100`, que pinte un `<h3>` con el nombre y un `<p>` con el precio. Úsalo dos veces en `AppComponent` y dale un borde desde `tarjeta.component.css` sin añadir ningún `div` nuevo.
+
+  <Pista>Para dar estilo a la propia etiqueta `<app-tarjeta>` desde su CSS, usa `:host`.</Pista>
+  <Pista>Las etiquetas de los componentes son `inline` por defecto, así que para que el borde rodee bien el contenido dale `display: block`.</Pista>
+
+  <Solucion>
+
+```bash title="Terminal"
+ng g c components/tarjeta --skip-tests
+```
+
+```ts title="src/app/components/tarjeta/tarjeta.component.ts"
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-tarjeta',
+  imports: [],
+  templateUrl: './tarjeta.component.html',
+  styleUrl: './tarjeta.component.css'
+})
+export class TarjetaComponent {
+  nombre = 'Teclado';
+  precio = 100;
+}
+```
+
+```html title="tarjeta.component.html"
+<h3>{{ nombre }}</h3>
+<p>{{ precio }} €</p>
+```
+
+```css title="tarjeta.component.css"
+:host {
+  display: block;
+  border: 1px solid #ccc;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+```
+
+```html title="app.component.html"
+<app-tarjeta />
+<app-tarjeta />
+```
+
+Y en `AppComponent`, `imports: [TarjetaComponent]`. Las dos tarjetas salen iguales porque los datos están fijos en el hijo: para pasarle datos distintos desde el padre hace falta `input()`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="¿Por qué no se pone blanco?" dificultad="media">
+  Un compañero tiene en `app.component.css` la regla `p { color: white; }` y no entiende por qué el `<p>lampara works!</p>` del hijo sigue negro, mientras que los `<p>` de `app.component.html` sí cambian. Explícaselo como si lo vieras en DevTools y dile dos formas de poner blanco el texto del hijo.
+
+  <Pista>Mira qué atributo lleva el `<p>` del hijo y cuál pide la regla reescrita.</Pista>
+
+  <Solucion>
+
+La regla que llega al navegador es `p[_ngcontent-ng-cAAA]`, con el atributo del **padre**. El `<p>` del hijo lleva `_ngcontent-ng-cBBB`, el del **hijo**, así que no coincide. Es la encapsulación de estilos.
+
+Formas de arreglarlo:
+
+1. Poner la regla en el CSS del hijo: `p { color: white; }` en `lampara.component.css`, o mejor `:host { color: white; }` para que lo hereden todos sus textos.
+2. Dar el color a la etiqueta del hijo desde el padre: `app-lampara { color: white; }` en `app.component.css`. La etiqueta sí lleva el atributo del padre, y el color se hereda hacia dentro.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

@@ -1,0 +1,558 @@
+---
+title: Servidor con Express 5
+description: "El esqueleto del servidor de clase: app.ts e index.ts separados, variables de entorno con env.ts, rutas, middlewares y su orden, el manejador de errores y el cierre ordenado."
+icon: Server
+---
+
+import { OrdenMiddlewares } from '@/components/temas/backend/orden-middlewares';
+
+Con el proyecto montado, toca el servidor. Aquí verás el esqueleto que tienen todos los proyectos de clase: un `app.ts` que configura Express, un `index.ts` que lo arranca, un `env.ts` que centraliza la configuración y una cadena de *middlewares* que acaba siempre en el manejador de errores.
+
+<DeClase fecha="20/10, 27/10" proyecto="node-server y node-server-26-27" nota="v0.2.0 de la referencia" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Por qué `app.ts` e `index.ts` van separados.
+  - Cómo se leen las variables de entorno con `env.ts`, `dotenv` y `required()`.
+  - Cómo se declara una ruta y se responde con `res.status().json()`.
+  - Qué es un <Concepto termino="Middleware" definicion="Función (req, res, next) que se ejecuta antes del controlador. Hace algo con la petición o la respuesta y llama a next() para pasar a la siguiente pieza, o responde y corta la cadena.">middleware</Concepto> y por qué **el orden importa**.
+  - Cómo funciona el manejador de errores de cuatro parámetros.
+  - Cómo se cierra el servidor de forma ordenada con `SIGTERM` y `SIGINT`.
+</Callout>
+
+## Express en una idea
+
+<Concepto termino="Express" definicion="El framework de Node más usado para hacer servidores HTTP. Se le dicen las rutas y qué función responde a cada una.">Express</Concepto> crea un servidor HTTP al que le dices "cuando llegue un `GET` a esta ruta, ejecuta esta función". La función recibe la petición (`req`) y la respuesta (`res`):
+
+```ts title="Lo mínimo"
+import express from 'express';
+
+const app = express();
+
+app.get('/', (req, res) => {
+  res.send('Hello World');
+});
+
+app.listen(3000);
+```
+
+Si vienes de Spring, `app.get('/', ...)` es un `@GetMapping("/")` y la función es el método del `@RestController`. La diferencia es que aquí no hay anotaciones ni escaneo de clases: cada ruta se registra a mano. Se usa **Express 5** (`^5.1.0` en la referencia, `^5.3.0` en directo).
+
+## `app.ts` e `index.ts` por separado
+
+Los dos proyectos de clase separan el servidor en dos ficheros:
+
+- **`app.ts`** crea la app con `express()`, le pone los middlewares y las rutas, y la **exporta** con `export default app`.
+- **`index.ts`** solo la **importa** y llama a `listen`. No exporta nada.
+
+Así se puede importar la app sin arrancar el servidor. Es lo que hacen los tests con Supertest (`request(app)`), que verás en [Logs, rate limiting y tests](/docs/2-dam/apis/backend/logs-rate-limiting-tests).
+
+<Tabs items={['En directo (20/10)', 'Referencia (v0.4.0)']}>
+  <Tab value="En directo (20/10)">
+
+```ts title="src/app.ts"
+import express from 'express';
+import morgan from 'morgan';
+
+const app = express();
+
+app.use(morgan('dev'));
+
+app.get('/health', (req, res) => {
+  res.status(200).json({ message: 'OK' });
+});
+
+export default app;
+```
+
+```ts title="src/index.ts"
+import app from './app.js';
+import { env } from './config/env.js';
+
+app.listen(env.NODE_PORT, () => {
+  console.log(`Server is running on port ${env.NODE_PORT}`);
+});
+```
+
+En el primer bloque del 20/10 `app.ts` tenía además `express.json()`, `express.urlencoded({ extended: true })` y la ruta `GET /` con `Hello World`.
+
+  </Tab>
+  <Tab value="Referencia (v0.4.0)">
+
+```ts title="src/app.ts"
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import { errorHandler } from './middleware/error.js';
+import usersRoutes from './modules/users/users.routes.js';
+
+const app = express();
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+app.use(morgan('dev'));
+app.get('/health', (_req, res) => res.json({ ok: true }));
+app.use('/api/users', usersRoutes);
+app.use(errorHandler);
+export default app;
+```
+
+```ts title="src/index.ts"
+import app from './app.js';
+import { env } from './config/env.js';
+const server = app.listen(env.PORT, () => {
+  console.log(`API escuchando en http://localhost:${env.PORT}`);
+});
+process.on('SIGTERM', () => server.close());
+process.on('SIGINT', () => server.close());
+```
+
+El `console.log` del arranque <Dudoso nota="En la captura se lee con comillas simples y `${env.PORT}`, que no sustituiría el valor. Lo normal es que sean backticks, y así se ha escrito aquí.">se lee con comillas simples</Dudoso>.
+
+  </Tab>
+</Tabs>
+
+<Callout type="warn" title="Errores que salieron montándolo">
+  - **`Property 'listen' does not exist on type 'typeof e...'`**: en `index.ts` se escribió `import app from 'express'`. Eso es el **módulo** express, no una app; la app se crea con `express()`. Se arregla importando `./app.js`.
+  - **`The requested module './app.js' does not provide an export named 'default'`**: `app.ts` estaba sin guardar, así que no tenía el `export default app`.
+  - **`export default app` en `index.ts`**: sobra. El fichero de arranque no exporta nada, y el profesor lo quitó.
+  - El 27/10, para enseñar los errores, el profesor borró `const app = express();` en la referencia y salieron 10 problemas `Cannot find name 'app'`.
+</Callout>
+
+## Variables de entorno: `env.ts`
+
+La configuración (el puerto, la URL de la base de datos, los secretos) no se escribe en el código: va en un fichero **`.env`** en la raíz, que **no se sube a Git**. La librería **dotenv** lo lee al arrancar y mete cada línea en `process.env`.
+
+```bash title=".env (en directo)"
+NODE_PORT=3000
+NODE_ENV=development
+```
+
+Y todo el código lee la configuración de **un único objeto `env`**, exportado desde `src/config/env.ts`. El resto del proyecto nunca toca `process.env` directamente.
+
+<Tabs items={['En directo', 'Referencia']}>
+  <Tab value="En directo">
+
+```ts title="src/config/env.ts (versión final del 20/10)"
+import "dotenv/config";
+
+export const env = {
+  NODE_PORT: process.env.NODE_PORT || 3000,
+  NODE_ENV: process.env.NODE_ENV || 'development',
+};
+```
+
+La primera versión era `import dotenv from 'dotenv'` más `dotenv.config()`. `import "dotenv/config"` hace lo mismo en una línea. Lo importante es que se ejecute **antes** de leer `process.env`. Al arrancar, la terminal decía `injected env (2) from .env`.
+
+  </Tab>
+  <Tab value="Referencia">
+
+<Recorrido
+  titulo="src/config/env.ts"
+  lenguaje="ts"
+  codigo={`import 'dotenv/config';
+
+const required = (v: string | undefined, k: string) => {
+  if (!v) throw new Error(\`Falta variable de entorno: \${k}\`);
+  return v;
+};
+
+export const env = {
+  PORT: Number(process.env.PORT ?? 3000),
+  NODE_ENV: process.env.NODE_ENV ?? 'development',
+  JWT_SECRET: required(process.env.JWT_SECRET, 'JWT_SECRET'),
+  DATABASE_URL: required(process.env.DATABASE_URL, 'DATABASE_URL'),
+  BCRYPT_SALT_ROUNDS: Number(process.env.BCRYPT_SALT_ROUNDS ?? 10),
+  CLOUDINARY_CLOUD_NAME: required(process.env.CLOUDINARY_CLOUD_NAME, 'CLOUDINARY_CLOUD_NAME'),
+  CLOUDINARY_API_KEY: required(process.env.CLOUDINARY_API_KEY, 'CLOUDINARY_API_KEY'),
+  CLOUDINARY_API_SECRET: required(process.env.CLOUDINARY_API_SECRET, 'CLOUDINARY_API_SECRET'),
+};`}
+>
+  <Paso lineas="1" titulo="Cargar el .env">
+    Lo primero, antes de leer ninguna variable.
+  </Paso>
+  <Paso lineas="3-6" titulo="required()">
+    Recibe el valor y el nombre. Si falta (o está vacío), lanza un error y **la app no arranca**. Mejor fallar al arrancar que a mitad de una petición. Devuelve `v` ya como `string`, no `string | undefined`.
+  </Paso>
+  <Paso lineas="9-10" titulo="Opcionales con valor por defecto">
+    `process.env.X` es siempre `string | undefined`. `??` pone el valor por defecto solo si la variable no existe, y `Number(...)` convierte el texto en número.
+  </Paso>
+  <Paso lineas="11-12" titulo="Obligatorias">
+    Sin `JWT_SECRET` o sin `DATABASE_URL` la API no tiene sentido, así que pasan por `required()`.
+  </Paso>
+  <Paso lineas="13" titulo="Rondas de bcrypt">
+    Opcional, por defecto 10. Lo usa el registro ([Autenticación](/docs/2-dam/apis/backend/autenticacion)).
+  </Paso>
+  <Paso lineas="14-16" titulo="Cloudinary">
+    Estas tres solo aparecen en la versión que se vio el 20/10 (rama `main`, la de subir archivos). En la v0.4.0 el objeto termina en `BCRYPT_SALT_ROUNDS`.
+  </Paso>
+</Recorrido>
+
+  </Tab>
+</Tabs>
+
+Con el ratón encima de `process.env.NODE_PORT`, el editor dice que es `string | undefined`: por eso hace falta un valor por defecto (`||` o `??`) o una conversión. La diferencia entre los dos: `||` también usa el valor por defecto si la variable existe pero está vacía (`""`), y `??` solo si no existe.
+
+<Comparar titulo="Lo que cambia entre los dos proyectos" columnas>
+  <Lado titulo="En directo">
+
+```ts
+NODE_PORT: process.env.NODE_PORT || 3000
+// /health → { message: 'OK' }
+```
+
+  </Lado>
+  <Lado titulo="Referencia">
+
+```ts
+PORT: Number(process.env.PORT ?? 3000)
+// /health → { ok: true }
+```
+
+  </Lado>
+</Comparar>
+
+### Los ficheros `.env` del proyecto
+
+| Fichero | Se sube a Git | Para qué |
+| --- | --- | --- |
+| `.env` | No | La configuración real de desarrollo. |
+| `.env.example` | Sí | Plantilla sin secretos para que el resto sepa qué variables hacen falta. |
+| `.env_local` | No | Copia local que hizo el profesor el 03/11 para la conexión a Supabase. |
+| `env.production.example` | Sí | Plantilla de producción (ver [Docker y Swagger](/docs/2-dam/apis/backend/docker-swagger)). |
+| `.env.production` | No | La configuración real de producción. |
+
+El `.env` de la referencia que se ve el 27/10 es este:
+
+```bash title=".env (referencia)"
+PORT=3000
+NODE_ENV=development
+DATABASE_URL="postgresql://postgres:<contraseña>@localhost:5432/app_db"
+```
+
+Ojo: <Dudoso nota="Con el env.ts de la referencia la app no arrancaría sin JWT_SECRET: o es de una versión anterior al módulo de auth, o está incompleto.">no tiene `JWT_SECRET`</Dudoso>.
+
+### Plantillas de texto
+
+En el `console.log` del arranque el profesor escribió primero comillas simples y el editor dio `Unterminated string literal`. Para meter una variable en un texto hacen falta **comillas invertidas** (backticks) y `${...}`:
+
+```ts title="src/index.ts"
+console.log(`Server is running on port ${env.NODE_PORT}`); // bien
+console.log('Server is running on port ${env.NODE_PORT}'); // imprime ${env.NODE_PORT} tal cual
+```
+
+Para ver de dónde salía el puerto, el profesor lo fue cambiando en el `.env` y en el valor por defecto (3000, 3001, 3010) y nodemon reiniciaba en cada cambio.
+
+## Rutas y respuestas
+
+Una ruta se registra con el método HTTP (`app.get`, `app.post`, `app.patch`, `app.delete`…), la URL y una función `(req, res)`:
+
+```ts title="src/app.ts (referencia)"
+app.get('/health', (_req, res) => res.json({ ok: true }));
+```
+
+- **`res.json(obj)`** responde con JSON y código 200.
+- **`res.status(código).json(obj)`** elige el código: `res.status(404).json({ message: 'No existe' })`.
+- **`res.send(texto)`** responde con texto.
+- **`_req`**: si un parámetro no se usa, se escribe con guion bajo delante. Lo mismo con `_next`.
+
+La ruta **`/health`** sirve para comprobar que el servidor está vivo sin tocar la base de datos. En clase, con el autocompletado, el profesor también exploró lo que trae `req`: `headers`, `hostname`, `ip`, `method`…
+
+### Lo que pasa si no hay ruta
+
+Con el servidor recién arrancado y sin rutas, `localhost:3010` en el navegador respondía **`Cannot GET /`**: es el 404 que da Express por defecto. Con `morgan('dev')` se ve cada petición en la consola:
+
+<Terminal titulo="zsh">
+{`GET / 404 3.110 ms - 139`}
+</Terminal>
+
+La línea dice el método, la ruta, el código, lo que tardó y el tamaño de la respuesta en bytes. Después de añadir la ruta `/health`, el navegador enseñó `{"message":"OK"}` (la respuesta del proyecto en directo) y en la consola salieron `GET /health 200` y `GET /favicon.ico 404`. El `404` de `/favicon.ico` lo provoca el navegador, que pide el icono de la pestaña: no es un fallo de la app.
+
+## Middlewares
+
+Un middleware es una función `(req, res, next)` que se ejecuta **antes** de que la petición llegue a su ruta. Puede hacer algo y llamar a `next()` para pasar a la siguiente pieza, o responder y cortar la cadena. Se registran con `app.use()` y **se ejecutan en el orden en que los escribes**.
+
+| Middleware | Qué hace |
+| --- | --- |
+| `helmet()` | Añade cabeceras de seguridad a todas las respuestas. |
+| `cors()` | Añade las cabeceras <Concepto termino="CORS" definicion="Regla de los navegadores que impide que una web lea respuestas de otro origen (otro dominio o puerto) si el servidor no le da permiso con una cabecera. No afecta a Postman ni a Android.">CORS</Concepto> para que una web de otro origen (Angular en el puerto 4200) pueda leer las respuestas. Sin opciones, deja pasar a cualquiera. |
+| `express.json()` | Lee el cuerpo de las peticiones con JSON y lo deja en `req.body`. Desde la v0.8.0, con `{ limit: '10mb' }`. |
+| `express.urlencoded({ extended: true })` | Lee los formularios HTML clásicos. Solo en el proyecto en directo. |
+| `morgan('dev')` | Una línea de log por petición. Desde la v0.8.0 se cambia por un `requestLogger` propio. |
+| `errorHandler` | El manejador de errores. **Siempre el último.** |
+
+El profesor insistió en el orden: primero seguridad y lectura del cuerpo, luego el log, luego las rutas, y el manejador de errores al final. Este es el orden definitivo de la referencia (v1.0.0):
+
+1. `helmet` y `cors`
+2. `express.json({ limit: '10mb' })`
+3. `requestLogger` (antes `morgan('dev')`)
+4. `generalLimiter` (rate limiting)
+5. `/health` y `/api-docs`
+6. Las rutas (`/api/auth`, `/api/users`)
+7. `errorHandler`
+
+El 20/10 también probó `helmet({ contentSecurityPolicy: false })` y lo dejó otra vez en `helmet()`. En la v1.0.0 se queda sin CSP para que se vea Swagger ([Docker y Swagger](/docs/2-dam/apis/backend/docker-swagger)).
+
+### Prueba a cambiar el orden
+
+<OrdenMiddlewares />
+
+La demo simula la petición `PATCH /api/users/1` con un JSON. Lo que tienes que sacar de ella:
+
+| Si pones… | …pasa esto |
+| --- | --- |
+| `express.json()` después de las rutas | `req.body` llega `undefined` y la validación responde 400. |
+| `requestLogger` (o `morgan`) después de las rutas | La ruta responde y no llama a `next()`, así que el log nunca se ejecuta. |
+| `helmet` o `cors` después de las rutas | La respuesta sale sin sus cabeceras. Sin CORS, el navegador bloquea la respuesta (Postman no lo comprueba). |
+| `generalLimiter` después de las rutas | Esas rutas no tienen límite de peticiones. |
+| `errorHandler` antes de las rutas | Los errores de las rutas no le llegan y responde el manejador por defecto de Express, con HTML. |
+
+## El manejador de errores
+
+Express reconoce un middleware de errores porque tiene **cuatro parámetros**: `(err, req, res, next)`. Si algo llama a `next(err)` (o lanza un error en una ruta), Express se salta los middlewares normales y va al siguiente de cuatro parámetros.
+
+```ts title="src/middleware/error.ts (v0.2.0)"
+import type { Request, Response, NextFunction } from 'express';
+
+export function errorHandler(err: any, _req: Request, res: Response, _next: NextFunction) {
+  console.error(err);
+  const status = err.status || 500;
+  res.status(status).json({ message: err.message || 'Error interno' });
+}
+```
+
+- Usa el `status` del error si lo trae (por ejemplo, `express.json()` pone 400 cuando el JSON está mal escrito) y, si no, 500.
+- Responde siempre JSON con `{ message }`, y `'Error interno'` si el error no trae mensaje.
+- `_next` no se usa, pero **tiene que estar**: sin el cuarto parámetro Express lo trataría como un middleware normal.
+
+En la v0.8.0 `console.error` se cambia por el logger de Winston y el parámetro `_req` pasa a `req`, para apuntar el método y la ruta ([Logs, rate limiting y tests](/docs/2-dam/apis/backend/logs-rate-limiting-tests)).
+
+<NoDadoEnClase titulo="Errores en funciones async con Express 5">
+  En Express 5, si una ruta `async` lanza un error (o una promesa se rechaza), Express lo pasa solo al manejador de errores. En Express 4 había que hacer `try/catch` y llamar a `next(err)`. Los controladores de clase llevan su propio `try/catch` y responden ellos, así que no dependen de esto.
+</NoDadoEnClase>
+
+## Cierre ordenado del servidor
+
+Cuando paras el servidor con **Ctrl+C** (señal `SIGINT`) o cuando Docker para el contenedor (señal `SIGTERM`), conviene dejar que terminen las peticiones que están a medias. Para eso se guarda lo que devuelve `app.listen` y se cierra al recibir la señal:
+
+<Recorrido
+  titulo="src/index.ts (v0.8.0 en adelante)"
+  lenguaje="ts"
+  codigo={`import app from './app.js';
+import { env } from './config/env.js';
+import { logger } from './utils/logger.js';
+
+const server = app.listen(env.PORT, () => {
+  logger.info(\`API escuchando en http://localhost:\${env.PORT}\`);
+  logger.info(\`Entorno: \${env.NODE_ENV}\`);
+});
+
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM recibido, cerrando servidor...');
+  server.close(() => {
+    logger.info('Servidor cerrado');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT recibido, cerrando servidor...');
+  server.close(() => {
+    logger.info('Servidor cerrado');
+    process.exit(0);
+  });
+});`}
+>
+  <Paso lineas="5-8" titulo="Guardar el servidor">
+    `app.listen` devuelve el servidor HTTP. Se guarda en `server` para poder cerrarlo después.
+  </Paso>
+  <Paso lineas="10" titulo="Escuchar la señal">
+    `process.on('SIGTERM', ...)` se ejecuta cuando el sistema (o Docker) pide al proceso que termine.
+  </Paso>
+  <Paso lineas="12-15" titulo="server.close(callback)">
+    Deja de aceptar conexiones nuevas, espera a que acaben las que hay y entonces ejecuta el *callback*, que sale con `process.exit(0)` (0 = sin error).
+  </Paso>
+  <Paso lineas="18-24" titulo="Lo mismo con Ctrl+C">
+    `SIGINT` es la señal de Ctrl+C. Se trata igual.
+  </Paso>
+</Recorrido>
+
+Hasta la v0.7 era más corto: `process.on('SIGTERM', () => server.close())`, con `console.log` en vez del logger. El 20/10 el profesor lo reescribió con llaves (con algún error de sintaxis por el camino) y lo dejó en una línea.
+
+## La estructura de la referencia
+
+Así está organizado `node-server-26-27` en las últimas versiones. Cada recurso de la API tiene su carpeta en `src/modules/`, como verás en [CRUD de usuarios](/docs/2-dam/apis/backend/crud-usuarios):
+
+<Files>
+  <Folder name="prisma" defaultOpen>
+    <Folder name="migrations" />
+    <File name="schema.prisma" />
+  </Folder>
+  <Folder name="src" defaultOpen>
+    <Folder name="config" defaultOpen>
+      <File name="db.ts" />
+      <File name="env.ts" />
+      <File name="swagger.ts" />
+    </Folder>
+    <Folder name="middleware" defaultOpen>
+      <File name="auth.ts" />
+      <File name="error.ts" />
+      <File name="rateLimiter.ts" />
+      <File name="requestLogger.ts" />
+      <File name="validate.ts" />
+    </Folder>
+    <Folder name="modules" defaultOpen>
+      <Folder name="auth" />
+      <Folder name="users" />
+    </Folder>
+    <Folder name="tests" />
+    <Folder name="utils">
+      <File name="logger.ts" />
+    </Folder>
+    <File name="app.ts" />
+    <File name="index.ts" />
+  </Folder>
+  <File name=".env.example" />
+  <File name="docker-compose.yml" />
+  <File name="Dockerfile" />
+  <File name="nodemon.json" />
+  <File name="package.json" />
+  <File name="tsconfig.json" />
+  <File name="CHANGELOG.md" />
+  <File name="README.md" />
+</Files>
+
+El `README.md` es un manual por versiones (cada una con su objetivo y sus pasos) y el `CHANGELOG.md` apunta qué añade cada versión. También hay `docs/API_EXAMPLES.md` y una carpeta `scripts/`.
+
+## Practica
+
+<Quiz titulo="Test: servidor con Express" descripcion="8 preguntas">
+  <Pregunta enunciado="¿Por qué `app.ts` exporta la app y `index.ts` hace el `listen`?" explicacion="Así se puede importar la app configurada sin levantar el servidor. Los tests con Supertest hacen `request(app)` directamente.">
+    <Opcion>Porque Express no deja hacer `listen` en el mismo fichero</Opcion>
+    <Opcion correcta>Para poder usar la app (por ejemplo en los tests) sin arrancar el servidor</Opcion>
+    <Opcion>Para que nodemon vigile dos ficheros</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En `index.ts` escribes `import app from 'express'` y `app.listen(3000)`. ¿Qué pasa?" explicacion="`'express'` es el módulo, no una app. La app se crea con `express()`; por eso el editor dice que `listen` no existe.">
+    <Opcion correcta>Error: `Property 'listen' does not exist`, porque eso es el módulo y no una app</Opcion>
+    <Opcion>Funciona igual que `express().listen(3000)`</Opcion>
+    <Opcion>Arranca pero sin rutas</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿De qué tipo es `process.env.PORT` en TypeScript?" explicacion="Las variables de entorno siempre son texto, y pueden no existir. Por eso se usan `??` y `Number(...)`.">
+    <Opcion>`number`</Opcion>
+    <Opcion correcta>`string | undefined`</Opcion>
+    <Opcion>`string`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué hace `required()` en el `env.ts` de la referencia si falta `JWT_SECRET`?" explicacion="Lanza `Falta variable de entorno: JWT_SECRET` y la app no llega a arrancar.">
+    <Opcion>Pone un secreto por defecto</Opcion>
+    <Opcion>Arranca y falla en el primer login</Opcion>
+    <Opcion correcta>Lanza un error y la app no arranca</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cómo sabe Express que una función es el manejador de errores?" explicacion="Tiene cuatro parámetros: `(err, req, res, next)`. Por eso `_next` se deja aunque no se use.">
+    <Opcion>Porque se llama `errorHandler`</Opcion>
+    <Opcion correcta>Porque tiene cuatro parámetros</Opcion>
+    <Opcion>Porque se registra con `app.error()`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Si `express.json()` se registra después de las rutas, `req.body` llega con los datos igual." respuesta={false} explicacion="Los middlewares se ejecutan en orden. Si la ruta va antes, cuando se ejecuta todavía nadie ha leído el cuerpo y `req.body` es `undefined`." />
+  <Pregunta enunciado="En la consola de morgan sale `GET /favicon.ico 404`. ¿Qué significa?" explicacion="El navegador pide el icono de la pestaña por su cuenta. La API no lo tiene y responde 404: no es un fallo de la app.">
+    <Opcion>Que falta una ruta obligatoria en Express</Opcion>
+    <Opcion correcta>Que el navegador ha pedido el icono de la pestaña y la API no lo tiene</Opcion>
+    <Opcion>Que helmet ha bloqueado la petición</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué hace `server.close(callback)` al recibir `SIGTERM`?" explicacion="Deja de aceptar conexiones nuevas y, cuando acaban las que hay, ejecuta el callback (que hace `process.exit(0)`).">
+    <Opcion>Mata el proceso al momento</Opcion>
+    <Opcion correcta>Deja de aceptar conexiones, espera a que acaben las que hay y ejecuta el callback</Opcion>
+    <Opcion>Reinicia el servidor</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: Express">
+  <Tarjeta frente="`app.ts` frente a `index.ts`">`app.ts` crea y configura Express (middlewares y rutas) y lo exporta. `index.ts` solo hace `listen` y el cierre ordenado.</Tarjeta>
+  <Tarjeta frente="¿Para qué sirve `env.ts`?">Centraliza la configuración: lee `process.env` una vez, con valores por defecto y `required()` para las obligatorias. El resto del código usa `env.X`.</Tarjeta>
+  <Tarjeta frente="`import 'dotenv/config'`">Carga el `.env` en `process.env`. Equivale a `import dotenv from 'dotenv'` + `dotenv.config()`.</Tarjeta>
+  <Tarjeta frente="Orden de los middlewares de la referencia">helmet → cors → express.json → requestLogger → generalLimiter → /health y /api-docs → rutas → errorHandler.</Tarjeta>
+  <Tarjeta frente="`Cannot GET /`">El 404 por defecto de Express cuando ninguna ruta coincide.</Tarjeta>
+  <Tarjeta frente="Firma del manejador de errores">`(err, req, res, next)`, con cuatro parámetros. Responde `err.status || 500` y `{ message }`.</Tarjeta>
+  <Tarjeta frente="¿Por qué `_req` o `_next`?">El guion bajo indica que el parámetro no se usa.</Tarjeta>
+  <Tarjeta frente="Graceful shutdown">`const server = app.listen(...)` y, en `SIGTERM`/`SIGINT`, `server.close(() => process.exit(0))`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Un env.ts con variables obligatorias" dificultad="facil">
+  Escribe un `src/config/env.ts` que cargue el `.env` y exporte un objeto `env` con `PORT` (número, por defecto 3000), `NODE_ENV` (por defecto `development`) y `DATABASE_URL`, que es obligatoria: si falta, la app no debe arrancar.
+
+  <Pista>Para cargar el fichero basta con `import 'dotenv/config'` en la primera línea.</Pista>
+  <Pista>Haz una función que reciba el valor y el nombre y lance un error si el valor no existe.</Pista>
+
+  <Solucion>
+
+Es el `env.ts` de la referencia, sin las variables de auth y Cloudinary:
+
+```ts title="src/config/env.ts"
+import 'dotenv/config';
+
+const required = (v: string | undefined, k: string) => {
+  if (!v) throw new Error(`Falta variable de entorno: ${k}`);
+  return v;
+};
+
+export const env = {
+  PORT: Number(process.env.PORT ?? 3000),
+  NODE_ENV: process.env.NODE_ENV ?? 'development',
+  DATABASE_URL: required(process.env.DATABASE_URL, 'DATABASE_URL'),
+};
+```
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Ordena este app.ts" dificultad="media">
+  Este `app.ts` tiene el orden mal. Di qué falla al hacer `PATCH /api/users/1` con un JSON y reescríbelo bien.
+
+```ts title="src/app.ts"
+const app = express();
+app.use(errorHandler);
+app.use('/api/users', usersRoutes);
+app.use(express.json());
+app.use(helmet());
+app.use(cors());
+app.get('/health', (_req, res) => res.json({ ok: true }));
+export default app;
+```
+
+  <Pista>Piensa qué se ha ejecutado ya cuando la petición llega a `usersRoutes`.</Pista>
+  <Pista>¿Le llegaría al `errorHandler` un error de la ruta?</Pista>
+
+  <Solucion>
+
+- `express.json()` va después de las rutas: `req.body` llega `undefined` y `validate` responde 400.
+- `helmet` y `cors` también van detrás: las respuestas de `/api/users` salen sin sus cabeceras (Angular no podría leerlas por CORS).
+- `errorHandler` va el primero: los errores de las rutas no le llegan y responde el manejador por defecto de Express.
+
+```ts title="src/app.ts"
+const app = express();
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+app.get('/health', (_req, res) => res.json({ ok: true }));
+app.use('/api/users', usersRoutes);
+app.use(errorHandler);
+export default app;
+```
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Express">Framework de Node para servidores HTTP: rutas, middlewares y respuestas.</Termino>
+  <Termino nombre="dotenv">Lee el `.env` y lo mete en `process.env`.</Termino>
+  <Termino nombre="env.ts">El único sitio que lee `process.env`. Exporta el objeto `env`.</Termino>
+  <Termino nombre="Middleware">Función `(req, res, next)` que se ejecuta en orden antes de la ruta.</Termino>
+  <Termino nombre="errorHandler">Middleware de cuatro parámetros que responde los errores. Va el último.</Termino>
+  <Termino nombre="/health">Ruta para comprobar que el servidor está vivo.</Termino>
+  <Termino nombre="SIGTERM / SIGINT">Señales para terminar el proceso: la de Docker y la de Ctrl+C.</Termino>
+</Glosario>
+
+<MarcarCompletado />

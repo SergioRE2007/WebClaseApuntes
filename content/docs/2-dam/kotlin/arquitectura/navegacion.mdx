@@ -1,0 +1,665 @@
+---
+title: Navegación con rutas tipadas
+description: Cómo se pasa de una pantalla a otra con Navigation Compose tal como se dio en clase. Rutas @Serializable, NavHost, rememberNavController, callbacks en vez de pasar el navController, toRoute en el destino y en el ViewModel, popBackStack y grafos anidados.
+icon: Route
+---
+
+import { PilaNavegacion } from '@/components/temas/arquitectura/pila-navegacion';
+
+Una app con varias pantallas necesita una forma de ir de una a otra, de volver y de pasar datos (por ejemplo, el id de la tarea que se quiere ver). En clase se usó **Navigation Compose** con **rutas tipadas**: cada destino es una clase de Kotlin y no un texto. Se montó el 09/10 en la ToDoApp y el 18/11 se amplió con grafos anidados.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Declarar las rutas como una clase sellada con `@Serializable`.
+  - Montar el `NavHost` con `rememberNavController()` y un `composable<Ruta>` por pantalla.
+  - Por qué las pantallas reciben **callbacks** y no el `navController`.
+  - Leer los argumentos con `toRoute()` en el destino y con `savedStateHandle.toRoute()` en el ViewModel.
+  - Volver atrás con `popBackStack()` y agrupar pantallas en grafos anidados.
+</Callout>
+
+## Antes de Navigation: el parche
+
+<DeClase fecha="09/10" proyecto="ToDoApp" />
+
+Antes de montar la navegación, el profesor probó el botón de crear con un apaño: un estado local en la pantalla de lista y un `if` que pintaba la lista o el formulario.
+
+```kotlin title="TaskListScreen.kt (parche provisional, fragmento)"
+var isCreatingTask by remember { mutableStateOf(false) }
+// ...
+// if (!isCreatingTask) { ...la lista... }
+else {
+    TaskCreateScreen()
+}
+```
+
+Funciona para probar, pero no hay botón atrás, no hay forma de pasar datos y la pantalla de lista acaba conociendo a todas las demás. Ese `if` se quitó en cuanto el `NavHost` estuvo listo: **se navega en vez de usar un `if` con estado local**.
+
+- En las capturas del documento de la ToDoApp el estado se llama `botonPulsado` y es un contador, y el `if` que decide no se ve en ninguna captura.
+
+## Dependencias
+
+<DeClase fecha="09/10" proyecto="ToDoApp" />
+
+```kotlin title="app/build.gradle.kts (09/10, fragmento)"
+implementation(libs.navigation.compose)
+implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+```
+
+- `libs.navigation.compose` es `androidx.navigation:navigation-compose:2.10.2`.
+- Las rutas tipadas necesitan además el **plugin de serialización** de Kotlin (lo decía la teoría de Moodle de esa clase), que es el que procesa `@Serializable`.
+
+<NoDadoEnClase titulo="Cómo se añade el plugin de serialización">
+  En las capturas no se ve dónde se declara el plugin. La forma estándar con el catálogo es declararlo con la misma versión que Kotlin y aplicarlo en `app`.
+</NoDadoEnClase>
+
+```toml title="gradle/libs.versions.toml (no dado en clase)"
+[plugins]
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+```
+
+```kotlin title="app/build.gradle.kts (no dado en clase)"
+plugins {
+    alias(libs.plugins.kotlin.serialization)
+}
+```
+
+En el `build.gradle.kts` de la raíz va como los demás: `alias(libs.plugins.kotlin.serialization) apply false`.
+
+## Las rutas
+
+<DeClase fecha="09/10" proyecto="ToDoApp" />
+
+```kotlin title="ui/navigation/Routes.kt"
+@Serializable
+sealed class Route(val route: String) {
+    @Serializable
+    object TaskList : Route(route = "taskList")
+
+    @Serializable
+    object TaskCreate : Route(route = "taskCreate")
+
+    @Serializable
+    class TaskDetail(val id: Int) : Route(route = "taskDetail/$id")
+}
+```
+
+- Una **clase sellada**: solo existen los destinos declarados aquí. Si mañana añades uno, está todo en este archivo.
+- Los destinos **sin datos** son `object` (`TaskList`, `TaskCreate`). Los que **llevan datos** son `class` con propiedades: `TaskDetail(val id: Int)` lleva el id de la tarea.
+- `@Serializable` es lo que hace posible la navegación tipada: Navigation convierte el objeto en una ruta al navegar y lo vuelve a construir al llegar. Va en la clase padre y en cada destino.
+- La ventaja frente a las rutas de texto: si a `TaskDetail` le falta el `id`, **no compila**.
+- Las cajas grises `companion object { fun serializer() ... }` que salen en el IDE son código generado por el plugin de serialización. No se escriben. Por eso el autocompletado de `Route.` ofrecía también `Companion`.
+
+<Callout type="warn" title="El route: String sobra">
+  El parámetro `route: String` (`"taskDetail/$id"`) es un resto de la navegación antigua por texto. Con rutas tipadas no hace falta, pero el profesor lo mantuvo en todas las versiones. Si lo copias, no estorba; si lo quitas, las rutas quedan como `object TaskList : Route()`.
+</Callout>
+
+## El NavController y el NavHost
+
+<DeClase fecha="09/10" proyecto="ToDoApp" />
+
+El `NavHost` es el composable que enseña una pantalla u otra según la ruta actual. Se escribió en un archivo nuevo, `ui/navigation/ToDoNavHost.kt` (New Kotlin Class/File, opción **File**, porque no es una clase sino una función):
+
+<Recorrido
+  titulo="ui/navigation/ToDoNavHost.kt"
+  lenguaje="kotlin"
+  codigo={`@Composable
+fun ToDoNavHost() {
+    val controller = rememberNavController()
+
+    NavHost(
+        navController = controller,
+        startDestination = Route.TaskList
+    ) {
+        composable<Route.TaskList> {
+            TaskListScreen(
+                toCreate = { controller.navigate(Route.TaskCreate) },
+                toDetail = { id -> controller.navigate(Route.TaskDetail(id = id)) }
+            )
+        }
+        composable<Route.TaskCreate> {
+            TaskCreateScreen()
+        }
+        composable<Route.TaskDetail> { backStackEntry ->
+            val detail: Route.TaskDetail = backStackEntry.toRoute()
+            TaskDetailScreen(id = detail.id)
+        }
+    }
+}`}
+>
+  <Paso lineas="3" titulo="El controlador, con = y no con by">
+    `rememberNavController()` crea (y recuerda entre recomposiciones) el `NavHostController`, que es quien sabe en qué pantalla estás y guarda la pila. El profesor lo escribió primero con `by` y dio error: `NavHostController` no tiene `getValue`, así que no sirve como delegado. Va con `=`.
+  </Paso>
+  <Paso lineas="5-8" titulo="Los dos parámetros obligatorios">
+    `navController` y `startDestination`, la pantalla con la que arranca. `startDestination` es de tipo `Any`, por eso acepta un objeto de ruta. Sin él no compila (se provocó el error en clase).
+  </Paso>
+  <Paso lineas="8, 22" titulo="Una lambda con receptor">
+    El último parámetro es `builder: NavGraphBuilder.() -> Unit`: una lambda en la que `this` es un `NavGraphBuilder`. Por eso dentro puedes llamar a `composable` sin poner nada delante.
+  </Paso>
+  <Paso lineas="9-14" titulo="Un destino por pantalla">
+    `composable<Route.TaskList>` dice qué se pinta para esa ruta. La pantalla recibe dos callbacks, y es aquí, en el `NavHost`, donde se decide a dónde lleva cada uno.
+  </Paso>
+  <Paso lineas="12" titulo="Navegar con datos">
+    `controller.navigate(Route.TaskDetail(id = id))` crea la ruta con su argumento. El `id ->` es el nombre del parámetro de la lambda.
+  </Paso>
+  <Paso lineas="18-21" titulo="Leer el argumento al llegar">
+    El bloque recibe la entrada de la pila (`NavBackStackEntry`) y `toRoute()` reconstruye el objeto `Route.TaskDetail` con su `id`.
+  </Paso>
+</Recorrido>
+
+Para que se vea, la Activity deja de pintar la lista directamente y pinta el `NavHost`:
+
+```kotlin title="MainActivity.kt (09/10)"
+setContent {
+    ToDoAppTheme {
+        ToDoNavHost()
+    }
+}
+```
+
+La documentación oficial que se enseñó en clase ("Design your navigation graph") usa el mismo patrón con un ejemplo `Profile`:
+
+```kotlin title="Ejemplo de la documentación oficial"
+@Serializable
+data class Profile(val name: String)
+
+val navController = rememberNavController()
+NavHost(navController = navController, startDestination = Profile(name = "John Smith")) {
+    composable<Profile> { backStackEntry ->
+        val profile: Profile = backStackEntry.toRoute()
+        ProfileScreen(name = profile.name)
+    }
+}
+```
+
+### El tipo de `toRoute()`
+
+Primero se escribió `toRoute<>()` sin tipo y dio error: `toRoute` es genérica y Kotlin tiene que saber qué ruta construir. Vale cualquiera de las dos formas:
+
+<Comparar columnas>
+  <Lado titulo="Tipo en la variable (clase)">
+
+```kotlin
+val detail: Route.TaskDetail =
+    backStackEntry.toRoute()
+```
+
+  </Lado>
+  <Lado titulo="Tipo en la función">
+
+```kotlin
+val detail =
+    backStackEntry.toRoute<Route.TaskDetail>()
+```
+
+  </Lado>
+</Comparar>
+
+## Las pantallas no conocen el navController
+
+<DeClase fecha="09/10" proyecto="ToDoApp" />
+
+Una de las ideas que más se repitió en clase: **la pantalla no navega**. Solo avisa de que ha pasado algo ("han pulsado +", "han pulsado la tarea 3") llamando a un callback. Quien decide a dónde ir es el `NavHost`.
+
+<Comparar titulo="¿Quién decide a dónde se va?">
+  <Lado tipo="evitar" titulo="Pasar el navController (no se hizo así)">
+
+```kotlin
+@Composable
+fun TaskListScreen(navController: NavHostController) {
+    // ...
+    FloatingActionButton(
+        onClick = { navController.navigate(Route.TaskCreate) }
+    ) { /* ... */ }
+}
+```
+
+La pantalla queda atada a Navigation y a las rutas: no se puede previsualizar ni reutilizar sin un `NavHostController` de verdad.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Callbacks (como en clase)">
+
+```kotlin
+@Composable
+fun TaskListScreen(
+    modifier: Modifier = Modifier,
+    toCreate: () -> Unit,
+    toDetail: (Int) -> Unit,
+    viewModel: TaskListViewModel = hiltViewModel(),
+) {
+    // ...
+    FloatingActionButton(onClick = toCreate) { /* ... */ }
+}
+```
+
+La pantalla solo sabe que "hay algo que hacer al pulsar +". El `NavHost` le pasa `{ controller.navigate(Route.TaskCreate) }`.
+
+  </Lado>
+</Comparar>
+
+Los tipos de los callbacks son **tipos función** de Kotlin: `() -> Unit` es "una función sin parámetros que no devuelve nada" (como un `Runnable` de Java) y `(Int) -> Unit`, "una función que recibe un `Int`" (como un `Consumer<Integer>`).
+
+### El callback baja hasta la tarjeta
+
+Para abrir el detalle hay que pulsar una tarea. El callback va bajando por los composables y cambia de forma por el camino:
+
+<Mermaid
+  titulo="Cómo baja toDetail hasta cada tarjeta"
+  chart={`flowchart TD
+    NH["ToDoNavHost<br/>toDetail = { id -> controller.navigate(Route.TaskDetail(id = id)) }"] --> LS["TaskListScreen<br/>toDetail: (Int) -> Unit"]
+    LS -->|"items: toDetail = { toDetail(it.id) }"| TC["TaskCard<br/>toDetail: () -> Unit"]
+    TC --> CL["Modifier.clickable(onClick = toDetail)"]`}
+/>
+
+```kotlin title="TaskListScreen.kt (09/10)"
+items(items = viewModel.readAll(), key = { it.id }) {
+    TaskCard(
+        toDetail = { toDetail(it.id) },
+        title = it.title,
+        description = it.description,
+        isCompleted = it.isCompleted
+    )
+}
+
+@Composable
+fun TaskCard(
+    toDetail: () -> Unit,
+    title: String, description: String, isCompleted: Boolean
+) {
+    Card(
+        modifier = Modifier.clickable(enabled = true, onClick = toDetail)
+    ) {
+        // Column con los textos y el Switch
+    }
+}
+```
+
+- La lista envuelve el callback en `{ toDetail(it.id) }`, donde `it` es la tarea de esa fila. Así **la tarjeta no necesita saber su id** ni a qué pantalla se va: recibe un `() -> Unit` y lo llama al pulsarla.
+- Un `Card` solo no responde a toques (lo dice su documentación). Se hace pulsable con `Modifier.clickable`, cuyo `onClick` es obligatorio.
+
+<Flujo titulo="Pulsar una tarea" nodos={["TaskCard", "TaskListScreen", "NavHost", "TaskDetailScreen"]}>
+  <Mensaje de="TaskCard" a="TaskCard" titulo="Modifier.clickable">
+    El usuario pulsa la tarjeta de la tarea 2. Se ejecuta su `onClick`, que es el `toDetail` que recibió.
+  </Mensaje>
+  <Mensaje de="TaskCard" a="TaskListScreen" titulo="toDetail()">
+    Ese `toDetail` es la lambda `{ toDetail(it.id) }` que escribió la lista, así que llama al callback de la lista con `it.id`, que vale 2.
+  </Mensaje>
+  <Mensaje de="TaskListScreen" a="NavHost" titulo="toDetail(2)">
+    El callback de la lista es el que le pasó el `NavHost`.
+  </Mensaje>
+  <Mensaje de="NavHost" a="NavHost" titulo="navigate(Route.TaskDetail(id = 2))">
+    El `NavHost` navega: mete la ruta en la pila con su argumento.
+  </Mensaje>
+  <Mensaje de="NavHost" a="TaskDetailScreen" titulo="backStackEntry.toRoute()">
+    Se pinta el destino `composable<Route.TaskDetail>`, que reconstruye la ruta y llama a `TaskDetailScreen(id = detail.id)`.
+  </Mensaje>
+</Flujo>
+
+### La primera pantalla de detalle
+
+El 09/10 la pantalla de detalle solo enseñaba el id, como prueba:
+
+```kotlin title="ui/TaskDetailScreen.kt (09/10)"
+@Composable
+fun TaskDetailScreen(
+    modifier: Modifier = Modifier,
+    id: Int? = null,
+) {
+    id?.let {
+        Text("Tarea $id")
+    }
+}
+```
+
+`id?.let { }` solo ejecuta el bloque si `id` no es `null`. Mientras faltaba el import de `Text`, el IDE marcaba un error raro en `let` (*Cannot infer type for type parameter R*): a veces el error real está en otra línea.
+
+## Leer el argumento en el ViewModel
+
+<DeClase fecha="09/11" proyecto="PokeApp2627" nota="y en las capturas del documento de la ToDoApp" />
+
+Pasar el `id` a la pantalla y que la pantalla se lo pase al ViewModel funciona, pero hay una forma más directa: el ViewModel lo lee él mismo. Al navegar, los argumentos de la ruta se guardan en el `SavedStateHandle` de esa entrada de la pila, y **Hilt se lo pasa al ViewModel** si lo pides en el constructor (no hace falta ningún módulo).
+
+<Recorrido
+  titulo="ui/PokemonDetailViewModel.kt (09/11)"
+  lenguaje="kotlin"
+  codigo={`@HiltViewModel
+class PokemonDetailViewModel @Inject constructor(
+    private val _repository: PokemonRepository,
+    savedStateHandle: SavedStateHandle,
+) : ViewModel() {
+    private val _route = savedStateHandle.toRoute<Routes.Detail>()
+    private val _id = _route.id
+
+    val state: StateFlow<PokemonDetailScreenState> = _repository.observePokemon(_id)
+        .map { pokemon ->
+            if (pokemon != null) PokemonDetailScreenState.Loaded(pokemon)
+            else PokemonDetailScreenState.Initial
+        }.stateIn(
+            scope = viewModelScope,
+            initialValue = PokemonDetailScreenState.Initial,
+            started = SharingStarted.WhileSubscribed(5_000L)
+        )
+}`}
+>
+  <Paso lineas="4" titulo="Se pide como un parámetro más">
+    `SavedStateHandle` no necesita `@Binds` ni `@Provides`: Hilt lo da a cualquier `@HiltViewModel` que lo pida. Fíjate en que no lleva `val`: no hace falta guardarlo como propiedad, porque solo se usa al inicializar `_route`.
+  </Paso>
+  <Paso lineas="6-7" titulo="toRoute en el ViewModel">
+    `savedStateHandle.toRoute<Routes.Detail>()` reconstruye la ruta con la que se llegó a esta pantalla, igual que `backStackEntry.toRoute()` en el `NavHost`. De ahí se saca el `id`.
+  </Paso>
+  <Paso lineas="9-17" titulo="Con el id, el estado">
+    El ViewModel pide al repositorio ese pokémon y construye su estado con `map` y `stateIn`.
+  </Paso>
+</Recorrido>
+
+- <Dudoso nota="No se ve en las capturas; se ha puesto porque sin él la app se cae (lo enseñó el propio profesor el 18/11).">`@HiltViewModel`</Dudoso> de esta clase no se ve en las capturas.
+- <Dudoso nota="No se ve implementado ni en el LocalDataSource ni en la interfaz del repositorio.">`observePokemon(id)`</Dudoso> se usa, pero no se ve cómo está hecho.
+
+En la ToDoApp, el `TaskDetailViewModel` de las capturas del documento hace lo mismo:
+
+```kotlin title="ui/taskdetail/TaskDetailViewModel.kt (fragmento)"
+@HiltViewModel
+class TaskDetailViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
+    private val _repository: TaskRepository
+) : ViewModel() {
+
+    private val route: Route.TaskDetail = savedStateHandle.toRoute()
+    private val id: Int = route.id
+    // ...
+}
+```
+
+Así, el destino del `NavHost` ya no necesita leer el argumento: la pantalla es `TaskDetailScreen()` y el ViewModel se encarga. Es lo que aparece el 18/11: `composable<Routes.TaskDetail> { TaskDetailScreen() }`.
+
+## Volver a la pantalla anterior
+
+<DeClase fecha="18/11" proyecto="ToDoOfflineFirst" />
+
+Navegar **mete** una pantalla en la pila; `popBackStack()` **saca** la de arriba y vuelve a la anterior (lo mismo que el botón atrás del sistema). Igual que para ir, la pantalla recibe un callback y el `NavHost` decide:
+
+```kotlin title="MainNavigation.kt (18/11, fragmento)"
+composable<Routes.TaskCreate> {
+    TaskCreateScreen(onBack = { navController.popBackStack() })
+}
+```
+
+En la ToDoApp, la pantalla de detalle de las capturas del documento recibe `toList: () -> Unit` y lo llama después de guardar:
+
+```kotlin title="ui/taskdetail/TaskDetailScreen.kt (fragmento)"
+Button(
+    onClick = {
+        viewModel.onSave()
+        toList()
+    }
+) {
+    Text("Update")
+}
+```
+
+<NoSeVio titulo="Volver después de guardar en la ToDoApp">
+  En la ToDoApp no se ve cómo conecta el `NavHost` los callbacks `toList` de las pantallas de crear y de detalle, ni la vuelta a la lista después de "Save". `popBackStack()` solo aparece el 18/11, en otro proyecto.
+</NoSeVio>
+
+Si guardar tarda (es una corrutina), volver justo al pulsar puede llegar antes de que termine. La forma de volver cuando el estado pasa a `Created`, con `LaunchedEffect`, está en [Estados de pantalla](/docs/2-dam/kotlin/arquitectura/estados-de-pantalla) y no se dio en clase.
+
+## Grafos anidados
+
+<DeClase fecha="18/11" proyecto="ToDoOfflineFirst" rama="datastore" />
+
+Cuando la app crece, las pantallas se agrupan por funcionalidad. Un **grafo anidado** es un grupo de destinos con su propia pantalla de inicio. El 18/11 se separaron las pantallas de tareas y la de ajustes:
+
+```kotlin title="core/ui/navigation/Routes.kt (18/11)"
+@Serializable
+abstract class Routes(val route: String) {
+    @Serializable object TaskFeature : Routes("task-feature")
+    @Serializable object SettingsFeature : Routes("settings-feature")
+    @Serializable object TaskList : Routes("task_list")
+    @Serializable object TaskCreate : Routes("task_create")
+    @Serializable class TaskDetail(val id: Int) : Routes("task_detail[$id]")
+    @Serializable object Settings : Routes("settings")
+}
+```
+
+- <Dudoso nota="Probablemente `task_detail/$id`, como en la ToDoApp.">`"task_detail[$id]"`</Dudoso>: así se lee la ruta de texto del detalle.
+- Aquí `Routes` es una `abstract class`, no una `sealed class` como en la ToDoApp. Se lee igual en muchas capturas, así que parece seguro.
+- `TaskFeature` y `SettingsFeature` no son pantallas: son los **grafos**.
+
+```kotlin title="core/ui/navigation/MainNavigation.kt (18/11)"
+@Composable
+fun MainNavigation(modifier: Modifier = Modifier) {
+    val navController = rememberNavController()
+    NavHost(modifier = modifier, startDestination = Routes.TaskFeature, navController = navController) {
+        navigation<Routes.TaskFeature>(startDestination = Routes.TaskList) {
+            composable<Routes.TaskList> {
+                TaskListScreen(
+                    modifier = Modifier.fillMaxSize(),
+                    toTaskCreate = { navController.navigate(Routes.TaskCreate) },
+                    onSettings = { navController.navigate(Routes.SettingsFeature) }
+                )
+            }
+            composable<Routes.TaskDetail> { TaskDetailScreen() }
+            composable<Routes.TaskCreate> { TaskCreateScreen(onBack = { navController.popBackStack() }) }
+        }
+        navigation<Routes.SettingsFeature>(startDestination = Routes.Settings) {
+            composable<Routes.Settings> { SettingsScreen() }
+        }
+    }
+}
+```
+
+<Mermaid
+  titulo="Grafos de ToDoOfflineFirst"
+  chart={`flowchart TD
+    NH["NavHost<br/>startDestination = Routes.TaskFeature"] --> TF["navigation#lt;Routes.TaskFeature#gt;<br/>startDestination = TaskList"]
+    NH --> SF["navigation#lt;Routes.SettingsFeature#gt;<br/>startDestination = Settings"]
+    TF --> TL["TaskList"]
+    TF --> TD["TaskDetail"]
+    TF --> TC["TaskCreate"]
+    SF --> S["Settings"]`}
+/>
+
+- `navigation<Grafo>(startDestination = ...)` crea el grupo. Dentro van sus `composable<...>`.
+- El `startDestination` del `NavHost` es ahora un **grafo** (`Routes.TaskFeature`), que a su vez abre su pantalla de inicio (`TaskList`).
+- `onSettings` navega **al grafo** (`Routes.SettingsFeature`), no a la pantalla: Navigation abre su `startDestination`, `Settings`. Si mañana ajustes tiene varias pantallas, la lista no tiene que saber cuál es la primera.
+- Al ir y volver de ajustes con atrás se veía la transición de fundido que Navigation pone por defecto.
+
+El `onSettings` también sube por callbacks: la barra superior reutilizable `ApplicationTopBar` recibe `onSettings: () -> Unit = {}` y se lo pasa al `IconButton` del engranaje; `TaskListScreen` se lo pasa a la barra; y el `NavHost`, a `TaskListScreen`. Ninguna pantalla conoce el `navController`.
+
+## Pruébalo: la pila de navegación
+
+El `NavHostController` guarda una **pila** (*back stack*): cada `navigate` mete una pantalla encima y cada `popBackStack()` o botón atrás quita la de arriba. Prueba los dos montajes de clase: la ToDoApp del 09/10 y los grafos del 18/11.
+
+<PilaNavegacion />
+
+Cosas que se ven en la demo:
+
+- Abrir el detalle de la tarea 1 y luego volver y abrir el de la 2 deja en la pila **una entrada distinta** para cada una, cada una con su argumento.
+- En el modo de grafos, el engranaje llama a `navigate(Routes.SettingsFeature)` y lo que aparece en la pila es `Settings`, la pantalla de inicio de ese grafo.
+- Atrás en la primera pantalla no tiene a dónde volver: Navigation no saca la pantalla de inicio, así que el botón atrás le llega a la Activity, que se cierra.
+- Cada entrada tiene **su propio ViewModel** (el de `hiltViewModel()`), que se destruye cuando la entrada sale de la pila.
+
+## Lo que no se dio
+
+<NoDadoEnClase titulo="Barra inferior, popUpTo y login">
+  No salieron en clase la barra de navegación inferior (`NavigationBar`), `popUpTo` para limpiar la pila ni cómo hacer que el login no vuelva atrás. Están explicados en [Navegación del proyecto](/docs/2-dam/kotlin/para-el-proyecto/navegacion-del-proyecto).
+</NoDadoEnClase>
+
+## Practica
+
+<CompletarCodigo
+  titulo="Una ruta con argumento"
+  enunciado="Completa la ruta, la navegación y la lectura del argumento."
+  lenguaje="kotlin"
+  codigo={`@Serializable
+[[class]] NoteDetail(val id: Int)
+
+// En el NavHost
+composable<NoteList> {
+    NoteListScreen(toDetail = { id -> navController.[[navigate]](NoteDetail(id = id)) })
+}
+composable<NoteDetail> { backStackEntry ->
+    val detail: NoteDetail = backStackEntry.[[toRoute]]()
+    NoteDetailScreen(id = detail.id)
+}`}
+/>
+
+<Quiz titulo="Test: navegación" descripcion="8 preguntas">
+  <Pregunta enunciado="¿Por qué `val controller by rememberNavController()` no compila?" explicacion="`by` necesita un objeto con `getValue` (un delegado). `NavHostController` no lo tiene, así que se escribe `val controller = rememberNavController()`.">
+    <Opcion>Porque `rememberNavController()` solo se puede usar en la Activity</Opcion>
+    <Opcion correcta>Porque `NavHostController` no tiene `getValue` y no sirve como delegado</Opcion>
+    <Opcion>Porque falta `@Composable`</Opcion>
+    <Opcion>Porque `controller` tendría que ser `var`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Quieres una ruta a una pantalla de editar tarea, que necesita el id. ¿Cómo la declaras, como en clase?" explicacion="Un destino con datos es una `class` con propiedades, marcada con `@Serializable`. Los destinos sin datos son `object`.">
+    <Opcion correcta>`@Serializable class TaskEdit(val id: Int) : Route(...)`</Opcion>
+    <Opcion>`@Serializable object TaskEdit : Route(...)`</Opcion>
+    <Opcion>`val TaskEdit = "taskEdit/{id}"`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="En clase, las pantallas recibían el `navController` como parámetro para navegar." respuesta={false} explicacion="Recibían callbacks (`toCreate: () -> Unit`, `toDetail: (Int) -> Unit`) y el `NavHost` decidía a dónde ir. La pantalla no conoce el `navController`." />
+  <Pregunta enunciado="¿Cómo lee el ViewModel de detalle el id de la ruta?" explicacion="Pide `SavedStateHandle` en su constructor (Hilt se lo da) y hace `savedStateHandle.toRoute<Ruta>()`, como en `PokemonDetailViewModel` del 09/11.">
+    <Opcion correcta>Con `savedStateHandle.toRoute<Routes.Detail>().id`</Opcion>
+    <Opcion>Con `navController.currentRoute.id`</Opcion>
+    <Opcion>No puede: la pantalla tiene que pasárselo siempre</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="`Routes.SettingsFeature` es un grafo anidado con `startDestination = Routes.Settings`. ¿Qué hace `navController.navigate(Routes.SettingsFeature)`?" explicacion="Navegar a un grafo abre su pantalla de inicio. Así quien navega no tiene que saber cuál es la primera pantalla de ajustes.">
+    <Opcion>Da error: solo se puede navegar a pantallas</Opcion>
+    <Opcion correcta>Abre la pantalla de inicio de ese grafo, `Settings`</Opcion>
+    <Opcion>Abre todas las pantallas del grafo a la vez</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿Qué función del `navController` quita la pantalla actual de la pila y vuelve a la anterior?" respuesta={["popBackStack", "popBackStack()", "`popBackStack()`"]} explicacion="`popBackStack()`. Se usó el 18/11 en `TaskCreateScreen(onBack = { navController.popBackStack() })`." />
+  <Pregunta enunciado="¿Qué necesitan las clases de ruta para la navegación tipada?" explicacion="`@Serializable` (y el plugin de serialización de Kotlin en Gradle). Navigation convierte el objeto en ruta y lo reconstruye al llegar.">
+    <Opcion correcta>La anotación `@Serializable` y el plugin de serialización</Opcion>
+    <Opcion>Heredar de `NavHost`</Opcion>
+    <Opcion>Ser `data class` obligatoriamente</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué `TaskCard` recibe `toDetail: () -> Unit` y no `(Int) -> Unit`?" explicacion="La lista le pasa `{ toDetail(it.id) }`, una lambda que ya lleva dentro el id de esa tarea. La tarjeta solo tiene que llamarla al pulsarse.">
+    <Opcion>Porque `Modifier.clickable` no admite parámetros</Opcion>
+    <Opcion correcta>Porque la lista envuelve el callback con el id (`{ toDetail(it.id) }`) y la tarjeta no necesita saberlo</Opcion>
+    <Opcion>Porque en Kotlin no existen funciones con parámetros como tipo</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: navegación">
+  <Tarjeta frente="Ruta tipada">Una clase `@Serializable` en vez de un texto. `object` si no lleva datos, `class X(val id: Int)` si los lleva.</Tarjeta>
+  <Tarjeta frente="`rememberNavController()`">Crea el `NavHostController`, que guarda la pila. Se escribe con `=`, no con `by`.</Tarjeta>
+  <Tarjeta frente="`NavHost`">Composable que pinta la pantalla de la ruta actual. Obligatorios: `navController` y `startDestination`. Dentro, un `composable<Ruta>` por pantalla.</Tarjeta>
+  <Tarjeta frente="¿Quién navega?">El `NavHost`. Las pantallas reciben callbacks (`toCreate: () -> Unit`) y no conocen el `navController`.</Tarjeta>
+  <Tarjeta frente="Leer un argumento">En el destino: `backStackEntry.toRoute<Ruta>()`. En el ViewModel: `savedStateHandle.toRoute<Ruta>()`.</Tarjeta>
+  <Tarjeta frente="`navigate` y `popBackStack`">`navigate(ruta)` mete una pantalla en la pila. `popBackStack()` quita la de arriba.</Tarjeta>
+  <Tarjeta frente="Grafo anidado">`navigation<Grafo>(startDestination = ...)` agrupa pantallas. Navegar al grafo abre su pantalla de inicio.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Una pantalla de estadísticas" dificultad="facil">
+  Añade a la ToDoApp una pantalla `TaskStatsScreen()` sin datos de entrada, a la que se llega desde la lista. Escribe la ruta nueva en `Route`, el destino en `ToDoNavHost` y el cambio en `TaskListScreen` para que reciba un callback `toStats`. La pantalla de lista no puede conocer el `navController`.
+
+  <Pista>Sin datos: es un `object`, como `TaskCreate`.</Pista>
+  <Pista>El callback es `() -> Unit` y el `NavHost` le pasa `{ controller.navigate(Route.TaskStats) }`.</Pista>
+
+  <Solucion>
+
+```kotlin title="ui/navigation/Routes.kt"
+@Serializable
+sealed class Route(val route: String) {
+    @Serializable object TaskList : Route(route = "taskList")
+    @Serializable object TaskCreate : Route(route = "taskCreate")
+    @Serializable class TaskDetail(val id: Int) : Route(route = "taskDetail/$id")
+    @Serializable object TaskStats : Route(route = "taskStats")
+}
+```
+
+```kotlin title="ui/navigation/ToDoNavHost.kt (fragmento)"
+composable<Route.TaskList> {
+    TaskListScreen(
+        toCreate = { controller.navigate(Route.TaskCreate) },
+        toDetail = { id -> controller.navigate(Route.TaskDetail(id = id)) },
+        toStats = { controller.navigate(Route.TaskStats) }
+    )
+}
+composable<Route.TaskStats> {
+    TaskStatsScreen()
+}
+```
+
+```kotlin title="ui/tasklist/TaskListScreen.kt (cabecera)"
+@Composable
+fun TaskListScreen(
+    modifier: Modifier = Modifier,
+    toCreate: () -> Unit,
+    toDetail: (Int) -> Unit,
+    toStats: () -> Unit,
+    viewModel: TaskListViewModel = hiltViewModel(),
+)
+```
+
+Dentro de la pantalla, el botón que lleve a estadísticas hace `onClick = toStats`. Si la pantalla está partida en una función con estado y otra sin estado, el callback hay que pasarlo también a la de sin estado, como `toCreate`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Editar una tarea por id" dificultad="media">
+  Añade una ruta `TaskEdit` que lleve el id de la tarea. Desde la lista, al pulsar un botón de editar, se navega a ella con `toEdit(id)`. El `TaskEditViewModel` tiene que leer el id **él mismo** de la ruta, sin que se lo pase la pantalla, y la pantalla tiene que poder volver a la lista con un callback `onBack`.
+
+  <Pista>La ruta lleva datos: `class TaskEdit(val id: Int)`.</Pista>
+  <Pista>El ViewModel pide `savedStateHandle: SavedStateHandle` en su constructor y usa `toRoute<Route.TaskEdit>()`.</Pista>
+  <Pista>Para volver: `onBack = { controller.popBackStack() }` en el `NavHost`.</Pista>
+
+  <Solucion>
+
+```kotlin title="ui/navigation/Routes.kt (añadido dentro de sealed class Route)"
+@Serializable class TaskEdit(val id: Int) : Route(route = "taskEdit/$id")
+```
+
+`TaskListScreen` gana el parámetro `toEdit: (Int) -> Unit`, que baja hasta el botón de editar de cada tarjeta igual que `toDetail` (`toEdit = { toEdit(it.id) }`).
+
+```kotlin title="ui/navigation/ToDoNavHost.kt (fragmento)"
+composable<Route.TaskList> {
+    TaskListScreen(
+        toCreate = { controller.navigate(Route.TaskCreate) },
+        toDetail = { id -> controller.navigate(Route.TaskDetail(id = id)) },
+        toEdit = { id -> controller.navigate(Route.TaskEdit(id = id)) }
+    )
+}
+composable<Route.TaskEdit> {
+    TaskEditScreen(onBack = { controller.popBackStack() })
+}
+```
+
+```kotlin title="ui/taskedit/TaskEditViewModel.kt"
+@HiltViewModel
+class TaskEditViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
+    private val _repository: TaskRepository
+) : ViewModel() {
+    private val id: Int = savedStateHandle.toRoute<Route.TaskEdit>().id
+    // con el id, carga la tarea y rellena los TextFieldState, como TaskDetailViewModel
+}
+```
+
+```kotlin title="ui/taskedit/TaskEditScreen.kt (cabecera)"
+@Composable
+fun TaskEditScreen(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: TaskEditViewModel = hiltViewModel(),
+)
+```
+
+El destino del `NavHost` no lee el argumento: `toRoute` lo hace el ViewModel. `SavedStateHandle` no necesita módulo de Hilt, porque Hilt se lo da a cualquier `@HiltViewModel`.
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Navigation Compose">La librería de navegación de Compose (`navigation-compose` 2.10.2 en clase).</Termino>
+  <Termino nombre="Ruta tipada">Clase `@Serializable` que identifica un destino y lleva sus argumentos.</Termino>
+  <Termino nombre="NavHostController">El que guarda la pila de pantallas. Se crea con `rememberNavController()`.</Termino>
+  <Termino nombre="NavHost">Une cada ruta con su pantalla y decide a dónde lleva cada callback.</Termino>
+  <Termino nombre="toRoute()">Reconstruye la ruta (con sus argumentos) desde la entrada de la pila o desde el `SavedStateHandle`.</Termino>
+  <Termino nombre="Pila de navegación">Las pantallas abiertas, una encima de otra. `navigate` mete y `popBackStack` saca.</Termino>
+  <Termino nombre="Grafo anidado">Grupo de destinos con su propia pantalla de inicio, creado con `navigation<Grafo>`.</Termino>
+</Glosario>
+
+<MarcarCompletado />

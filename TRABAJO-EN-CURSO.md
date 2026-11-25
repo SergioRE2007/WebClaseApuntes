@@ -4,10 +4,11 @@ Rama: `wip/apuntes-curso-2dam`. **No está en producción.** La rama de producci
 
 Se paró el 25/11/2026 a las 20:05 para ahorrar uso. Antes de pasarla a producción hay que terminar lo pendiente y comprobar que `npm run build` pasa.
 
-## Material de origen (NO está en el repo: cópialo al otro PC)
-- `TodoTFG-Apuntes/`: en el PC original está en `C:/Users/sergi/Documents/TFG/Primeros pasos/TodoTFG-Apuntes`. Tiene los dos resúmenes "Lo dado en clase", `Clases/`, `Requisitos/` y `Material de clase/`.
-- `Extras para TodoTFG/`: en el PC original está en la raíz del repo, sin añadir a git. Su "Contexto para la web.md" tiene las reglas del material.
-- Si continúas en otro PC, copia las dos carpetas y cambia sus rutas en los argumentos del workflow (`corpus` y `extras`). Sin ellas no se pueden revisar las páginas contra las fuentes. Los índices y el build sí se pueden hacer sin ellas.
+## Material de origen (en el repo, en esta rama)
+- `TodoTFG-Apuntes/`: los dos resúmenes "Lo dado en clase", `Clases/`, `Requisitos/` y `Material de clase/`. Es una copia de `C:/Users/sergi/Documents/TFG/Primeros pasos/TodoTFG-Apuntes`, del PC original.
+- `Extras para TodoTFG/`: su "Contexto para la web.md" tiene las reglas del material.
+- Los argumentos del workflow son `corpus` = `<repo>/TodoTFG-Apuntes`, `extras` = `<repo>/Extras para TodoTFG` y `validador` = `<repo>/scripts/validar-mdx.mjs`, con rutas absolutas del PC en el que estés.
+- Estas dos carpetas son material de origen, no van a la web. No las pases a la rama de producción: quítalas antes de fusionar.
 
 ## Reglas del material (resumen de "Contexto para la web.md")
 - Lo que no se dio en clase va siempre marcado con `<NoDadoEnClase>`.

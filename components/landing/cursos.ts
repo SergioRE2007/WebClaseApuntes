@@ -18,6 +18,8 @@ export interface CursoResumen {
   nombre: string;
   /** Número de curso si se ha detectado (1 o 2). */
   numero: number | null;
+  /** Portada del curso (/docs/2-dam), si la tiene. */
+  url: string | null;
   modulos: ModuloResumen[];
   paginas: string[];
 }
@@ -70,7 +72,7 @@ function aModulo(node: PageTree.Folder | PageTree.Item, i: number): ModuloResume
   };
 }
 
-function cursoDesdeNodos(id: string, nombre: string, nodos: PageTree.Node[]): CursoResumen {
+function cursoDesdeNodos(id: string, nombre: string, nodos: PageTree.Node[], url: string | null = null): CursoResumen {
   const modulos = nodos
     .filter((n): n is PageTree.Folder | PageTree.Item => n.type === 'folder' || n.type === 'page')
     .map(aModulo)
@@ -79,6 +81,7 @@ function cursoDesdeNodos(id: string, nombre: string, nodos: PageTree.Node[]): Cu
     id,
     nombre,
     numero: numeroCurso(nombre),
+    url,
     modulos,
     paginas: [...new Set(modulos.flatMap((m) => m.paginas))],
   };
@@ -125,7 +128,9 @@ export function getCursos(): CursoResumen[] {
         (c) => c.type !== 'separator' && !(c.type === 'page' && (c.url === node.index?.url || profundidad(c.url) <= 1)),
       );
       // Si el curso no tiene subcarpetas, sus páginas hacen de módulos.
-      cursos.push(cursoDesdeNodos(node.$id ?? `curso-${cursos.length}`, texto(node.name), hijos));
+      cursos.push(
+        cursoDesdeNodos(node.$id ?? `curso-${cursos.length}`, texto(node.name), hijos, node.index?.url ?? null),
+      );
       continue;
     }
     if (node.type === 'page' && (node.url === '/docs' || node.url === '/docs/')) continue;
@@ -148,7 +153,7 @@ function orden(numero: number | null | undefined) {
   return numero ?? 99;
 }
 
-/** Títulos de todas las páginas por URL (para la tira de progreso). */
+/** Títulos de todas las páginas por URL (para "Continúa donde lo dejaste"). */
 export function getTitulos(): Record<string, string> {
   const out: Record<string, string> = {};
   try {

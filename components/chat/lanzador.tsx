@@ -4,13 +4,11 @@ import { forwardRef, useEffect, useState, type ComponentProps } from 'react';
 import { MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
-function esMac() {
-  return typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent);
-}
+export { esPaginaDeAcceso } from './abrir-chat';
 
-/** Páginas de acceso: ahí el lanzador del tutor sobra. */
-export function esPaginaDeAcceso(pathname: string) {
-  return pathname.startsWith('/login') || pathname.startsWith('/unirse') || pathname.startsWith('/auth');
+/** true en Mac/iPhone/iPad (para mostrar ⌘ en vez de Ctrl). Solo en cliente, tras montar. */
+export function esMac() {
+  return typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent);
 }
 
 /** Atajo del tutor según el sistema ("⌘J" en Mac, "Ctrl+J" en el resto). */

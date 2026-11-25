@@ -4,13 +4,15 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import { EVENTO_ABRIR_CHAT } from './abrir-chat';
+import { EVENTO_ABRIR_CHAT, rutaParaVolver } from './abrir-chat';
 import { esPaginaDeAcceso, Lanzador, useAtajoChat } from './lanzador';
 
 /**
  * Lanzador del tutor para quien no puede usarlo (sin sesión o sin código de
  * clase). Al pulsarlo (o con Ctrl+J / el evento 'dam:abrir-chat') muestra un
- * aviso pequeño con el enlace para entrar.
+ * aviso pequeño con el enlace para entrar, que después devuelve a esta página.
+ * Atiende el evento (preventDefault) para que `abrirChat()` sepa que hay
+ * alguien escuchando y no redirija por su cuenta.
  */
 export function ChatBloqueado({ logueado }: { logueado: boolean }) {
   const pathname = usePathname() ?? '/';
@@ -20,10 +22,20 @@ export function ChatBloqueado({ logueado }: { logueado: boolean }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const accionRef = useRef<HTMLAnchorElement>(null);
   const tituloId = useId();
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
+
+  // Elemento que tenía el foco al abrir (p. ej. "Preguntar al tutor"): ahí vuelve al cerrar.
+  const origenRef = useRef<HTMLElement | null>(null);
 
   const cerrar = useCallback((devolverFoco = true) => {
     setAbierto(false);
-    if (devolverFoco) requestAnimationFrame(() => lanzadorRef.current?.focus());
+    if (!devolverFoco) return;
+    requestAnimationFrame(() => {
+      const origen = origenRef.current;
+      if (origen?.isConnected && !panelRef.current?.contains(origen)) origen.focus({ preventScroll: true });
+      else lanzadorRef.current?.focus();
+    });
   }, []);
 
   useEffect(() => {
@@ -33,7 +45,12 @@ export function ChatBloqueado({ logueado }: { logueado: boolean }) {
         setAbierto((v) => !v);
       }
     };
-    const onAbrir = () => setAbierto(true);
+    const onAbrir = (e: Event) => {
+      // En las páginas de acceso no se muestra nada: que decida quien lanza el evento.
+      if (esPaginaDeAcceso(pathnameRef.current)) return;
+      e.preventDefault();
+      setAbierto(true);
+    };
     window.addEventListener('keydown', onKey);
     window.addEventListener(EVENTO_ABRIR_CHAT, onAbrir);
     return () => {
@@ -44,6 +61,8 @@ export function ChatBloqueado({ logueado }: { logueado: boolean }) {
 
   useEffect(() => {
     if (!abierto) return;
+    const activo = document.activeElement;
+    origenRef.current = activo instanceof HTMLElement && activo !== document.body ? activo : null;
     requestAnimationFrame(() => accionRef.current?.focus({ preventScroll: true }));
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
@@ -56,8 +75,9 @@ export function ChatBloqueado({ logueado }: { logueado: boolean }) {
 
   useEffect(() => setAbierto(false), [pathname]);
 
-  const volver = pathname.startsWith('/login') || pathname.startsWith('/unirse') ? '/' : pathname;
-  const href = `${logueado ? '/unirse' : '/login'}?next=${encodeURIComponent(volver)}`;
+  // Solo se pinta con el aviso abierto (tras una interacción), así que leer
+  // window.location aquí no provoca diferencias de hidratación.
+  const href = abierto ? `${logueado ? '/unirse' : '/login'}?next=${encodeURIComponent(rutaParaVolver(pathname))}` : '/login';
 
   if (esPaginaDeAcceso(pathname)) return null;
 

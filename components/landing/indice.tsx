@@ -18,11 +18,27 @@ export function Indice({ cursos }: { cursos: CursoResumen[] }) {
         <section key={curso.id} aria-labelledby={`curso-${curso.id}`}>
           <div className="flex items-baseline justify-between gap-4 border-b pb-2">
             <h2 id={`curso-${curso.id}`} className="text-base font-semibold tracking-tight">
-              {curso.nombre}
+              {curso.url ? (
+                <Link
+                  href={curso.url}
+                  className="rounded-sm transition-colors hover:text-fd-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
+                >
+                  {curso.nombre}
+                </Link>
+              ) : (
+                curso.nombre
+              )}
             </h2>
-            <span className="text-sm text-fd-muted-foreground">
+            <span className="text-end text-sm tabular-nums text-fd-muted-foreground">
               {curso.modulos.length} {curso.modulos.length === 1 ? 'módulo' : 'módulos'}
-              {curso.paginas.length === 0 ? ' · sin temas todavía' : ''}
+              {curso.paginas.length === 0 ? (
+                ' · sin temas todavía'
+              ) : (
+                <>
+                  {' · '}
+                  <ModuloProgreso paginas={curso.paginas} unidad />
+                </>
+              )}
             </span>
           </div>
           <ul className="divide-y divide-fd-border">

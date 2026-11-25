@@ -22,6 +22,9 @@ export default async function HomePage() {
 
   const cursos = getCursos();
   const titulos = getTitulos();
+  // Portada real del curso actual (sale del árbol de apuntes); si no se detecta, la ruta por convenio.
+  const cursoActual = cursos.find((c) => c.numero === CURSO_ACTUAL);
+  const urlCurso = cursoActual?.url ?? cursoActual?.modulos[0]?.url ?? `/docs/${CURSO_ACTUAL}-dam`;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -29,7 +32,7 @@ export default async function HomePage() {
         <Hero
           logueado={Boolean(perfil)}
           enClase={Boolean(perfil?.clase_ok)}
-          urlCurso={`/docs/${CURSO_ACTUAL}-dam`}
+          urlCurso={urlCurso}
           curso={`${CURSO_ACTUAL}º`}
         />
         <Continua

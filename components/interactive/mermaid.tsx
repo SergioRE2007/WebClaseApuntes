@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTheme } from 'next-themes';
 import { motion } from 'motion/react';
 import { AlertTriangle, Maximize2, X } from 'lucide-react';
@@ -44,6 +44,8 @@ export function Mermaid({ chart, titulo, className }: MermaidProps) {
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ampliado, setAmpliado] = useState(false);
+  const botonAmpliar = useRef<HTMLButtonElement>(null);
+  const abiertoAntes = useRef(false);
 
   useEffect(() => {
     let cancelado = false;
@@ -128,7 +130,15 @@ export function Mermaid({ chart, titulo, className }: MermaidProps) {
   }, [chart, resolvedTheme, idBase]);
 
   useEffect(() => {
-    if (!ampliado) return;
+    if (!ampliado) {
+      // Al cerrar la vista ampliada, el foco vuelve al botón que la abrió.
+      if (abiertoAntes.current) {
+        abiertoAntes.current = false;
+        botonAmpliar.current?.focus({ preventScroll: true });
+      }
+      return;
+    }
+    abiertoAntes.current = true;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setAmpliado(false);
     window.addEventListener('keydown', onKey);
     const overflow = document.body.style.overflow;
@@ -176,12 +186,13 @@ export function Mermaid({ chart, titulo, className }: MermaidProps) {
         )}
         {svg && (
           <button
+            ref={botonAmpliar}
             type="button"
             onClick={() => setAmpliado(true)}
             aria-label="Ampliar diagrama"
             className="absolute right-2 top-2 rounded-md border bg-fd-background p-2.5 sm:p-1.5 text-fd-muted-foreground opacity-100 transition hover:text-fd-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
           >
-            <Maximize2 className="size-4" />
+            <Maximize2 className="size-4" aria-hidden />
           </button>
         )}
       </div>
@@ -200,9 +211,10 @@ export function Mermaid({ chart, titulo, className }: MermaidProps) {
             autoFocus
             onClick={() => setAmpliado(false)}
             aria-label="Cerrar"
+            title="Cerrar (Esc)"
             className="absolute right-4 top-4 rounded-md border bg-fd-background p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
           >
-            <X className="size-5" />
+            <X className="size-5" aria-hidden />
           </button>
           <motion.div
             initial={{ opacity: 0 }}

@@ -101,6 +101,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--color-fd-background);
+  color: var(--color-fd-foreground);
 }
 
 ::selection {
@@ -137,6 +138,8 @@ samp {
 .prose {
   --tw-prose-links: var(--color-fd-primary);
   line-height: 1.7;
+  /* URLs y nombres largos (rutas, clases Java…) no desbordan la pantalla en móvil */
+  overflow-wrap: break-word;
 }
 
 .prose :where(h1, h2, h3, h4):not(:where([class~='not-prose'] *)) {
@@ -144,15 +147,33 @@ samp {
   letter-spacing: -0.012em;
 }
 
-.prose :where(a):not(:where([class~='not-prose'] *)) {
+/* Las tarjetas (<Cards>) también son <a>, pero no deben verse como enlaces de texto */
+.prose :where(a:not([data-card])):not(:where([class~='not-prose'] *)) {
   font-weight: 450;
   text-underline-offset: 3px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, var(--color-fd-primary) 35%, transparent);
 }
 
-.prose :where(a):not(:where([class~='not-prose'] *)):hover {
+.prose :where(a:not([data-card])):not(:where([class~='not-prose'] *)):hover {
   text-decoration-color: var(--color-fd-primary);
+}
+
+/* Tablas: celdas alineadas arriba cuando el texto ocupa varias líneas */
+.prose :where(td):not(:where([class~='not-prose'] *)) {
+  vertical-align: top;
+}
+
+/* Citas: sin cursiva ni comillas automáticas, solo la línea lateral */
+.prose :where(blockquote):not(:where([class~='not-prose'] *)) {
+  font-style: normal;
+  font-weight: 400;
+  color: var(--color-fd-muted-foreground);
+}
+
+.prose :where(blockquote p:first-of-type):not(:where([class~='not-prose'] *))::before,
+.prose :where(blockquote p:last-of-type):not(:where([class~='not-prose'] *))::after {
+  content: none;
 }
 
 /* Los títulos llevan dentro un enlace de ancla: que no herede el peso de los enlaces */
@@ -249,6 +270,96 @@ figure.shiki {
   body:has(.dam-preguntar-tutor) .dam-chat-fab,
   body:has(:is(input, textarea, select):focus) .dam-chat-fab {
     display: none;
+  }
+}
+
+/* ---------- Avisos (sonner) con los colores del tema ----------
+   Sonner usa su tema claro por defecto: sin esto, en modo oscuro los avisos
+   salen blancos (y la descripción en gris oscuro sobre fondo oscuro). */
+:root [data-sonner-toaster][data-sonner-theme] {
+  --normal-bg: var(--color-fd-popover);
+  --normal-bg-hover: var(--color-fd-accent);
+  --normal-border: var(--color-fd-border);
+  --normal-border-hover: var(--color-fd-border);
+  --normal-text: var(--color-fd-popover-foreground);
+}
+:root [data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+}
+/* Sonner marca el foco con box-shadow (outline: 0): hay que conservarlo */
+:root [data-sonner-toaster] [data-sonner-toast][data-styled='true']:focus-visible,
+:root [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button]:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-fd-ring);
+}
+/* En su tema claro el hover del botón de cerrar usa grises fijos (casi blanco en oscuro) */
+:root [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button]:hover {
+  background: var(--normal-bg-hover);
+  border-color: var(--normal-border-hover);
+}
+:root [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-description] {
+  color: var(--color-fd-muted-foreground);
+}
+
+/* ---------- Impresión: solo el apunte ---------- */
+@media print {
+  #nd-sidebar,
+  #nd-nav,
+  #nd-subnav,
+  #nd-toc,
+  [data-toc-popover],
+  .dam-chat-fab,
+  .dam-preguntar-tutor,
+  [data-sonner-toaster] {
+    display: none !important;
+  }
+  /* Las columnas de la barra lateral y del índice siguen reservadas aunque se oculten */
+  #nd-docs-layout {
+    --fd-sidebar-width: 0px !important;
+    --fd-sidebar-col: 0px !important;
+    --fd-toc-width: 0px !important;
+    --fd-header-height: 0px !important;
+    --fd-toc-popover-height: 0px !important;
+  }
+  #nd-page {
+    max-width: none !important;
+  }
+  /* El papel no lleva fondo: en modo oscuro se imprime con los colores del tema claro */
+  .dark {
+    --color-fd-background: #ffffff;
+    --color-fd-foreground: #18181b;
+    --color-fd-muted: #f4f4f5;
+    --color-fd-muted-foreground: #6b6b74;
+    --color-fd-popover: #ffffff;
+    --color-fd-popover-foreground: #18181b;
+    --color-fd-card: #ffffff;
+    --color-fd-card-foreground: #18181b;
+    --color-fd-border: #e4e4e7;
+    --color-fd-primary: #2563eb;
+    --color-fd-primary-foreground: #ffffff;
+    --color-fd-secondary: #f4f4f5;
+    --color-fd-secondary-foreground: #18181b;
+    --color-fd-accent: #f4f4f5;
+    --color-fd-accent-foreground: #18181b;
+    --color-fd-warning: #b45309;
+    --color-fd-error: #dc2626;
+    --color-fd-success: #15803d;
+    color-scheme: light;
+  }
+  .dark .shiki:not(.not-fumadocs-codeblock *) code span,
+  .dark code.shiki:not(.not-fumadocs-code *) span {
+    color: var(--shiki-light) !important;
+    font-style: var(--shiki-light-font-style) !important;
+  }
+  /* Código completo: sin el alto máximo de 600px ni el ancho fijo (w-max) que impide partir líneas */
+  figure.shiki .fd-scroll-container {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  figure.shiki pre {
+    width: auto !important;
+    min-width: 0 !important;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
 }
 

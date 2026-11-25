@@ -14,7 +14,9 @@ import {
 } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Eye, EyeOff, Lightbulb, MessageCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/cn';
+import { abrirChat, urlLoginVolviendo } from '@/components/chat/abrir-chat';
 import { useRegistroOrdenado } from './utils';
 import {
   avisoCaja,
@@ -63,6 +65,7 @@ export interface EjercicioProps {
 }
 
 export function Ejercicio({ titulo, dificultad = 'media', pregunta, tutor = true, children }: EjercicioProps) {
+  const router = useRouter();
   const contenedor = useRef<HTMLDivElement>(null);
   const { ids: pistas, registrar: registrarPista } = useRegistroOrdenado(contenedor, 'data-pista');
   const [pistasVisibles, setPistasVisibles] = useState(0);
@@ -71,7 +74,7 @@ export function Ejercicio({ titulo, dificultad = 'media', pregunta, tutor = true
   const tituloId = useId();
   const solucionId = useId();
   const enfocarSolucion = useRef(false);
-  // Al volver de la confirmación, el foco regresa al botón «Ver solución».
+  // Al volver de la confirmación o al ocultar la solución, el foco regresa al botón «Ver solución».
   const enfocarTrigger = useRef(false);
   const triggerRef = useCallback((el: HTMLButtonElement | null) => {
     if (el && enfocarTrigger.current) {
@@ -79,7 +82,7 @@ export function Ejercicio({ titulo, dificultad = 'media', pregunta, tutor = true
       el.focus();
     }
   }, []);
-  const cancelarConfirmacion = () => {
+  const ocultar = () => {
     enfocarTrigger.current = true;
     setFase('oculta');
   };
@@ -111,7 +114,9 @@ export function Ejercicio({ titulo, dificultad = 'media', pregunta, tutor = true
     const texto =
       pregunta ??
       `Estoy haciendo el ejercicio «${titulo}» de los apuntes. ¿Me ayudas a razonarlo paso a paso sin darme directamente la solución?`;
-    window.dispatchEvent(new CustomEvent('dam:abrir-chat', { detail: { pregunta: texto } }));
+    // Lo atiende el panel del tutor o, sin sesión, el aviso para entrar. Si aún no
+    // hay nada montado, se va a entrar y se vuelve a este tema.
+    if (!abrirChat({ pregunta: texto })) router.push(urlLoginVolviendo());
   };
 
   return (
@@ -153,7 +158,7 @@ export function Ejercicio({ titulo, dificultad = 'media', pregunta, tutor = true
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
                   e.stopPropagation();
-                  cancelarConfirmacion();
+                  ocultar();
                 }
               }}
             >
@@ -162,7 +167,7 @@ export function Ejercicio({ titulo, dificultad = 'media', pregunta, tutor = true
                 {quedanPistas && ' Aún te quedan pistas.'}
               </p>
               <div className="flex gap-2">
-                <button type="button" autoFocus onClick={cancelarConfirmacion} className={botonPrimario}>
+                <button type="button" autoFocus onClick={ocultar} className={botonPrimario}>
                   Vale, lo intento
                 </button>
                 <button
@@ -205,7 +210,7 @@ export function Ejercicio({ titulo, dificultad = 'media', pregunta, tutor = true
                 (fase === 'visible' ? (
                   <button
                     type="button"
-                    onClick={() => setFase('oculta')}
+                    onClick={ocultar}
                     aria-expanded
                     aria-controls={solucionId}
                     className={botonSecundario}
@@ -230,7 +235,7 @@ export function Ejercicio({ titulo, dificultad = 'media', pregunta, tutor = true
                 <button
                   type="button"
                   onClick={preguntarTutor}
-                  className="ml-auto inline-flex min-h-10 items-center sm:min-h-8 gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-fd-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
+                  className="ml-auto inline-flex min-h-10 items-center sm:min-h-8 gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-fd-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring print:hidden"
                 >
                   <MessageCircle className="size-4" aria-hidden />
                   Pregúntale al tutor

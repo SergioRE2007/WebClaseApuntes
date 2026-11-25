@@ -99,7 +99,8 @@ export function AportacionCard({
         </div>
       )}
 
-      <div className="mt-3">
+      {/* Sin adjunto, Adjunto no pinta nada: empty:hidden evita el hueco. */}
+      <div className="mt-3 empty:hidden">
         <Adjunto a={a} />
       </div>
 

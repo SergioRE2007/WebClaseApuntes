@@ -34,6 +34,8 @@ import { Contenido, TextoEnriquecido, useRegistroOrdenado } from './utils';
 
 interface QuizCtx {
   activa: string | null;
+  /** Al revisar un test terminado se muestran todas las preguntas a la vez. */
+  todas: boolean;
   listo: boolean;
   registrar: () => () => void;
   responder: (id: string, correcta: boolean) => void;
@@ -83,7 +85,9 @@ export function Quiz({ titulo = 'Comprueba lo que sabes', descripcion, children 
   const [respuestas, setRespuestas] = useState<Record<string, boolean>>({});
   const [intento, setIntento] = useState(0);
   const [terminado, setTerminado] = useState(false);
+  const [revisando, setRevisando] = useState(false);
   const tituloId = useId();
+  const preguntasId = useId();
   const cabeceraRef = useRef<HTMLDivElement>(null);
 
   const activa = terminado ? null : (ids[indice] ?? null);
@@ -99,8 +103,8 @@ export function Quiz({ titulo = 'Comprueba lo que sabes', descripcion, children 
   const numero = useCallback((id: string) => ids.indexOf(id) + 1, [ids]);
 
   const ctx = useMemo<QuizCtx>(
-    () => ({ activa, listo: total > 0, registrar, responder, numero, total }),
-    [activa, total, registrar, responder, numero],
+    () => ({ activa, todas: terminado && revisando, listo: total > 0, registrar, responder, numero, total }),
+    [activa, terminado, revisando, total, registrar, responder, numero],
   );
 
   const enfocarCabecera = () => requestAnimationFrame(() => cabeceraRef.current?.focus({ preventScroll: true }));
@@ -115,6 +119,7 @@ export function Quiz({ titulo = 'Comprueba lo que sabes', descripcion, children 
     setRespuestas({});
     setIndice(0);
     setTerminado(false);
+    setRevisando(false);
     setIntento((n) => n + 1);
     enfocarCabecera();
   };
@@ -155,7 +160,49 @@ export function Quiz({ titulo = 'Comprueba lo que sabes', descripcion, children 
         </div>
       )}
 
-      <div ref={contenedor} data-registro-raiz="" className="px-4 py-5 sm:px-5">
+      <div ref={contenedor} id={preguntasId} data-registro-raiz="" className="px-4 py-5 sm:px-5">
+        {terminado && (
+          <div className="py-2">
+            <div role="status">
+              <p className="text-2xl font-semibold tabular-nums">
+                {aciertos}
+                <span className="text-fd-muted-foreground">/{total}</span>
+              </p>
+              <p className="mt-1 text-sm text-fd-muted-foreground">{resultado}</p>
+              <ol className="mt-4 flex flex-wrap gap-1.5" aria-label="Resumen por pregunta">
+                {ids.map((id, i) => (
+                  <li
+                    key={id}
+                    title={`Pregunta ${i + 1}: ${respuestas[id] ? 'acierto' : 'fallo'}`}
+                    className={cn(
+                      'flex size-7 items-center justify-center rounded-md border text-xs font-medium tabular-nums',
+                      respuestas[id] ? cn(okCaja, okTexto) : cn(malCaja, malTexto),
+                    )}
+                  >
+                    {i + 1}
+                    <span className="sr-only">{respuestas[id] ? ': acierto' : ': fallo'}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button type="button" onClick={reintentar} className={botonSecundario}>
+                <RotateCcw className="size-3.5" aria-hidden />
+                Reintentar
+              </button>
+              <button
+                type="button"
+                onClick={() => setRevisando((r) => !r)}
+                aria-expanded={revisando}
+                aria-controls={preguntasId}
+                className={botonSecundario}
+              >
+                {revisando ? 'Ocultar respuestas' : 'Revisar respuestas'}
+              </button>
+            </div>
+          </div>
+        )}
+
         <QuizContext value={ctx}>
           <Fragment key={intento}>{children}</Fragment>
         </QuizContext>
@@ -165,35 +212,6 @@ export function Quiz({ titulo = 'Comprueba lo que sabes', descripcion, children 
             <div className="h-5 w-2/3 animate-pulse rounded bg-fd-muted" />
             <div className="h-10 animate-pulse rounded-md bg-fd-muted" />
             <div className="h-10 animate-pulse rounded-md bg-fd-muted" />
-          </div>
-        )}
-
-        {terminado && (
-          <div className="py-2" role="status">
-            <p className="text-2xl font-semibold tabular-nums">
-              {aciertos}
-              <span className="text-fd-muted-foreground">/{total}</span>
-            </p>
-            <p className="mt-1 text-sm text-fd-muted-foreground">{resultado}</p>
-            <ol className="mt-4 flex flex-wrap gap-1.5" aria-label="Resumen por pregunta">
-              {ids.map((id, i) => (
-                <li
-                  key={id}
-                  title={`Pregunta ${i + 1}: ${respuestas[id] ? 'acierto' : 'fallo'}`}
-                  className={cn(
-                    'flex size-7 items-center justify-center rounded-md border text-xs font-medium tabular-nums',
-                    respuestas[id] ? cn(okCaja, okTexto) : cn(malCaja, malTexto),
-                  )}
-                >
-                  {i + 1}
-                  <span className="sr-only">{respuestas[id] ? ': acierto' : ': fallo'}</span>
-                </li>
-              ))}
-            </ol>
-            <button type="button" onClick={reintentar} className={cn(botonSecundario, 'mt-5')}>
-              <RotateCcw className="size-3.5" aria-hidden />
-              Reintentar
-            </button>
           </div>
         )}
       </div>
@@ -264,7 +282,8 @@ export function Pregunta({
 
   useEffect(() => quiz?.registrar(), [quiz?.registrar]);
 
-  const visible = !quiz || (quiz.listo && quiz.activa === id);
+  const visible = !quiz || (quiz.listo && (quiz.todas || quiz.activa === id));
+  const revision = Boolean(quiz?.todas);
   const numCorrectas = Object.values(correctas).filter(Boolean).length;
   const multiple = tipo === 'opciones' && numCorrectas > 1;
 
@@ -340,121 +359,133 @@ export function Pregunta({
   const numero = quiz?.numero(id);
 
   return (
-    <div data-quiz-pregunta={id} hidden={!visible} role="group" aria-labelledby={enunciadoId}>
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={visible ? 'v' : 'h'}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.15 }}
-        >
-          <p id={enunciadoId} className="mb-1 text-[15px] font-semibold leading-snug sm:text-base">
-            {numero ? <span className="sr-only">Pregunta {numero}. </span> : null}
-            <TextoEnriquecido texto={enunciado} />
-          </p>
-          <p className="mb-4 text-xs text-fd-muted-foreground">
-            {tipo === 'vf'
-              ? 'Verdadero o falso'
-              : tipo === 'texto'
-                ? 'Escribe la respuesta'
-                : multiple
-                  ? 'Varias respuestas correctas: marca todas y comprueba'
-                  : 'Una sola respuesta correcta'}
-          </p>
+    <div
+      data-quiz-pregunta={id}
+      hidden={!visible}
+      role="group"
+      aria-labelledby={enunciadoId}
+      className={cn(revision && 'mt-6 border-t pt-6')}
+    >
+      {/* Sin key que cambie con la visibilidad: si el contenido se volviera a montar, las
+          <Opcion> tendrían ids nuevos y la revisión perdería lo que marcaste. */}
+      <motion.div initial={false} animate={{ opacity: visible ? 1 : 0 }} transition={{ duration: 0.15 }}>
+        <p id={enunciadoId} className="mb-1 text-[15px] font-semibold leading-snug sm:text-base">
+          {numero ? (
+            revision ? (
+              <span className="me-1.5 tabular-nums text-fd-muted-foreground">
+                <span className="sr-only">Pregunta </span>
+                {numero}.
+              </span>
+            ) : (
+              <span className="sr-only">Pregunta {numero}. </span>
+            )
+          ) : null}
+          <TextoEnriquecido texto={enunciado} />
+        </p>
+        <p className="mb-4 text-xs text-fd-muted-foreground">
+          {tipo === 'vf'
+            ? 'Verdadero o falso'
+            : tipo === 'texto'
+              ? 'Escribe la respuesta'
+              : multiple
+                ? 'Varias respuestas correctas: marca todas y comprueba'
+                : 'Una sola respuesta correcta'}
+        </p>
 
-          <PreguntaContext value={ctx}>
-            <div ref={cuerpo} data-registro-raiz="" className="space-y-2 [&_pre]:my-3">
-              {tipo === 'vf' ? (
-                <>
-                  <Opcion correcta={respuesta === true}>Verdadero</Opcion>
-                  <Opcion correcta={respuesta === false}>Falso</Opcion>
-                  {children}
-                </>
-              ) : (
-                children
+        <PreguntaContext value={ctx}>
+          <div ref={cuerpo} data-registro-raiz="" className="space-y-2 [&_pre]:my-3">
+            {tipo === 'vf' ? (
+              <>
+                <Opcion correcta={respuesta === true}>Verdadero</Opcion>
+                <Opcion correcta={respuesta === false}>Falso</Opcion>
+                {children}
+              </>
+            ) : (
+              children
+            )}
+          </div>
+
+          {tipo === 'texto' && (
+            <form
+              className="mt-3 flex flex-col gap-2 sm:flex-row"
+              onSubmit={(e) => {
+                e.preventDefault();
+                comprobarTexto();
+              }}
+            >
+              <label className="sr-only" htmlFor={`${id}-texto`}>
+                Tu respuesta
+              </label>
+              <input
+                id={`${id}-texto`}
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
+                readOnly={respondida}
+                autoComplete="off"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                placeholder="Tu respuesta…"
+                aria-invalid={respondida && acierto === false ? true : undefined}
+                className={cn(
+                  'min-h-9 flex-1 rounded-md border bg-fd-background px-3 font-mono text-sm outline-none transition-colors focus-visible:border-fd-primary',
+                  respondida && acierto && okCaja,
+                  respondida && acierto === false && malCaja,
+                )}
+              />
+              {!respondida && (
+                <button type="submit" className={botonPrimario} disabled={!texto.trim()}>
+                  Comprobar
+                </button>
               )}
-            </div>
+            </form>
+          )}
 
-            {tipo === 'texto' && (
-              <form
-                className="mt-3 flex flex-col gap-2 sm:flex-row"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  comprobarTexto();
-                }}
-              >
-                <label className="sr-only" htmlFor={`${id}-texto`}>
-                  Tu respuesta
-                </label>
-                <input
-                  id={`${id}-texto`}
-                  value={texto}
-                  onChange={(e) => setTexto(e.target.value)}
-                  disabled={respondida}
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder="Tu respuesta…"
-                  aria-invalid={respondida && acierto === false ? true : undefined}
-                  className={cn(
-                    'min-h-9 flex-1 rounded-md border bg-fd-background px-3 font-mono text-sm outline-none transition-colors focus-visible:border-fd-primary',
-                    respondida && acierto && okCaja,
-                    respondida && acierto === false && malCaja,
-                  )}
-                />
-                {!respondida && (
-                  <button type="submit" className={botonPrimario} disabled={!texto.trim()}>
-                    Comprobar
-                  </button>
-                )}
-              </form>
-            )}
+          {multiple && !respondida && (
+            <button
+              type="button"
+              onClick={comprobarMultiple}
+              disabled={seleccionadas.size === 0}
+              className={cn(botonPrimario, 'mt-3')}
+            >
+              Comprobar
+            </button>
+          )}
 
-            {multiple && !respondida && (
-              <button
-                type="button"
-                onClick={comprobarMultiple}
-                disabled={seleccionadas.size === 0}
-                className={cn(botonPrimario, 'mt-3')}
-              >
-                Comprobar
-              </button>
-            )}
-
-            <div aria-live="polite">
-              <AnimatePresence>
-                {respondida && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    transition={{ duration: 0.15 }}
-                    className="overflow-hidden"
+          <div aria-live="polite">
+            <AnimatePresence>
+              {respondida && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  transition={{ duration: 0.15 }}
+                  className="overflow-hidden"
+                >
+                  <div
+                    className={cn('mt-4 rounded-md border p-3 text-sm leading-relaxed', acierto ? okCaja : malCaja)}
                   >
-                    <div
-                      className={cn('mt-4 rounded-md border p-3 text-sm leading-relaxed', acierto ? okCaja : malCaja)}
-                    >
-                      <p className={cn('flex items-center gap-1.5 font-medium', acierto ? okTexto : malTexto)}>
-                        {acierto ? <Check className="size-4" aria-hidden /> : <X className="size-4" aria-hidden />}
-                        {acierto ? 'Correcto' : 'Incorrecto'}
+                    <p className={cn('flex items-center gap-1.5 font-medium', acierto ? okTexto : malTexto)}>
+                      {acierto ? <Check className="size-4" aria-hidden /> : <X className="size-4" aria-hidden />}
+                      {acierto ? 'Correcto' : 'Incorrecto'}
+                    </p>
+                    {tipo === 'texto' && !acierto && solucionTexto && (
+                      <p className="mt-1">
+                        Respuesta correcta:{' '}
+                        <code className="rounded border bg-fd-background px-1 py-px font-mono">{solucionTexto}</code>
                       </p>
-                      {tipo === 'texto' && !acierto && solucionTexto && (
-                        <p className="mt-1">
-                          Respuesta correcta:{' '}
-                          <code className="rounded border bg-fd-background px-1 py-px font-mono">{solucionTexto}</code>
-                        </p>
-                      )}
-                      {explicacion && (
-                        <p className="mt-1 text-fd-foreground/90">
-                          <TextoEnriquecido texto={explicacion} />
-                        </p>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </PreguntaContext>
-        </motion.div>
-      </AnimatePresence>
+                    )}
+                    {explicacion && (
+                      <p className="mt-1 text-fd-foreground/90">
+                        <TextoEnriquecido texto={explicacion} />
+                      </p>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </PreguntaContext>
+      </motion.div>
     </div>
   );
 }

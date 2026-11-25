@@ -24,7 +24,7 @@ function iniciales(nombre: string | null, email: string): string {
 }
 
 const itemClass =
-  'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm text-fd-popover-foreground transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:bg-fd-accent focus-visible:outline-none [&_svg]:size-4 [&_svg]:text-fd-muted-foreground';
+  'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm text-fd-popover-foreground transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:bg-fd-accent focus-visible:outline-none [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-fd-muted-foreground';
 
 export function UserMenuCliente({ nombre, email, esAdmin, enClase, demo }: UserMenuClienteProps) {
   const [open, setOpen] = useState(false);
@@ -45,7 +45,7 @@ export function UserMenuCliente({ nombre, email, esAdmin, enClase, demo }: UserM
         <span className="max-w-[9rem] truncate">{primerNombre}</span>
         <ChevronDown
           aria-hidden
-          className="size-3.5 text-fd-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180"
+          className="size-3.5 shrink-0 text-fd-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180"
         />
       </PopoverTrigger>
       <PopoverContent align="end" sideOffset={8} className="w-60 p-1">

@@ -45,6 +45,7 @@ export function ChatPanel({ nombre, disponible }: ChatPanelProps) {
   const ayudaId = useId();
 
   const atajo = useAtajoChat();
+  const atajoBuscar = atajo.startsWith('⌘') ? '⌘K' : 'Ctrl+K';
 
   const enDocs = pathname === '/docs' || pathname.startsWith('/docs/');
   const sugerencias: string[] = enDocs
@@ -62,15 +63,31 @@ export function ChatPanel({ nombre, disponible }: ChatPanelProps) {
       ];
 
   // ---------- abrir / cerrar ----------
+  // Elemento que tenía el foco al abrir (p. ej. "Preguntar al tutor" de un
+  // ejercicio): al cerrar, el foco vuelve ahí. Si ya no existe (el lanzador se
+  // desmonta al abrir), vuelve al lanzador. No se vacía aquí: se sobrescribe
+  // al abrir, y así no falla si React llama dos veces al updater de Ctrl+J
+  // (StrictMode en desarrollo).
+  const origenRef = useRef<HTMLElement | null>(null);
+  const devolverFoco = useCallback(() => {
+    requestAnimationFrame(() => {
+      const origen = origenRef.current;
+      if (origen?.isConnected && !panelRef.current?.contains(origen)) origen.focus({ preventScroll: true });
+      else lanzadorRef.current?.focus();
+    });
+  }, []);
+
   const cerrar = useCallback(() => {
     setAbierto(false);
-    requestAnimationFrame(() => lanzadorRef.current?.focus());
-  }, []);
+    devolverFoco();
+  }, [devolverFoco]);
 
   const abrir = useCallback(() => setAbierto(true), []);
 
   useEffect(() => {
     if (!abierto) return;
+    const activo = document.activeElement;
+    origenRef.current = activo instanceof HTMLElement && activo !== document.body ? activo : null;
     const id = window.setTimeout(() => {
       const el = textareaRef.current;
       // Si el tutor no está disponible el textarea está deshabilitado: enfocamos
@@ -87,14 +104,14 @@ export function ChatPanel({ nombre, disponible }: ChatPanelProps) {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'j') {
         e.preventDefault();
         setAbierto((v) => {
-          if (v) requestAnimationFrame(() => lanzadorRef.current?.focus());
+          if (v) devolverFoco();
           return !v;
         });
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [devolverFoco]);
 
   // En móvil el panel ocupa toda la pantalla: es modal. Bloquea el scroll del
   // body y deja el resto de la página inerte para que el Tab no se escape.
@@ -129,6 +146,8 @@ export function ChatPanel({ nombre, disponible }: ChatPanelProps) {
   enviarRef.current = enviar;
   useEffect(() => {
     const onAbrir = (e: Event) => {
+      // Marca el evento como atendido: así abrirChat() sabe que el tutor está montado.
+      e.preventDefault();
       const detalle = ((e as CustomEvent<DetalleAbrirChat>).detail ?? {}) as DetalleAbrirChat;
       setAbierto(true);
       const pregunta = detalle.pregunta?.trim();
@@ -210,6 +229,8 @@ export function ChatPanel({ nombre, disponible }: ChatPanelProps) {
     if (mensajes.length === 0) return;
     limpiar();
     setTexto('');
+    pegadoRef.current = true;
+    setPegadoAbajo(true);
     toast.success('Conversación borrada');
     textareaRef.current?.focus();
   };
@@ -353,6 +374,12 @@ export function ChatPanel({ nombre, disponible }: ChatPanelProps) {
               onSubmit={onSubmit}
               className="shrink-0 border-t px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
             >
+              {disponible && sinMensajes && (
+                <p role="status" className="mb-2 px-1 text-xs leading-relaxed text-fd-muted-foreground">
+                  Has usado todos tus mensajes de hoy con el tutor. Mañana podrás seguir preguntando; mientras, tienes
+                  los apuntes y el buscador ({atajoBuscar}).
+                </p>
+              )}
               <div className="flex items-end gap-2 rounded-md border bg-fd-background px-3 py-1.5 transition-colors focus-within:border-fd-primary">
                 <label htmlFor={`${tituloId}-entrada`} className="sr-only">
                   Escribe tu pregunta

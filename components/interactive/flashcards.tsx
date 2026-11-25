@@ -22,9 +22,13 @@ type Marca = 'sabida' | 'repasar';
 
 const kbd = 'rounded border bg-fd-muted px-1 py-px font-mono text-[0.7rem] text-fd-foreground';
 
+const ETIQUETA_MARCA: Record<Marca, string> = { sabida: 'Me la sé', repasar: 'Por repasar' };
+
 interface MazoCtx {
   activa: string | null;
   girada: boolean;
+  /** Marca de la tarjeta activa, para mostrarla sobre la tarjeta. */
+  marca: Marca | null;
   listo: boolean;
   registrar: () => () => void;
   girar: () => void;
@@ -62,6 +66,7 @@ export function Flashcards({ titulo = 'Tarjetas de repaso', children }: Flashcar
   const total = lista.length;
   const indice = Math.min(pos, Math.max(0, total - 1));
   const activa = lista[indice] ?? null;
+  const marcaActiva = activa ? (marcas[activa] ?? null) : null;
   const sabidas = ids.filter((id) => marcas[id] === 'sabida').length;
   const repasar = ids.filter((id) => marcas[id] === 'repasar').length;
 
@@ -140,8 +145,8 @@ export function Flashcards({ titulo = 'Tarjetas de repaso', children }: Flashcar
   };
 
   const ctx = useMemo<MazoCtx>(
-    () => ({ activa, girada, listo: total > 0, registrar, girar, reducir }),
-    [activa, girada, total, registrar, girar, reducir],
+    () => ({ activa, girada, marca: marcaActiva, listo: total > 0, registrar, girar, reducir }),
+    [activa, girada, marcaActiva, total, registrar, girar, reducir],
   );
 
   const filtrado = orden !== null && orden.length < ids.length;
@@ -173,7 +178,11 @@ export function Flashcards({ titulo = 'Tarjetas de repaso', children }: Flashcar
           onKeyDown={onKeyDown}
           role="group"
           aria-roledescription="mazo de tarjetas"
-          aria-label={`Tarjeta ${indice + 1} de ${total}. ${girada ? 'Mostrando respuesta' : 'Mostrando pregunta'}`}
+          aria-label={
+            total
+              ? `Tarjeta ${indice + 1} de ${total}. ${girada ? 'Mostrando respuesta' : 'Mostrando pregunta'}${marcaActiva ? `. ${ETIQUETA_MARCA[marcaActiva]}` : ''}`
+              : 'Mazo de tarjetas'
+          }
           className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-fd-ring focus-visible:ring-offset-2 focus-visible:ring-offset-fd-background"
         >
           <MazoContext value={ctx}>{children}</MazoContext>
@@ -207,12 +216,11 @@ export function Flashcards({ titulo = 'Tarjetas de repaso', children }: Flashcar
             <button
               type="button"
               onClick={() => marcar('repasar')}
-              aria-pressed={Boolean(activa && marcas[activa] === 'repasar')}
+              aria-pressed={marcaActiva === 'repasar'}
               className={cn(
                 botonSecundario,
                 'flex-1 whitespace-nowrap sm:flex-none',
-                activa &&
-                  marcas[activa] === 'repasar' &&
+                marcaActiva === 'repasar' &&
                   'border-amber-600/30 bg-amber-500/[0.07] text-amber-800 dark:border-amber-400/30 dark:text-amber-300',
               )}
             >
@@ -221,12 +229,11 @@ export function Flashcards({ titulo = 'Tarjetas de repaso', children }: Flashcar
             <button
               type="button"
               onClick={() => marcar('sabida')}
-              aria-pressed={Boolean(activa && marcas[activa] === 'sabida')}
+              aria-pressed={marcaActiva === 'sabida'}
               className={cn(
                 botonSecundario,
                 'flex-1 whitespace-nowrap sm:flex-none',
-                activa &&
-                  marcas[activa] === 'sabida' &&
+                marcaActiva === 'sabida' &&
                   'border-green-600/30 bg-green-600/[0.06] text-green-800 dark:border-green-400/30 dark:text-green-300',
               )}
             >
@@ -318,7 +325,12 @@ export function Tarjeta({ frente, children }: TarjetaProps) {
   const girada = visible && mazo.girada;
 
   return (
-    <div data-tarjeta={id} hidden={!visible} className="[perspective:1200px]">
+    <div data-tarjeta={id} hidden={!visible} className="relative [perspective:1200px]">
+      {mazo.marca && (
+        <span className="pointer-events-none absolute end-3 top-2.5 z-10 text-xs text-fd-muted-foreground">
+          {ETIQUETA_MARCA[mazo.marca]}
+        </span>
+      )}
       <motion.div
         className="grid cursor-pointer [transform-style:preserve-3d]"
         initial={false}
@@ -332,6 +344,7 @@ export function Tarjeta({ frente, children }: TarjetaProps) {
         {/* Frente */}
         <div
           aria-hidden={girada}
+          inert={girada}
           className="col-start-1 row-start-1 flex min-h-44 flex-col items-center justify-center rounded-md border bg-fd-background p-6 text-center [backface-visibility:hidden]"
         >
           <span className="mb-2 text-xs font-medium text-fd-muted-foreground">Pregunta</span>
@@ -343,9 +356,14 @@ export function Tarjeta({ frente, children }: TarjetaProps) {
         {/* Reverso */}
         <div
           aria-hidden={!girada}
+          inert={!girada}
           className="col-start-1 row-start-1 flex min-h-44 flex-col items-center justify-center rounded-md border bg-fd-muted/40 p-6 text-center [backface-visibility:hidden] [transform:rotateY(180deg)]"
         >
-          <span className="mb-2 text-xs font-medium text-fd-muted-foreground">Respuesta</span>
+          {/* Recuerda la pregunta para no tener que volver a girar la tarjeta. */}
+          <p className="mb-2 max-w-prose text-xs font-medium text-fd-muted-foreground">
+            <span className="sr-only">Respuesta a: </span>
+            <TextoEnriquecido texto={frente} />
+          </p>
           <div className="max-w-prose text-sm leading-relaxed sm:text-base [&_code]:rounded [&_code]:border [&_code]:bg-fd-muted [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.9em] [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:text-left">
             <Contenido>{children}</Contenido>
           </div>

@@ -72,11 +72,11 @@ export function Terminal({ titulo = 'Terminal', prompt, children, contenido }: T
         <button
           type="button"
           onClick={copiar}
-          aria-label={comandos.length ? 'Copiar comandos' : 'Copiar salida'}
+          aria-label={copiado ? 'Copiado' : comandos.length ? 'Copiar comandos' : 'Copiar salida'}
           title={comandos.length ? 'Copiar comandos' : 'Copiar'}
           className="rounded-md p-2.5 text-fd-muted-foreground transition-colors hover:bg-fd-accent sm:p-1 hover:text-fd-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
         >
-          {copiado ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+          {copiado ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
         </button>
       </div>
       <pre className="overflow-x-auto px-4 py-3 font-mono text-[13px] leading-6">

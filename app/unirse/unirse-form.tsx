@@ -44,9 +44,12 @@ export function UnirseForm({ next }: { next: string }) {
           value={codigo}
           onChange={(e) => setCodigo(e.target.value)}
           aria-invalid={state ? true : undefined}
-          aria-describedby={state ? 'unirse-estado' : undefined}
+          aria-describedby={state ? 'unirse-estado codigo-ayuda' : 'codigo-ayuda'}
           className={cn(authInput, 'font-mono uppercase tracking-[0.25em]')}
         />
+        <p id="codigo-ayuda" className="text-xs text-fd-muted-foreground">
+          Te lo da quien gestiona la web. Da igual mayúsculas o minúsculas.
+        </p>
       </div>
       <button type="submit" disabled={pending} className={authBoton}>
         {pending ? <Loader2 aria-hidden className="size-4 animate-spin" /> : null}

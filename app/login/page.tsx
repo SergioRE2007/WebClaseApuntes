@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { CircleAlert } from 'lucide-react';
 import { rutaSegura } from '@/lib/ruta-segura';
 import { getPerfil } from '@/lib/auth';
 import { AuthShell } from '@/components/layout/auth-shell';
@@ -22,8 +23,9 @@ export default async function LoginPage(props: PageProps<'/login'>) {
       {typeof sp.error === 'string' && ERRORES[sp.error] && (
         <p
           role="alert"
-          className="mt-5 rounded-md border border-red-600/20 bg-red-600/5 p-3 text-sm text-red-800 dark:text-red-300"
+          className="mt-5 flex items-start gap-2 rounded-md border border-red-600/20 bg-red-600/5 p-3 text-sm text-red-800 dark:text-red-300"
         >
+          <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
           {ERRORES[sp.error]}
         </p>
       )}

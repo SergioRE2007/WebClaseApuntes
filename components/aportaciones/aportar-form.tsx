@@ -217,7 +217,7 @@ export function AportarForm({
         return;
       }
       toast.success(res.mensaje ?? 'Aportación enviada', {
-        description: 'Te avisaremos aquí abajo cuando se revise.',
+        description: 'Verás su estado abajo, en «Mis aportaciones».',
       });
       resetear();
       router.refresh();

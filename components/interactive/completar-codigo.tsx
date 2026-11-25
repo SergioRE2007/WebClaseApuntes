@@ -105,9 +105,11 @@ export function CompletarCodigo({
   };
 
   return (
-    <section className={bloque}>
+    <section aria-labelledby={`${baseId}-titulo`} className={bloque}>
       <div className={cabecera}>
-        <p className={tituloBloque}>{titulo ?? 'Completa el código'}</p>
+        <p id={`${baseId}-titulo`} className={tituloBloque}>
+          {titulo ?? 'Completa el código'}
+        </p>
         <span className={cn(etiqueta, 'ms-auto font-mono')}>{lenguaje}</span>
         <p className="w-full text-sm text-fd-muted-foreground">{enunciado}</p>
       </div>
@@ -177,7 +179,13 @@ export function CompletarCodigo({
               </span>
             )}
           </p>
-          <button type="button" onClick={reiniciar} className={botonSecundario} aria-label="Reiniciar ejercicio">
+          <button
+            type="button"
+            onClick={reiniciar}
+            className={botonSecundario}
+            aria-label="Borrar respuestas"
+            title="Borrar respuestas"
+          >
             <RotateCcw className="size-4" aria-hidden />
           </button>
           {!solucion && (

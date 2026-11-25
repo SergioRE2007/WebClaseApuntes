@@ -17,7 +17,9 @@ export function MisAportaciones({
 }) {
   if (aportaciones.length === 0) {
     return (
-      <p className="py-2 text-sm text-fd-muted-foreground">Aún no has enviado nada.</p>
+      <p className="py-2 text-sm text-fd-muted-foreground">
+        Aún no has enviado nada. Cuando lo hagas, aparecerá aquí con su estado: pendiente, aprobada o descartada.
+      </p>
     );
   }
 

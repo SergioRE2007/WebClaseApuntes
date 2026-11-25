@@ -18,7 +18,7 @@ export function Concepto({ definicion, termino, children }: ConceptoProps) {
   return (
     <Popover>
       <PopoverTrigger
-        className="cursor-help rounded-sm text-fd-foreground underline decoration-fd-muted-foreground/60 decoration-dotted decoration-1 underline-offset-4 transition-colors hover:decoration-fd-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
+        className="cursor-help rounded-sm text-fd-foreground underline decoration-fd-muted-foreground/60 decoration-dotted decoration-1 underline-offset-4 transition-colors hover:decoration-fd-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring data-[state=open]:decoration-fd-primary"
         aria-label={`${termino ?? textoPlano(children)}: ver definición`}
       >
         {children}

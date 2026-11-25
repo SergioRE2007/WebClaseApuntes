@@ -59,16 +59,29 @@ function crearComponentes(enStreaming: boolean, onNavegar?: () => void): Compone
       };
       const lang = /language-([\w+#-]+)/.exec(props.className ?? '')?.[1]?.toLowerCase() ?? 'text';
       const code = textoDe(props.children).replace(/\n$/, '');
+      const titulo = lang !== 'text' ? lang : undefined;
       if (enStreaming) {
+        // Mientras llega el texto: la misma caja que el bloque final de Fumadocs
+        // (borde, radio, barra de título y márgenes), sin resaltado, para que
+        // no salte al terminar.
         return (
-          <pre className="my-2 overflow-x-auto rounded-md border bg-fd-muted p-3 font-mono text-[12.5px] leading-relaxed">
-            <code>{code}</code>
-          </pre>
+          <div className="my-2">
+            <figure className="not-prose relative overflow-hidden rounded-xl border bg-fd-card text-sm">
+              {titulo && (
+                <div className="flex h-9.5 items-center border-b px-4 text-fd-muted-foreground">
+                  <span className="truncate">{titulo}</span>
+                </div>
+              )}
+              <pre className="max-h-[600px] overflow-auto px-4 py-3.5 font-mono text-[0.8125rem]">
+                <code>{code}</code>
+              </pre>
+            </figure>
+          </div>
         );
       }
       return (
-        <div className="my-2 text-[12.5px] [&_figure]:my-0">
-          <DynamicCodeBlock lang={lang} code={code} codeblock={{ title: lang !== 'text' ? lang : undefined }} />
+        <div className="my-2 [&_figure]:my-0">
+          <DynamicCodeBlock lang={lang} code={code} codeblock={{ title: titulo }} />
         </div>
       );
     },
@@ -85,7 +98,7 @@ function crearComponentes(enStreaming: boolean, onNavegar?: () => void): Compone
     table({ children }) {
       return (
         <div className="my-2 overflow-x-auto rounded-md border">
-          <table className="w-full border-collapse text-left text-[13px]">{children}</table>
+          <table className="w-full border-collapse text-left text-[13px] [&_tr:last-child>td]:border-b-0">{children}</table>
         </div>
       );
     },
@@ -111,8 +124,12 @@ export const ChatMarkdown = memo(function ChatMarkdown({ texto, enStreaming = fa
     <div
       className={cn(
         'min-w-0 break-words text-sm leading-relaxed',
-        '[&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0',
+        // Sin margen arriba/abajo en el primer y último bloque (aunque sea un título o una lista).
+        // (y, como antes, el primer/último párrafo dentro de citas u otros bloques).
+        '[&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&>:first-child]:mt-0 [&>:last-child]:mb-0',
         '[&_ul]:my-2 [&_ul]:list-disc [&_ul]:ps-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:ps-5 [&_li]:my-0.5',
+        // Listas "sueltas" (con líneas en blanco): el <p> de cada punto no añade hueco extra.
+        '[&_li>p]:my-0 [&_li_ul]:my-1 [&_li_ol]:my-1',
         '[&_h1]:mt-3 [&_h1]:mb-1.5 [&_h1]:text-base [&_h1]:font-semibold',
         '[&_h2]:mt-3 [&_h2]:mb-1.5 [&_h2]:text-[15px] [&_h2]:font-semibold',
         '[&_h3]:mt-2.5 [&_h3]:mb-1 [&_h3]:text-sm [&_h3]:font-semibold',

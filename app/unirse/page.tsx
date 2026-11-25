@@ -16,7 +16,7 @@ export default async function UnirsePage(props: PageProps<'/unirse'>) {
   return (
     <AuthShell
       titulo="Únete a la clase"
-      subtitulo="Mete el código de clase. Solo hace falta la primera vez."
+      subtitulo="Solo la primera vez: dinos cómo te llamas y mete el código de clase."
       pie={`Has entrado como ${perfil.email}`}
     >
       <UnirseForm next={next} />

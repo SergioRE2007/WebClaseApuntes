@@ -181,11 +181,13 @@ export function Dropzone({
             <span className="text-sm font-medium text-fd-foreground">
               {arrastrando ? 'Suelta el archivo aquí' : 'Arrastra un archivo o haz clic para elegirlo'}
             </span>
-            <span className="inline-flex flex-wrap items-center justify-center gap-1 text-xs text-fd-muted-foreground">
+            <span className="hidden flex-wrap items-center justify-center gap-1 text-xs text-fd-muted-foreground [@media(pointer:fine)]:inline-flex">
               <ClipboardPaste className="size-3.5" aria-hidden />
               También puedes pegar una captura con
-              <kbd className="rounded border bg-fd-muted px-1 font-mono text-[11px]">Ctrl</kbd>+
-              <kbd className="rounded border bg-fd-muted px-1 font-mono text-[11px]">V</kbd>
+              <span className="whitespace-nowrap">
+                <kbd className="rounded border bg-fd-muted px-1 font-mono text-[11px]">Ctrl</kbd>+
+                <kbd className="rounded border bg-fd-muted px-1 font-mono text-[11px]">V</kbd>
+              </span>
             </span>
           </motion.button>
         )}

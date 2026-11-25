@@ -1,6 +1,7 @@
 'use server';
 
 import { z } from 'zod';
+import { rutaSegura } from '@/lib/ruta-segura';
 import { env, isSupabaseConfigured } from '@/lib/env';
 import { createClient } from '@/lib/supabase/server';
 
@@ -16,7 +17,7 @@ export async function enviarEnlace(_prev: LoginState, formData: FormData): Promi
   const parsed = schema.safeParse({ email: formData.get('email'), next: formData.get('next') ?? undefined });
   if (!parsed.success) return { ok: false, mensaje: parsed.error.issues[0]?.message ?? 'Datos no válidos' };
 
-  const next = parsed.data.next?.startsWith('/') && !parsed.data.next.startsWith('//') ? parsed.data.next : '/docs';
+  const next = rutaSegura(parsed.data.next);
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithOtp({
     email: parsed.data.email,

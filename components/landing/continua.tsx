@@ -20,7 +20,9 @@ interface Props {
 function fechaRelativa(iso: string): string | null {
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return null;
-  const dias = Math.floor((Date.now() - t) / 86_400_000);
+  // Días de calendario (hora local), no bloques de 24 h
+  const dia = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const dias = Math.round((dia(new Date()) - dia(new Date(t))) / 86_400_000);
   if (dias <= 0) return 'hoy';
   if (dias === 1) return 'ayer';
   if (dias < 7) return `hace ${dias} días`;
@@ -38,7 +40,8 @@ export function Continua({ cursos, titulos }: Props) {
   if (hechas.length === 0) return null;
 
   // Última página completada (por fecha).
-  const [ultimaUrl, ultima] = hechas.reduce((a, b) => (Date.parse(b[1].fecha) > Date.parse(a[1].fecha) ? b : a));
+  const ms = (fecha: string) => Date.parse(fecha) || 0; // sin fecha → la más antigua
+  const [ultimaUrl, ultima] = hechas.reduce((a, b) => (ms(b[1].fecha) > ms(a[1].fecha) ? b : a));
 
   // Siguiente tema pendiente dentro del mismo curso, en el orden del temario.
   const cursoDeUltima = cursos.find((c) => c.paginas.some((u) => normalizarUrlProgreso(u) === ultimaUrl));

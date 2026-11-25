@@ -1,7 +1,7 @@
 import 'server-only';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
-import { isSupabaseConfigured } from '@/lib/env';
+import { avisarConfiguracion, demoPermitido, isSupabaseConfigured } from '@/lib/env';
 import { createClient } from '@/lib/supabase/server';
 
 export type Rol = 'alumno' | 'admin';
@@ -17,7 +17,8 @@ export interface Perfil {
 /** Perfil del usuario actual o null. En modo demo devuelve un admin ficticio. */
 export const getPerfil = cache(async (): Promise<Perfil | null> => {
   if (!isSupabaseConfigured) {
-    return { id: 'demo', email: 'demo@local', nombre: 'Demo', rol: 'admin', clase_ok: true };
+    avisarConfiguracion();
+    return demoPermitido ? { id: 'demo', email: 'demo@local', nombre: 'Demo', rol: 'admin', clase_ok: true } : null;
   }
   const supabase = await createClient();
   const {
@@ -54,3 +55,4 @@ export async function requireAdmin(): Promise<Perfil> {
   if (perfil.rol !== 'admin') redirect('/');
   return perfil;
 }
+

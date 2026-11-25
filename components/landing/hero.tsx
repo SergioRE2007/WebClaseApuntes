@@ -59,7 +59,7 @@ export function Hero({ logueado, enClase, nombre, totalPaginas, totalModulos }: 
             transition={{ duration: 0.6, delay: 0.12, ease }}
             className="mx-auto mt-5 max-w-xl text-base text-pretty text-fd-muted-foreground sm:text-lg lg:mx-0"
           >
-            Los apuntes de clase de 1º y 2º, con tests, flashcards y un tutor IA que se los sabe de memoria.
+            Los apuntes de clase de 2º (y de 1º para repasar), con tests, flashcards y un tutor IA que se los sabe de memoria.
             Estudia a tu ritmo y no pierdas el hilo de ningún módulo.
           </motion.p>
 
@@ -96,7 +96,9 @@ export function Hero({ logueado, enClase, nombre, totalPaginas, totalModulos }: 
               <>
                 <Sparkles aria-hidden className="me-1 inline size-3.5 -translate-y-px text-fd-primary" />
                 {totalModulos > 0
-                  ? `${totalModulos} módulos y ${totalPaginas} temas esperándote.`
+                  ? `${totalModulos} ${totalModulos === 1 ? 'módulo' : 'módulos'}${
+                      totalPaginas > 0 ? ` y ${totalPaginas} ${totalPaginas === 1 ? 'tema' : 'temas'} esperándote.` : ': los temas van llegando.'
+                    }`
                   : 'Los apuntes se están cargando: vuelve pronto.'}
               </>
             ) : (

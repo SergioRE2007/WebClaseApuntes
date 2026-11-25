@@ -1,9 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { rutaSegura } from '@/lib/ruta-segura';
 import { createClient } from '@/lib/supabase/server';
 
 function destinoSeguro(next: string | null) {
   // Evita redirecciones abiertas: solo rutas internas
-  return next && next.startsWith('/') && !next.startsWith('//') ? next : '/docs';
+  return rutaSegura(next);
 }
 
 export async function GET(request: NextRequest) {

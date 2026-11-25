@@ -45,7 +45,7 @@ export default async function AportarPage() {
           se añadirá a los apuntes.
         </p>
         <ul className="mt-4 grid gap-2 text-sm text-fd-muted-foreground sm:grid-cols-3">
-          <li className="flex items-center gap-2">
+          <li className="hidden items-center gap-2 [@media(pointer:fine)]:flex">
             <ClipboardPaste className="size-4 shrink-0 text-fd-primary" aria-hidden />
             Pega capturas con Ctrl+V
           </li>

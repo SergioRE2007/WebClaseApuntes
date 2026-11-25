@@ -68,14 +68,15 @@ export async function eliminarAportacion(input: { id: string }): Promise<Resulta
   const supabase = await createClient();
   const { data: fila, error: errLeer } = await supabase
     .from('aportaciones')
-    .select('id, archivo_path')
+    .select('id, autor_id, archivo_path')
     .eq('id', parsed.data.id)
     .maybeSingle();
   if (errLeer) return { ok: false, error: 'No se pudo leer la aportación.' };
   if (!fila) return { ok: false, error: 'Esa aportación ya no existe.' };
 
-  const path = (fila as { archivo_path: string | null }).archivo_path;
-  if (path) {
+  const { archivo_path: path, autor_id } = fila as { archivo_path: string | null; autor_id: string };
+  // Solo borramos el adjunto si está en la carpeta del autor (evita borrar archivos ajenos)
+  if (path && path.startsWith(`${autor_id}/`)) {
     const { error } = await supabase.storage.from(BUCKET_APORTACIONES).remove([path]);
     if (error) return { ok: false, error: 'No se pudo borrar el archivo adjunto. Inténtalo de nuevo.' };
   }

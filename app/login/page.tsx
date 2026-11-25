@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { rutaSegura } from '@/lib/ruta-segura';
 import { getPerfil } from '@/lib/auth';
 import { AuthShell } from '@/components/layout/auth-shell';
 import { LoginForm } from './login-form';
@@ -7,7 +8,7 @@ export const metadata = { title: 'Entrar' };
 
 export default async function LoginPage(props: PageProps<'/login'>) {
   const sp = await props.searchParams;
-  const next = typeof sp.next === 'string' ? sp.next : '/docs';
+  const next = rutaSegura(sp.next);
   const perfil = await getPerfil();
   if (perfil?.clase_ok) redirect(next);
   if (perfil) redirect(`/unirse?next=${encodeURIComponent(next)}`);

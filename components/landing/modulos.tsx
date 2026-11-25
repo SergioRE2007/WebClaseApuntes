@@ -126,7 +126,9 @@ export function Modulos({ cursos }: { cursos: CursoResumen[] }) {
                           <p className="mt-1 line-clamp-2 text-sm text-fd-muted-foreground">{m.descripcion}</p>
                         )}
                         <p className="mt-auto pt-3 text-xs font-medium text-fd-muted-foreground">
-                          {m.paginas.length} {m.paginas.length === 1 ? 'tema' : 'temas'}
+                          {m.paginas.length === 0
+                            ? 'Próximamente'
+                            : `${m.paginas.length} ${m.paginas.length === 1 ? 'tema' : 'temas'}`}
                         </p>
                         <ModuloProgreso paginas={m.paginas} nombre={m.nombre} />
                       </Link>

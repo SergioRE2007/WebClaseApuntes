@@ -35,13 +35,14 @@ const FEATURES: Feature[] = [
     titulo: 'Aporta recursos',
     texto: 'Sube capturas, vídeos, enlaces o documentos de clase. Se revisan y se suman a los apuntes.',
     icono: <Upload />,
+    clase: 'sm:col-span-2 lg:col-span-2',
     acento: 'from-brand-violet/20',
   },
   {
     titulo: 'Tu progreso',
     texto: 'Marca temas como completados y retoma justo donde lo dejaste. Se guarda en tu navegador.',
     icono: <ChartNoAxesColumnIncreasing />,
-    clase: 'sm:col-span-2 lg:col-span-1',
+    clase: 'sm:col-span-2 lg:col-span-2',
     acento: 'from-brand-cyan/20',
   },
 ];

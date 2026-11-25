@@ -2,7 +2,7 @@ import { after, NextResponse } from 'next/server';
 import { z } from 'zod';
 import type Anthropic from '@anthropic-ai/sdk';
 import { getPerfil } from '@/lib/auth';
-import { env, isSupabaseConfigured } from '@/lib/env';
+import { demoPermitido, env, isSupabaseConfigured } from '@/lib/env';
 import { createServiceClient } from '@/lib/supabase/server';
 import { anthropicConfigurado, ESFUERZO_CHAT, getAnthropic, MAX_TOKENS_CHAT, MODELO_CHAT } from '@/lib/ai/config';
 import { getSistema } from '@/lib/ai/conocimiento';
@@ -93,7 +93,20 @@ async function registrarUso(usuarioId: string, entrada: number, salida: number) 
   }
 }
 
+/** Devuelve el mensaje al cupo de hoy si Claude falló antes de responder nada. */
+async function devolverCupo(usuarioId: string) {
+  try {
+    const { error } = await createServiceClient().rpc('chat_devolver', { p_usuario: usuarioId });
+    if (error) throw error;
+  } catch (e) {
+    console.error('[chat] No se pudo devolver el mensaje al cupo diario', e);
+  }
+}
+
 export async function POST(request: Request) {
+  // 0. Sin Supabase solo se permite el modo demo en desarrollo (o con DAM_DEMO=1)
+  if (!isSupabaseConfigured && !demoPermitido) return errorJson(503, 'Servidor mal configurado.');
+
   // 1. Autenticación
   const perfil = await getPerfil();
   if (!perfil) return errorJson(401, 'Inicia sesión para usar el tutor.');
@@ -127,7 +140,12 @@ export async function POST(request: Request) {
     'Cache-Control': 'no-store, no-transform',
     'X-Accel-Buffering': 'no',
   });
+  let cupoContado = false;
   if (isSupabaseConfigured) {
+    if (!env.supabaseServiceRoleKey) {
+      console.error('[chat] Falta SUPABASE_SERVICE_ROLE_KEY: no se puede aplicar el límite diario.');
+      return errorJson(503, 'El tutor no está disponible ahora mismo (no se puede comprobar el límite diario).');
+    }
     try {
       const { data, error } = await createServiceClient().rpc('chat_incrementar', {
         p_usuario: perfil.id,
@@ -142,12 +160,14 @@ export async function POST(request: Request) {
           { [CABECERA_RESTANTES]: '0' },
         );
       }
+      cupoContado = true;
       if (Number.isFinite(total)) {
         headers.set(CABECERA_RESTANTES, String(Math.max(0, env.chatLimiteDiario - total)));
       }
     } catch (e) {
-      // Si el contador falla (p. ej. falta la service role), no bloqueamos al alumno.
+      // Fallamos cerrados: sin contador no hay límite, y eso lo paga el propietario.
       console.error('[chat] No se pudo comprobar el límite diario', e);
+      return errorJson(503, 'El tutor no está disponible ahora mismo (no se puede comprobar el límite diario).');
     }
   }
 
@@ -180,6 +200,8 @@ export async function POST(request: Request) {
     primero = await iterador.next();
   } catch (e) {
     marcarTerminado();
+    // Claude no llegó a responder: ese intento no cuenta para el límite de hoy
+    if (cupoContado) after(() => devolverCupo(perfil.id));
     const { status, mensaje } = traducirError(e);
     return errorJson(status === 499 ? 400 : status, mensaje);
   }
@@ -220,6 +242,9 @@ export async function POST(request: Request) {
           const r: IteratorResult<Anthropic.MessageStreamEvent> = pendiente ?? (await iterador.next());
           pendiente = null;
           if (r.done) {
+            // El iterador del SDK se cierra en silencio si llega un error SSE o se corta la
+            // conexión; stream.done() rechaza con ese error para que lo veamos abajo.
+            await stream.done();
             if (motivo === 'refusal') {
               controller.enqueue(
                 encoder.encode(
@@ -245,6 +270,7 @@ export async function POST(request: Request) {
       } catch (e) {
         cerrado = true;
         const { mensaje } = traducirError(e);
+        if (!request.signal.aborted) console.error('[chat] Error a mitad de respuesta', e);
         if (!request.signal.aborted) {
           try {
             controller.enqueue(encoder.encode(serializarEvento({ t: 'error', mensaje })));

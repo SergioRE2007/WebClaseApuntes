@@ -17,7 +17,7 @@ export function CtaFinal({ logueado }: { logueado: boolean }) {
             className="absolute -bottom-32 left-1/2 -z-10 h-64 w-[40rem] max-w-[150%] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,var(--dam-glow-1),transparent)] blur-2xl"
           />
           <h2 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
-            Los apuntes los hacemos <span className="text-gradient">entre todos</span>
+            Los apuntes los hacemos <span className="text-gradient-brand">entre todos</span>
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-pretty text-fd-muted-foreground">
             ¿Tienes una captura de la pizarra, un vídeo que lo explica genial o tus propios resúmenes? Súbelo y ayuda a

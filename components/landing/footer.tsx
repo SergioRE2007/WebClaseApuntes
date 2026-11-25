@@ -13,15 +13,15 @@ export function Footer({ logueado = false }: { logueado?: boolean }) {
             <p className="text-xs text-fd-muted-foreground">Hecho por y para la clase de DAM · {anio}</p>
           </div>
         </div>
-        <nav aria-label="Pie de página" className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-fd-muted-foreground">
-          <Link href="/docs" className="rounded transition-colors hover:text-fd-foreground">
+        <nav aria-label="Pie de página" className="-mx-2 flex flex-wrap gap-x-2 gap-y-1 text-sm text-fd-muted-foreground">
+          <Link href="/docs" className="inline-flex min-h-10 items-center rounded px-2 transition-colors hover:text-fd-foreground">
             Apuntes
           </Link>
-          <Link href="/aportar" className="rounded transition-colors hover:text-fd-foreground">
+          <Link href="/aportar" className="inline-flex min-h-10 items-center rounded px-2 transition-colors hover:text-fd-foreground">
             Aportar
           </Link>
           {logueado ? null : (
-            <Link href="/login" className="rounded transition-colors hover:text-fd-foreground">
+            <Link href="/login" className="inline-flex min-h-10 items-center rounded px-2 transition-colors hover:text-fd-foreground">
               Entrar
             </Link>
           )}

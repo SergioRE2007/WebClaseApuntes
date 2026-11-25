@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { demoPermitido } from '@/lib/env';
 
 const PUBLICAS = ['/', '/login', '/unirse', '/auth'];
 
@@ -9,12 +10,19 @@ function esPublica(pathname: string) {
 
 /**
  * Refresca la sesión de Supabase en cada navegación y protege las rutas
- * privadas (apuntes, chat, aportar, admin). Sin Supabase configurado no hace nada.
+ * privadas (apuntes, chat, aportar, admin). Sin Supabase configurado solo deja pasar
+ * en desarrollo (o con DAM_DEMO=1); en producción falla cerrada con un 503.
  */
 export default async function proxy(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return NextResponse.next();
+  if (!url || !key) {
+    if (demoPermitido) return NextResponse.next();
+    return new NextResponse('Supabase no configurado: define NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY antes del build.', {
+      status: 503,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+    });
+  }
 
   let response = NextResponse.next({ request });
   const supabase = createServerClient(url, key, {
@@ -22,10 +30,12 @@ export default async function proxy(request: NextRequest) {
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet, headers) {
         for (const { name, value } of cookiesToSet) request.cookies.set(name, value);
         response = NextResponse.next({ request });
         for (const { name, value, options } of cookiesToSet) response.cookies.set(name, value, options);
+        // Cabeceras anti-caché que @supabase/ssr pide al renovar la sesión (que ninguna CDN la comparta)
+        for (const [k, v] of Object.entries(headers ?? {})) response.headers.set(k, v);
       },
     },
   });

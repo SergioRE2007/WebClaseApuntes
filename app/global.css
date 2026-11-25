@@ -150,6 +150,15 @@ body {
   }
 }
 
+/* En móvil, deja hueco al final para que el botón flotante del tutor no tape el contenido */
+@layer base {
+  @media (max-width: 639px) {
+    body:has(.dam-chat-fab) :is(#nd-page, main) {
+      padding-bottom: 5rem;
+    }
+  }
+}
+
 /* Scrollbar fina y teñida */
 * {
   scrollbar-width: thin;
@@ -221,6 +230,19 @@ figure.shiki {
     var(--color-fd-foreground) 10%,
     color-mix(in oklch, var(--color-brand-violet) 85%, var(--color-fd-foreground)) 45%,
     var(--color-brand-cyan) 95%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Variante solo de marca, para frases cortas (sin tramo del color de texto que parta palabras) */
+@utility text-gradient-brand {
+  background-image: linear-gradient(
+    100deg,
+    var(--color-brand-indigo),
+    var(--color-brand-violet) 55%,
+    color-mix(in oklch, var(--color-brand-cyan) 60%, var(--color-brand-violet))
   );
   -webkit-background-clip: text;
   background-clip: text;

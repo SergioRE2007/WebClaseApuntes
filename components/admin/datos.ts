@@ -109,7 +109,10 @@ export async function getDatosAdmin(filtros: Filtros): Promise<{
   const visibles = filas.slice(0, LIMITE_LISTA);
 
   // URLs firmadas de corta duración, en lote
-  const paths = visibles.map((f) => f.archivo_path).filter((p): p is string => Boolean(p));
+  // Solo firmamos adjuntos que estén en la carpeta de su autor (defensa extra contra filas falsificadas)
+  const propio = (f: { archivo_path: string | null; autor_id: string }) =>
+    Boolean(f.archivo_path && f.archivo_path.startsWith(`${f.autor_id}/`));
+  const paths = visibles.filter(propio).map((f) => f.archivo_path as string);
   const urls = new Map<string, string>();
   if (paths.length) {
     const { data } = await supabase.storage.from(BUCKET_APORTACIONES).createSignedUrls(paths, SIGNED_URL_SEGUNDOS);
@@ -117,7 +120,7 @@ export async function getDatosAdmin(filtros: Filtros): Promise<{
   }
 
   const aportaciones: AportacionAdmin[] = visibles.map((f) => {
-    const url = f.archivo_path ? (urls.get(f.archivo_path) ?? null) : null;
+    const url = f.archivo_path && propio(f) ? (urls.get(f.archivo_path) ?? null) : null;
     const descarga = url
       ? `${url}${url.includes('?') ? '&' : '?'}download=${encodeURIComponent(f.archivo_nombre ?? 'archivo')}`
       : null;

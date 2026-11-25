@@ -183,7 +183,7 @@ export function ChatPanel({ nombre, disponible }: ChatPanelProps) {
   }, []);
 
   useEffect(() => {
-    if (abierto && pegadoRef.current) irAbajo();
+    if (abierto && pegadoRef.current && mensajes.length > 0) irAbajo();
   }, [mensajes, abierto, irAbajo]);
 
   // ---------- acciones ----------
@@ -243,7 +243,7 @@ export function ChatPanel({ nombre, disponible }: ChatPanelProps) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={reducir ? { opacity: 0 } : { opacity: 0, scale: 0.6, y: 12 }}
             transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-            className="group fixed right-4 bottom-4 z-50 sm:right-6 sm:bottom-6 print:hidden"
+            className="dam-chat-fab group fixed right-4 bottom-4 z-30 sm:right-6 sm:bottom-6 print:hidden"
             style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
           >
             <span
@@ -491,10 +491,10 @@ function EstadoVacio({
   deshabilitado: boolean;
 }) {
   return (
-    <div className="flex min-h-full flex-col justify-center gap-5 py-4">
+    <div className="flex min-h-full flex-col justify-center gap-4 py-2">
       <div className="flex flex-col items-center gap-3 text-center">
-        <div className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-fd-primary/20 to-fd-primary/5 text-fd-primary ring-1 ring-fd-primary/20">
-          <Sparkles className="size-7" aria-hidden />
+        <div className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-fd-primary/20 to-fd-primary/5 text-fd-primary ring-1 ring-fd-primary/20">
+          <Sparkles className="size-6" aria-hidden />
         </div>
         <div>
           <p className="text-base font-semibold">{nombre ? `¡Hola, ${nombre}!` : '¡Hola!'} Soy tu Tutor DAM</p>

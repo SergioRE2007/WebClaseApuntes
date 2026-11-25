@@ -137,7 +137,7 @@ public class Persona {
 }
 ```
 
-`this` es una referencia al **propio objeto** que se está construyendo o usando. En `this.nombre = nombre`, la parte izquierda es el atributo y la derecha el parámetro que tiene el mismo nombre. Además, `this(...)` llama a otro constructor de la misma clase (debe ser la primera instrucción).
+`this` es una referencia al **propio objeto** que se está construyendo o usando. En `this.nombre = nombre`, la parte izquierda es el atributo y la derecha el parámetro que tiene el mismo nombre. Además, `this(...)` llama a otro constructor de la misma clase; hasta Java 24 tenía que ser la primera instrucción (desde Java 25 puede ir precedida de código que no use `this`).
 
 <Callout type="warn" title="El constructor por defecto desaparece">
   Si no escribes ningún constructor, Java añade uno **sin parámetros** automáticamente. Pero en cuanto escribes uno con parámetros, ese constructor por defecto deja de existir: `new Persona()` dará error de compilación a menos que lo declares tú.
@@ -343,9 +343,11 @@ Un método `static` **no puede usar `this`** ni acceder directamente a atributos
     public [[String]] getTitulo() {
         [[return]] titulo;
     }
-}
 
-Libro quijote = [[new]] Libro("El Quijote", 1250);`}
+    public static void main(String[] args) {
+        Libro quijote = [[new]] Libro("El Quijote", 1250);
+    }
+}`}
 />
 
 ## Pon a prueba lo aprendido

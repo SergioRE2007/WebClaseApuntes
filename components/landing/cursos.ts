@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type * as PageTree from 'fumadocs-core/page-tree';
 import { source } from '@/lib/source';
+import { CURSO_ACTUAL } from '@/lib/shared';
 
 export interface ModuloResumen {
   id: string;
@@ -46,15 +47,17 @@ function profundidad(url: string): number {
 
 function urlsDe(node: PageTree.Node): string[] {
   if (node.type === 'page') return node.external ? [] : [node.url];
+  // Las portadas de carpeta (index) no son temas: nunca se marcan como completadas.
   if (node.type === 'folder') {
-    const propias = node.index ? [node.index.url] : [];
-    return [...propias, ...node.children.flatMap(urlsDe)];
+    const indice = node.index?.url;
+    return node.children.flatMap(urlsDe).filter((u) => u !== indice);
   }
   return [];
 }
 
 function aModulo(node: PageTree.Folder | PageTree.Item, i: number): ModuloResumen | null {
   const paginas = urlsDe(node);
+  // Un módulo vacío sigue apareciendo (con su portada) y se marca como "Próximamente".
   const url = node.type === 'page' ? node.url : (node.index?.url ?? paginas[0]);
   if (!url) return null;
   return {
@@ -136,7 +139,13 @@ export function getCursos(): CursoResumen[] {
 
   return cursos
     .filter((c) => c.modulos.length > 0)
-    .sort((a, b) => (a.numero ?? 99) - (b.numero ?? 99));
+    .sort((a, b) => orden(a.numero) - orden(b.numero));
+}
+
+/** El curso actual de la clase va primero; el resto, en orden. */
+function orden(numero: number | null | undefined) {
+  if (numero === CURSO_ACTUAL) return -1;
+  return numero ?? 99;
 }
 
 /** Títulos de todas las páginas por URL (para la tira de progreso). */

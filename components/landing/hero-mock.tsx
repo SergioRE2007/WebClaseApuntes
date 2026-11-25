@@ -71,7 +71,7 @@ export function HeroMock() {
       {/* Tarjeta trasera: flashcards */}
       <div
         aria-hidden
-        className="glass absolute -top-5 -right-2 hidden w-48 rotate-6 rounded-2xl border p-4 shadow-xl sm:block lg:-right-6"
+        className="glass absolute -top-12 -right-4 hidden w-52 rotate-6 rounded-2xl border p-4 shadow-xl sm:block lg:-right-10"
       >
         <div className="flex items-center gap-2 text-xs font-medium text-fd-muted-foreground">
           <Layers className="size-3.5 text-fd-primary" /> Flashcards

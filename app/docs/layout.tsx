@@ -2,11 +2,9 @@ import { source } from '@/lib/source';
 import { DocsLayout } from 'fumadocs-ui/layouts/docs';
 import { House, Upload } from 'lucide-react';
 import { baseOptions } from '@/lib/layout.shared';
-import { requireAlumno } from '@/lib/auth';
 import { UserMenu } from '@/components/layout/user-menu';
 
-export default async function Layout({ children }: LayoutProps<'/docs'>) {
-  await requireAlumno('/docs');
+export default function Layout({ children }: LayoutProps<'/docs'>) {
   const base = baseOptions();
   return (
     <DocsLayout

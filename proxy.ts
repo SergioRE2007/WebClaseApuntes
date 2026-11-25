@@ -2,7 +2,8 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { demoPermitido } from '@/lib/env';
 
-const PUBLICAS = ['/', '/login', '/unirse', '/auth'];
+// Los apuntes y su buscador son públicos; el chat, aportar y admin requieren sesión.
+const PUBLICAS = ['/', '/login', '/unirse', '/auth', '/docs', '/api/search'];
 
 function esPublica(pathname: string) {
   return PUBLICAS.some((p) => (p === '/' ? pathname === '/' : pathname === p || pathname.startsWith(`${p}/`)));
@@ -10,7 +11,7 @@ function esPublica(pathname: string) {
 
 /**
  * Refresca la sesión de Supabase en cada navegación y protege las rutas
- * privadas (apuntes, chat, aportar, admin). Sin Supabase configurado solo deja pasar
+ * privadas (chat, aportar, admin). Sin Supabase configurado solo deja pasar
  * en desarrollo (o con DAM_DEMO=1); en producción falla cerrada con un 503.
  */
 export default async function proxy(request: NextRequest) {

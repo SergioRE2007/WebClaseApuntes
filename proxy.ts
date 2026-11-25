@@ -25,6 +25,24 @@ export default async function proxy(request: NextRequest) {
     });
   }
 
+  // 1) Dominio canónico: el login usa una cookie (PKCE) atada al dominio donde se pidió
+  //    el enlace, así que en producción todos los alias de Vercel redirigen al dominio oficial.
+  const canonico = dominioCanonico();
+  if (canonico && request.nextUrl.host !== canonico.host) {
+    const destino = new URL(request.nextUrl.pathname + request.nextUrl.search, canonico.origin);
+    return NextResponse.redirect(destino, 308);
+  }
+
+  // 2) Si Supabase nos devuelve el ?code= a otra página (p. ej. a la Site URL "/"),
+  //    lo mandamos al callback para completar el login igualmente.
+  const code = request.nextUrl.searchParams.get('code');
+  if (code && !request.nextUrl.pathname.startsWith('/auth/')) {
+    const cb = request.nextUrl.clone();
+    cb.pathname = '/auth/callback';
+    cb.search = `?code=${encodeURIComponent(code)}&next=/docs`;
+    return NextResponse.redirect(cb);
+  }
+
   let response = NextResponse.next({ request });
   const supabase = createServerClient(url, key, {
     cookies: {
@@ -56,6 +74,15 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.redirect(login);
   }
   return response;
+}
+
+function dominioCanonico(): URL | null {
+  if (process.env.VERCEL_ENV !== 'production') return null;
+  try {
+    return process.env.NEXT_PUBLIC_SITE_URL ? new URL(process.env.NEXT_PUBLIC_SITE_URL) : null;
+  } catch {
+    return null;
+  }
 }
 
 export const config = {

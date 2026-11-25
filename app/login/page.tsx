@@ -19,15 +19,22 @@ export default async function LoginPage(props: PageProps<'/login'>) {
       subtitulo="Te enviamos un enlace a tu correo. Sin contraseñas."
       pie="Solo para la clase de DAM. La primera vez te pediremos el código de clase."
     >
-      {sp.error === 'enlace' && (
+      {typeof sp.error === 'string' && ERRORES[sp.error] && (
         <p
           role="alert"
           className="mt-5 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300"
         >
-          El enlace ha caducado o no es válido. Pide uno nuevo.
+          {ERRORES[sp.error]}
         </p>
       )}
       <LoginForm next={next} />
     </AuthShell>
   );
 }
+
+const ERRORES: Record<string, string> = {
+  enlace: 'El enlace no es válido. Pide uno nuevo.',
+  caducado: 'Ese enlace ya se usó o ha caducado. Pide uno nuevo y usa solo el último que te llegue.',
+  navegador:
+    'No se pudo completar el inicio de sesión. Abre el enlace en el mismo navegador (y dispositivo) donde lo pediste.',
+};

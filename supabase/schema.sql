@@ -51,8 +51,9 @@ security definer
 set search_path = public
 as $$
 begin
-  -- Solo service role (servidor) o un admin pueden tocar rol / clase_ok / email / id
-  if coalesce(auth.role(), '') <> 'service_role' and not public.es_admin() then
+  -- Solo protege frente a peticiones de usuarios de la web (anon/authenticated).
+  -- El servidor (service_role) y el SQL Editor (sin JWT) pueden cambiarlo todo.
+  if coalesce(auth.role(), '') in ('anon', 'authenticated') and not public.es_admin() then
     new.id := old.id;
     new.email := old.email;
     new.rol := old.rol;

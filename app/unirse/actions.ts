@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { rutaSegura } from '@/lib/ruta-segura';
 import { timingSafeEqual } from 'node:crypto';
@@ -47,6 +48,9 @@ export async function unirseClase(_prev: UnirseState, formData: FormData): Promi
     return { mensaje: 'Error guardando tu perfil. Inténtalo de nuevo.' };
   }
 
+  // Sin esto, el redirect de la action reutiliza los layouts ya pintados (el tutor del layout raíz
+  // seguiría bloqueado pidiendo el código hasta recargar la página).
+  revalidatePath('/', 'layout');
   const next = String(formData.get('next') ?? '/docs');
   redirect(rutaSegura(next));
 }

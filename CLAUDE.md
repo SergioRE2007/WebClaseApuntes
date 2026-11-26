@@ -11,7 +11,9 @@ Producción: https://web-clase-apuntes.vercel.app
   - Los apuntes de 2º DAM: 105 páginas en 5 asignaturas, con demos en `components/temas/<bloque>/`. 1º DAM se quitó porque ya no sirve.
   - La portada con los módulos en tarjetas.
   - El Tutor IA con herramientas (ver más abajo).
+  - El login arreglado (ver "Login por correo" más abajo). Los compañeros ya están entrando.
 - **Pendiente o por revisar:**
+  - El enlace nuevo del correo (`/auth/confirm`) aún no se ha visto funcionar con un alumno real: compruébalo en los logs de Supabase.
   - El tutor nuevo aún no se ha probado con una conversación real. Si falla, mira los logs de Vercel de `/api/chat`.
   - SGE e IPE II salen en el menú sin apuntes.
 
@@ -102,7 +104,25 @@ Estilo de documentación limpia y minimalista: fondo blanco o casi negro, un sol
 - El cliente de Supabase con service role solo se usa en el servidor y solo cuando RLS no basta. Las server actions vuelven a comprobar la autorización por su cuenta.
 - Si cambias la base de datos, actualiza `supabase/schema.sql`, que debe poder ejecutarse varias veces sin romper nada, y aplica el cambio en Supabase.
 
+## Login por correo
+
+- **Flujo:** `/login` envía el enlace (`signInWithOtp`) → el correo lleva a `/auth/confirm?token_hash=…&type=email` → `verifyOtp` crea la sesión → `/unirse` pide nombre y código de clase si aún no lo tiene → vuelve a la página de origen (cookie `dam_login_next`, solo si es el mismo navegador).
+- `/auth/confirm` no depende de cookies: funciona aunque el correo se abra en otro navegador o dispositivo. `/auth/callback` (PKCE, `?code=`) se mantiene solo por compatibilidad: falla con `pkce_code_verifier_not_found` en otro navegador y con `bad_code_verifier` si el alumno pidió dos enlaces.
+- **Configuración en el panel de Supabase (no está en el repo; si se pierde, el login se rompe):**
+  - Authentication → URL Configuration: **Site URL** `https://web-clase-apuntes.vercel.app` y en **Redirect URLs** `https://web-clase-apuntes.vercel.app/**` (y `http://localhost:3000/**` para local).
+  - Authentication → Emails → Templates, **Confirm signup** y **Magic Link** con este cuerpo:
+    ```html
+    <h2>Entra en DAM Apuntes</h2>
+    <p>Pulsa el enlace para entrar:</p>
+    <p><a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email">Entrar en DAM Apuntes</a></p>
+    <p>Si no lo has pedido tú, ignora este correo.</p>
+    ```
+- Las server actions que cambian la sesión o `clase_ok` (`unirseClase`, `salir`) llaman a `revalidatePath('/', 'layout')` antes del `redirect`. Sin eso, Next reutiliza el layout raíz ya pintado y el tutor sigue pidiendo el código hasta recargar.
+- Para depurar: logs de Supabase (`auth_logs` y `edge_logs`, mira el `redirect_to` de `/auth/v1/verify`) y logs de Vercel (`[auth/confirm]`, `[auth/callback]`; el plan Hobby solo guarda 1 hora).
+
 ## Trampas conocidas
+
+- **Los alias `*-lopuzno.vercel.app` están protegidos por Vercel** (Deployment Protection): piden iniciar sesión en Vercel. Solo `web-clase-apuntes.vercel.app` es público. Si la Site URL de Supabase apunta a un alias, los alumnos ven "regístrate en Vercel" al abrir el enlace, y al dueño le funciona porque tiene sesión en Vercel. Pasó el 26/11/2026.
 
 - **En Vercel no hay archivos `.mdx` en tiempo de ejecución.** Usa solo `page.data.getText('processed')`, que se genera al compilar. `getText('raw')` lee el disco y rompe la página con un `ENOENT`: pasó con todas las páginas de tema.
 - **El proyecto de Supabase no trae los permisos por defecto en `public`.** Cada tabla o función nueva necesita sus `grant` (mira el bloque "Permisos de tabla" de `schema.sql`). Sin ellos falla con `permission denied` aunque RLS esté bien: pasó con el código de clase y con guardar el perfil.

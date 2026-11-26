@@ -1,24 +1,34 @@
 ---
 title: Acceso a Datos
-description: "Persistencia desde Java: ficheros (texto, binarios, XML, JSON), JDBC, mapeo objeto-relacional con JPA/Hibernate, bases de datos NoSQL y componentes de acceso a datos."
+description: "En este curso, Acceso a Datos ha sido sobre todo Angular 19: una web en TypeScript que pide y envía los datos a una API por HTTP. Componentes, servicios, HttpClient, signals, formularios reactivos y rutas."
 ---
 
-## De qué va el módulo
+## De qué va este curso
 
-Aprenderás a **guardar y recuperar información** desde tus aplicaciones: ficheros de distintos formatos, bases de datos relacionales con **JDBC**, **ORM** con JPA/Hibernate, bases de datos orientadas a objetos y documentales (**MongoDB**), y el desarrollo de componentes de acceso a datos.
+En el currículo, Acceso a Datos (módulo 0486) trata de guardar y recuperar información desde una aplicación. En clase este curso se ha dado como **Angular 19**: el lado cliente de una aplicación web, que lee y modifica los datos a través de una **API REST** con `HttpClient`. Primero contra APIs de prueba (JSONPlaceholder, Fake Store y JSON Server) y, en el proyecto, contra tu propio backend.
 
-Módulo profesional de 2º DAM (código 0486).
+La otra mitad de la aplicación, el servidor con Node, Express, Prisma y PostgreSQL, va en [Infraestructuras de Servicios y APIs](/docs/2-dam/apis).
 
-## Temas
+## Bloques
 
-1. Manejo de ficheros: texto, binarios y acceso aleatorio
-2. Ficheros XML y JSON: DOM, SAX, JAXB, Jackson
-3. Conectores: JDBC
-4. Herramientas de mapeo objeto-relacional: JPA e Hibernate
-5. Bases de datos objeto-relacionales y orientadas a objetos
-6. Bases de datos NoSQL: MongoDB
-7. Desarrollo de componentes de acceso a datos
+<Cards>
+  <Card icon="Component" title="Angular: componentes, plantillas y servicios" href="/docs/2-dam/acceso-a-datos/angular" description="Proyecto standalone y CLI, componentes, data binding, control flow, Flexbox, input() y output(), servicios, HttpClient y pipes." />
+  <Card icon="Route" title="Angular: signals, rutas y formularios" href="/docs/2-dam/acceso-a-datos/angular-avanzado" description="proj-game con JSON Server y paginación, signals, CRUD padre e hijo, formularios reactivos, Router, guards, RxJS y errores típicos." />
+</Cards>
 
-<Callout type="info" title="Apuntes en construcción">
-  Estamos añadiendo los apuntes de este módulo poco a poco. Si tienes resúmenes, capturas de clase, ejercicios resueltos o enlaces útiles, súbelos desde [Aportar](/aportar) y los revisaremos para incluirlos.
+## Orden de estudio
+
+1. Empieza por [Proyecto standalone y Angular CLI](/docs/2-dam/acceso-a-datos/angular/proyecto-y-cli) y sigue el primer bloque en orden: el núcleo es [Peticiones HTTP con HttpClient](/docs/2-dam/acceso-a-datos/angular/httpclient).
+2. Pasa al segundo bloque con [proj-game](/docs/2-dam/acceso-a-datos/angular-avanzado/proj-game), que es el proyecto que se usa de hilo conductor hasta los [formularios reactivos](/docs/2-dam/acceso-a-datos/angular-avanzado/formularios-reactivos).
+3. Termina con las [rutas](/docs/2-dam/acceso-a-datos/angular-avanzado/rutas) y con lo que piden los requisitos aunque no se diera en clase: [parámetros y guards](/docs/2-dam/acceso-a-datos/angular-avanzado/rutas-parametros-guards), [RxJS y errores](/docs/2-dam/acceso-a-datos/angular-avanzado/rxjs-y-errores) y [listado con filtros y token](/docs/2-dam/acceso-a-datos/angular-avanzado/listado-filtros-y-token).
+
+Si algo no te compila, mira antes [Errores típicos en Angular](/docs/2-dam/acceso-a-datos/angular-avanzado/errores-tipicos-angular).
+
+## Para el proyecto intermodular
+
+- Conectar tu web con tu API: [CORS y token](/docs/2-dam/apis/backend-proyecto/cors-y-token) y [listado paginado](/docs/2-dam/apis/backend-proyecto/listado-paginado) en el backend.
+- Publicar la web: [Despliegue en Vercel](/docs/2-dam/proyecto-intermodular/despliegue-en-vercel).
+
+<Callout title="Versiones">
+  Todo está escrito para Angular 19 y TypeScript 5.7. Mucho de lo que encuentras en internet es de Angular 20 o posterior y no siempre se escribe igual.
 </Callout>

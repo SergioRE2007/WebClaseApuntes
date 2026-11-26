@@ -1,0 +1,460 @@
+---
+title: "Corrutinas: suspend, viewModelScope y por qué no GlobalScope"
+description: "Cómo espera una app Android a la red o a la base de datos sin congelar la pantalla: funciones suspend, viewModelScope.launch, delay, runBlocking y GlobalScope, como se vio en clase."
+icon: Timer
+---
+
+import { BloquearOSuspender } from '@/components/temas/datos/bloquear-o-suspender';
+
+Pedir datos a una API o a una base de datos tarda: a veces milisegundos, a veces segundos. Mientras tanto, la pantalla tiene que seguir pintándose y respondiendo a los toques. En Android eso lo hace un único hilo, el **hilo principal**, y si lo dejas esperando, la app se congela.
+
+En Java lo resolverías con un `Thread` nuevo y callbacks para volver al hilo principal. En Kotlin se usan **corrutinas**: escribes el código de arriba abajo, como si fuera síncrono, y la función **se suspende** mientras espera sin bloquear el hilo.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué es una función `suspend` y desde dónde se puede llamar.
+  - Lanzar una corrutina con `viewModelScope.launch` y qué pasa con ella al cerrar la pantalla.
+  - Simular la red con `delay`.
+  - Por qué no conviene cargar datos con `GlobalScope`, `runBlocking` ni `CoroutineScope(Dispatchers.IO)`: en clase se descartó `GlobalScope` y `runBlocking` quedó como solución provisional.
+</Callout>
+
+## Funciones `suspend`
+
+<DeClase fecha="23/10" proyecto="ToDoApp" rama="dev" />
+
+El 23/10 el repositorio de tareas pasa a tener **todas sus funciones `suspend`**. Así el día de mañana pueden ir a la red o a una base de datos sin que el resto de la app cambie.
+
+```kotlin title="data/repository/TaskRepository.kt"
+interface TaskRepository {
+    val tasks: Flow<List<Task>>
+    suspend fun readAll(): List<Task>
+    suspend fun readOne(id: Int): Task
+    suspend fun create(title: String, description: String, limitDate: String): Task
+    suspend fun complete(id: Int)
+    suspend fun uncomplete(id: Int)
+    suspend fun update(id: Int, title: String? = null, description: String? = null)
+}
+```
+
+De momento las tareas están en memoria, así que el profesor **simula la red** con `delay`: cada función espera 5 segundos antes de responder.
+
+```kotlin title="data/repository/TaskRepositoryInMemory.kt (fragmento)"
+private const val delay = 5_000L
+
+class TaskRepositoryInMemory @Inject constructor() : TaskRepository {
+    private val _taskList = mutableListOf<Task>()
+
+    override suspend fun readAll(): List<Task> {
+        delay(timeMillis = delay)
+        return _taskList.toList()
+    }
+}
+```
+
+- `delay` es también una función `suspend`: **no bloquea el hilo**, solo pausa esta corrutina. Es lo contrario de `Thread.sleep()` de Java, que sí deja el hilo parado.
+- `5_000L` es un `Long` (la `L`) con un guion bajo para leerlo mejor. Vale lo mismo que `5000L`.
+- El repositorio completo del 23/10 está en [ViewModel y StateFlow](/docs/2-dam/kotlin/arquitectura/viewmodel-y-stateflow). Aquí solo interesan las funciones `suspend`.
+
+### La regla de oro
+
+Una función `suspend` **solo se puede llamar desde una corrutina o desde otra función `suspend`**. Si la llamas desde una función normal, no compila. El IDE marca la llamada con un icono de flecha en el margen para que veas dónde se suspende.
+
+```kotlin title="Lo que compila y lo que no"
+suspend fun cargar(): List<Task> = repository.readAll()
+
+fun cargarMal(): List<Task> = repository.readAll()
+```
+
+La segunda da el error *Suspend function 'readAll' should be called only from a coroutine or another suspend function*. Para llamarla desde una función normal hay que **lanzar una corrutina**.
+
+## Lanzar una corrutina con `viewModelScope.launch`
+
+<DeClase fecha="16/10, 23/10" proyecto="ToDoApp" />
+
+En el ViewModel, la forma de clase es `viewModelScope.launch { }`. `viewModelScope` es un <Concepto termino="Ámbito de corrutinas (CoroutineScope)" definicion="El 'dueño' de las corrutinas que lanzas. Cuando el ámbito se cancela, se cancelan todas sus corrutinas.">ámbito</Concepto> que viene con cada `ViewModel` (de `lifecycle-viewmodel-ktx`) y **se cancela solo cuando el ViewModel se destruye**: lo que lances ahí no sigue vivo cuando la pantalla se cierra del todo.
+
+<Recorrido
+  titulo="ui/taskcreate/TaskCreateViewModel.kt"
+  lenguaje="kotlin"
+  codigo={`@HiltViewModel
+class TaskCreateViewModel @Inject constructor(
+    private val _repository: TaskRepository
+) : ViewModel() {
+    private val _screenState = MutableStateFlow<TaskCreateScreenState>(TaskCreateScreenState.Initial)
+    val screenState: StateFlow<TaskCreateScreenState>
+        get() = _screenState.asStateFlow()
+    val titleState = TextFieldState()
+    val descriptionState = TextFieldState()
+
+    fun onCreate() {
+        _screenState.value = TaskCreateScreenState.Creating
+        viewModelScope.launch {
+            _repository.create(
+                title = titleState.text.toString(),
+                description = descriptionState.text.toString(),
+                limitDate = "9999.31.12"
+            )
+            _screenState.value = TaskCreateScreenState.Created
+        }
+    }
+}`}
+>
+  <Paso lineas="11" titulo="Una función normal">
+    `onCreate()` no es `suspend`: la llama un `Button` con `onClick = viewModel::onCreate`, y un `onClick` no puede esperar.
+  </Paso>
+  <Paso lineas="12" titulo="Antes de lanzar">
+    Pone el estado en `Creating` en el acto, en el hilo principal. La pantalla puede enseñar que está guardando.
+  </Paso>
+  <Paso lineas="13" titulo="launch">
+    `viewModelScope.launch { }` crea una corrutina y **vuelve enseguida**: `onCreate()` termina sin esperar a que se guarde la tarea.
+  </Paso>
+  <Paso lineas="14-18" titulo="Aquí se suspende">
+    `create()` es `suspend` (con el `delay` de 5 s). La corrutina se queda en pausa en esta línea, pero el hilo principal queda libre para pintar.
+  </Paso>
+  <Paso lineas="19" titulo="Cuando termina">
+    Al volver de `create()`, la corrutina sigue por la línea siguiente y pone `Created`. Se lee como código secuencial, sin callbacks.
+  </Paso>
+</Recorrido>
+
+- La fecha `"9999.31.12"` es provisional: el profesor la marca como deuda técnica. Las fechas como texto son una de las prácticas que no conviene copiar.
+- La lista hace lo mismo en `load()`, llamada desde el `init` del ViewModel: `Loading`, luego `readAll()` y luego `Success(tasks)`.
+
+```kotlin title="ui/tasklist/TaskListViewModel.kt (fragmento)"
+init {
+    load()
+}
+
+fun load() {
+    viewModelScope.launch {
+        _state.value = TaskListScreenState.Loading
+        val tasks = _repository.readAll()
+        _state.value = TaskListScreenState.Success(tasks)
+    }
+}
+```
+
+En el depurador se ve la corrutina: el 23/10, en el panel **Frames** sale la pila con `invokeSuspend` del `TaskCreateViewModel`. Es el código que genera Kotlin para poder pausar y seguir la función.
+
+### `delay` con `Duration`
+
+<DeClase fecha="13/11" proyecto="Room" nota="ViewModel de la Splash Screen" />
+
+`delay` también acepta un `Duration` de Kotlin, que se lee mejor que los milisegundos. En clase se pasó de `delay(timeMillis = 10_000L)` a `10_000L.milliseconds` y al final a `10.seconds`, que luego se bajó a `1.seconds`:
+
+```kotlin title="MainViewModel.kt"
+@HiltViewModel
+class MainViewModel @Inject constructor() : ViewModel() {
+    private val _uiState: MutableStateFlow<Boolean> = MutableStateFlow(value = false)
+    val uiState: StateFlow<Boolean>
+        get() = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            delay(duration = 1.seconds)
+            _uiState.value = true
+        }
+    }
+}
+```
+
+`seconds` y `milliseconds` se importan de `kotlin.time.Duration.Companion`. Este ViewModel decide cuándo se quita la Splash Screen (con `setKeepOnScreenCondition { !viewModel.uiState.value }` en la `MainActivity`), que no es de este bloque.
+
+## Pruébalo: bloquear frente a suspender
+
+La demo simula `load()` con una espera de 3 segundos. Cambia cómo se lanza la carga y fíjate en tres cosas: si la pantalla sigue pintándose (los fotogramas), si atiende tus toques y qué pasa con el trabajo si cierras la pantalla a mitad.
+
+<BloquearOSuspender />
+
+Lo que enseña la demo:
+
+- Con **`viewModelScope.launch`** la pantalla sigue viva mientras se espera, y si se cierra, la corrutina se cancela. Es la forma de clase.
+- Con **`runBlocking`** el hilo principal se queda esperando: ni se pinta nada ni se atienden toques. Si dura más de unos 5 segundos, Android enseña el aviso de que la app no responde (ANR).
+- Con **`GlobalScope.launch`** la pantalla no se congela, pero la corrutina no pertenece a nadie y sigue trabajando aunque cierres la pantalla.
+
+## Por qué no `GlobalScope`
+
+<DeClase fecha="09/11" proyecto="PokeApp2627" nota="bloque 1, del minuto 15:48 al 17:02" />
+
+El 09/11, al convertir un `Flow` en estado con `stateIn`, el profesor prueba primero `scope = GlobalScope`, explica por qué no se usa y lo cambia por `viewModelScope`.
+
+De ese momento las capturas solo recogen que se escribió `scope = GlobalScope`. El bloque de la izquierda es el mismo de la derecha cambiando ese parámetro: no es una captura del código entero.
+
+<Comparar titulo="El ámbito de stateIn">
+  <Lado tipo="evitar" titulo="Lo que se probó y se descartó">
+
+```kotlin
+val state: StateFlow<PokemonListScreenState> = _repository.pokemons
+    .map<List<Pokemon>, PokemonListScreenState> { PokemonListScreenState.Loaded(pokemons = it) }
+    .stateIn(
+        scope = GlobalScope,
+        started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000L),
+        initialValue = PokemonListScreenState.Loading
+    )
+```
+
+`GlobalScope` no está ligado a ningún ciclo de vida: el trabajo sigue vivo aunque el ViewModel se destruya. Kotlin además avisa al usarlo, porque es una API "delicada".
+
+  </Lado>
+  <Lado tipo="bien" titulo="Lo que quedó en clase">
+
+```kotlin
+val state: StateFlow<PokemonListScreenState> = _repository.pokemons
+    .map<List<Pokemon>, PokemonListScreenState> { PokemonListScreenState.Loaded(pokemons = it) }
+    .stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000L),
+        initialValue = PokemonListScreenState.Loading
+    )
+```
+
+Con `viewModelScope`, todo se cancela cuando el ViewModel se destruye.
+
+  </Lado>
+</Comparar>
+
+`stateIn` y `WhileSubscribed` se explican en [Flow y stateIn](/docs/2-dam/kotlin/datos/flow-y-statein).
+
+## Cargar datos al crear el repositorio
+
+<DeClase fecha="09/11, 16/11" proyecto="PokeApp2627" />
+
+En el bloque 2 del 09/11 el repositorio tiene que traer los pokémon de la API la primera vez. El profesor intenta hacerlo en el `init` del **repositorio** y van saliendo los problemas de la regla de oro:
+
+| Intento | Qué pasa |
+| --- | --- |
+| Llamar a `refresh()` directamente en `init { }` | No compila: `init` no es `suspend`. |
+| `withContext(Dispatchers.IO) { refresh() }` | Tampoco: `withContext` también es `suspend`. |
+| `runBlocking { refresh() }` | Funciona, pero **bloquea** el hilo hasta que responde la API. El profesor lo trata como algo provisional. |
+| `CoroutineScope(Dispatchers.IO).launch { refresh() }` | No bloquea, pero **la pantalla sale en blanco**. Se vuelve a `runBlocking`. |
+
+```kotlin title="data/repository/PokemonRepositoryImpl.kt (fragmento del 09/11)"
+init {
+    runBlocking {
+        refresh()
+    }
+}
+
+suspend fun refresh() {
+    val remotePokemons = _remoteDataSource.readAllPokemon()
+    _localDataSource.save(remotePokemons)
+}
+```
+
+<NoSeVio titulo="Por qué sale en blanco">
+  No se ve la explicación del profesor de por qué `CoroutineScope(Dispatchers.IO).launch` deja la pantalla en blanco. La interpretación del resumen de clase es que la fuente local, `flow { emit(_pokemons) }`, emite una sola vez al recogerla, y si `refresh()` termina después, ya no vuelve a emitir y la lista se queda vacía. <Dudoso nota="Es una deducción, no lo dijo el profesor." />
+</NoSeVio>
+
+El 16/11 el `init { runBlocking { refresh() } }` aparece **comentado**, y no se ve desde dónde se llama entonces a `refresh()`. Todo el repositorio offline-first está en [Offline-first](/docs/2-dam/kotlin/datos/offline-first).
+
+<Comparar titulo="La carga inicial">
+  <Lado tipo="evitar">
+
+```kotlin
+class PokemonRepositoryImpl @Inject constructor(
+    private val _remoteDataSource: PokemonRemoteDataSource,
+    private val _localDataSource: PokemonLocalDataSource,
+) : PokemonRepository {
+    init {
+        runBlocking { refresh() }
+    }
+}
+```
+
+`runBlocking` congela la app hasta que responde la red. Y si en vez de eso se usa `CoroutineScope(Dispatchers.IO)`, ese ámbito tampoco pertenece a nadie, igual que `GlobalScope`.
+
+  </Lado>
+  <Lado tipo="bien">
+
+<NoDadoEnClase inline />
+
+```kotlin
+interface PokemonRepository {
+    val pokemons: Flow<List<Pokemon>>
+    suspend fun refresh()
+}
+
+@HiltViewModel
+class PokemonListViewModel @Inject constructor(
+    private val _repository: PokemonRepository
+) : ViewModel() {
+    init {
+        viewModelScope.launch { _repository.refresh() }
+    }
+}
+```
+
+`refresh()` pasa a la interfaz y la lanza el ViewModel con `viewModelScope.launch`: no bloquea y se cancela si se cierra la pantalla. Para que la lista aparezca cuando llegan los datos, la fuente local tiene que avisar de los cambios (por ejemplo, Room con consultas que devuelven `Flow`). Está entero en [Room como fuente de verdad](/docs/2-dam/kotlin/para-el-proyecto/offline-first).
+
+  </Lado>
+</Comparar>
+
+## Los `Dispatchers` <NoDadoEnClase inline />
+
+En clase salen `Dispatchers.IO` (en los intentos de arriba) y `withContext`, pero no se explican. Un *dispatcher* decide **en qué hilos** corre una corrutina:
+
+- `Dispatchers.Main`: el hilo principal. Es el que usa `viewModelScope` por defecto.
+- `Dispatchers.IO`: un grupo de hilos para tareas que esperan (ficheros, red bloqueante).
+- `withContext(Dispatchers.IO) { ... }`: ejecuta un trozo en otro dispatcher y vuelve. Es `suspend`.
+
+Las funciones `suspend` de **Retrofit** y de **Room** ya se encargan solas de no usar el hilo principal, así que puedes llamarlas desde `viewModelScope.launch` sin `withContext`. Por eso el código de clase funciona sin cambiar de dispatcher.
+
+## Errores que salieron en clase
+
+- **`Suspend function '...' should be called only from a coroutine or another suspend function`**: estás llamando a una `suspend` desde una función normal (como el `init`). Lánzala dentro de `viewModelScope.launch { }`.
+- **La pantalla se queda en blanco al arrancar**: carga de datos con `CoroutineScope(Dispatchers.IO).launch` en el `init` del repositorio. Lanza `refresh()` con `viewModelScope.launch` desde el ViewModel, y haz que la fuente local avise cuando cambia (un `Flow` de Room o un `MutableStateFlow`): si emite una sola vez, la lista seguirá vacía aunque la carga vaya bien.
+
+Y una práctica rara que conviene no copiar: el 23/10 se llamó a `viewModel.load()` dentro del `when` de la pantalla (rama `Initial`). Un composable se ejecuta en cada recomposición, así que podría lanzar la carga muchas veces. En clase no llegó a pasar, porque el estado empezaba en `Loading` y esa rama nunca se ejecutaba. La carga va en el `init` del ViewModel.
+
+## Practica
+
+<CompletarCodigo
+  titulo="Guardar una tarea sin bloquear"
+  enunciado="Completa la función para que llame al repositorio, que es suspend, sin bloquear la pantalla."
+  lenguaje="kotlin"
+  codigo={`fun onCreate() {
+    _screenState.value = TaskCreateScreenState.Creating
+    [[viewModelScope]].[[launch]] {
+        _repository.create(title = titleState.text.toString(), description = "", limitDate = "")
+        _screenState.value = TaskCreateScreenState.[[Created]]
+    }
+}`}
+/>
+
+<Quiz titulo="Test: corrutinas">
+  <Pregunta enunciado="¿Desde dónde se puede llamar a una función `suspend`?" explicacion="Es la regla que salió el 09/11: `init` no es `suspend`, y por eso no se podía llamar a `refresh()` directamente.">
+    <Opcion>Desde cualquier función de la clase</Opcion>
+    <Opcion correcta>Desde una corrutina o desde otra función `suspend`</Opcion>
+    <Opcion>Solo desde el bloque `init`</Opcion>
+    <Opcion>Solo desde un composable</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`delay(5_000L)` deja el hilo principal parado 5 segundos, igual que `Thread.sleep(5000)` en Java." respuesta={false} explicacion="`delay` suspende solo la corrutina y deja el hilo libre para otras cosas. `Thread.sleep` sí bloquea el hilo." />
+  <Pregunta enunciado="¿Qué pasa con una corrutina lanzada con `viewModelScope.launch` cuando el ViewModel se destruye?" explicacion="`viewModelScope` se cancela en `onCleared()`, y con él todas sus corrutinas.">
+    <Opcion correcta>Se cancela sola</Opcion>
+    <Opcion>Sigue hasta terminar</Opcion>
+    <Opcion>Pasa a `GlobalScope`</Opcion>
+    <Opcion>La app se cae</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En `onCreate()`, justo después de `viewModelScope.launch { ... }`, ¿la función espera a que termine el bloque?" explicacion="`launch` crea la corrutina y vuelve enseguida. Lo de dentro del bloque se ejecuta a su ritmo, suspendiéndose en `create()`.">
+    <Opcion>Sí, `launch` espera a que acabe el bloque</Opcion>
+    <Opcion correcta>No, `launch` vuelve enseguida y el bloque sigue por su cuenta</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué se descartó `GlobalScope` el 09/11?" explicacion="No pertenece a ningún ViewModel ni pantalla: lo que lances ahí sigue vivo aunque ya no lo use nadie.">
+    <Opcion>Porque es más lento que `viewModelScope`</Opcion>
+    <Opcion correcta>Porque no está ligado a ningún ciclo de vida y deja el trabajo vivo</Opcion>
+    <Opcion>Porque no funciona con `Flow`</Opcion>
+    <Opcion>Porque solo existe en Java</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué hace `runBlocking { refresh() }` en el `init` del repositorio?" explicacion="Funciona, pero congela el hilo que lo llama hasta que responde la API. En clase se usó como solución provisional y el 16/11 aparece comentado.">
+    <Opcion>Lanza `refresh()` en segundo plano</Opcion>
+    <Opcion correcta>Bloquea el hilo hasta que termina `refresh()`</Opcion>
+    <Opcion>No compila</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`withContext(Dispatchers.IO) { }` sirve para llamar a una función `suspend` desde el bloque `init`." respuesta={false} explicacion="`withContext` también es `suspend`, así que tampoco se puede llamar desde `init`. Es lo que pasó en clase." />
+  <Pregunta tipo="texto" enunciado="¿Qué escribes en un ViewModel para lanzar una corrutina que se cancele sola al destruirlo? (solo el nombre del ámbito)" respuesta={["viewModelScope", "viewModelScope.launch"]} explicacion="`viewModelScope.launch { ... }`." />
+</Quiz>
+
+<Flashcards titulo="Repaso: corrutinas">
+  <Tarjeta frente="¿Qué es una corrutina?">Una tarea que puede esperar (a la red o a la base de datos) **sin bloquear el hilo**. Se lanza con `viewModelScope.launch { }`.</Tarjeta>
+  <Tarjeta frente="`suspend fun`">Una función que puede pausarse y seguir más tarde. Solo se llama desde una corrutina o desde otra `suspend`.</Tarjeta>
+  <Tarjeta frente="`viewModelScope`">El ámbito de corrutinas de cada ViewModel. Se cancela solo cuando el ViewModel se destruye.</Tarjeta>
+  <Tarjeta frente="`delay` frente a `Thread.sleep`">`delay` suspende la corrutina y deja el hilo libre. `Thread.sleep` bloquea el hilo.</Tarjeta>
+  <Tarjeta frente="`runBlocking`">Bloquea el hilo que lo llama hasta que termina el bloque. En clase, solución provisional en el `init` del repositorio.</Tarjeta>
+  <Tarjeta frente="¿Por qué no `GlobalScope`?">Porque no está ligado a ningún ciclo de vida: el trabajo sigue aunque la pantalla y el ViewModel ya no existan.</Tarjeta>
+  <Tarjeta frente="`delay(1.seconds)`">`delay` con un `Duration`. `seconds` y `milliseconds` vienen de `kotlin.time.Duration.Companion`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Simular la red en un repositorio" dificultad="facil">
+  Tienes esta interfaz:
+
+```kotlin
+interface NotaRepository {
+    suspend fun readAll(): List<String>
+}
+```
+
+  Escribe `NotaRepositoryInMemory`, que devuelva una lista fija de tres notas después de esperar 2 segundos, como el `TaskRepositoryInMemory` de clase.
+
+  <Pista>Para esperar sin bloquear se usa `delay`, que es `suspend`, así que solo puede ir dentro de una función `suspend`.</Pista>
+  <Pista>Puedes escribir los 2 segundos como `2_000L` o como `2.seconds`.</Pista>
+
+  <Solucion>
+
+```kotlin
+class NotaRepositoryInMemory @Inject constructor() : NotaRepository {
+    private val _notas = listOf("Estudiar Room", "Repasar Flow", "Probar Retrofit")
+
+    override suspend fun readAll(): List<String> {
+        delay(timeMillis = 2_000L)
+        return _notas
+    }
+}
+```
+
+  `delay` viene de `kotlinx.coroutines`. Con `delay(2.seconds)` también vale, importando `kotlin.time.Duration.Companion.seconds`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Arregla la carga del ViewModel" dificultad="media">
+  Este ViewModel no compila. Arréglalo para que, al crearse, ponga `Loading`, llame a `readAll()` y ponga `Success` con la lista, sin bloquear la pantalla y sin usar `GlobalScope`.
+
+```kotlin
+@HiltViewModel
+class NotaListViewModel @Inject constructor(
+    private val _repository: NotaRepository
+) : ViewModel() {
+    private val _state = MutableStateFlow<NotaListState>(NotaListState.Loading)
+    val state: StateFlow<NotaListState> get() = _state.asStateFlow()
+
+    init {
+        val notas = _repository.readAll()
+        _state.value = NotaListState.Success(notas)
+    }
+}
+```
+
+  <Pista>`init` no es `suspend`, y `readAll()` sí.</Pista>
+  <Pista>Saca la carga a una función `load()` pública, como en clase, para poder recargar luego.</Pista>
+
+  <Solucion>
+
+```kotlin
+@HiltViewModel
+class NotaListViewModel @Inject constructor(
+    private val _repository: NotaRepository
+) : ViewModel() {
+    private val _state = MutableStateFlow<NotaListState>(NotaListState.Loading)
+    val state: StateFlow<NotaListState> get() = _state.asStateFlow()
+
+    init {
+        load()
+    }
+
+    fun load() {
+        viewModelScope.launch {
+            _state.value = NotaListState.Loading
+            val notas = _repository.readAll()
+            _state.value = NotaListState.Success(notas)
+        }
+    }
+}
+```
+
+  Es el mismo patrón que `TaskListViewModel` del 23/10. Con `runBlocking` también compilaría, pero congelaría la pantalla mientras espera.
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Corrutina">Tarea que puede esperar sin bloquear el hilo en el que corre.</Termino>
+  <Termino nombre="suspend">Marca una función que puede suspenderse. Solo se llama desde una corrutina o desde otra `suspend`.</Termino>
+  <Termino nombre="viewModelScope.launch">Lanza una corrutina ligada al ViewModel. Se cancela cuando el ViewModel se destruye.</Termino>
+  <Termino nombre="delay">Pausa la corrutina un tiempo sin bloquear el hilo. Admite milisegundos o un `Duration`.</Termino>
+  <Termino nombre="runBlocking">Bloquea el hilo hasta que acaba el bloque. No se usa para cargar datos en una app.</Termino>
+  <Termino nombre="GlobalScope">Ámbito global sin ciclo de vida. Se descartó en clase.</Termino>
+</Glosario>
+
+<MarcarCompletado />

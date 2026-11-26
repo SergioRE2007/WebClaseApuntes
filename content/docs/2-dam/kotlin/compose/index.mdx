@@ -1,0 +1,54 @@
+---
+title: Kotlin y Jetpack Compose
+description: "El Kotlin que se usó en clase explicado desde Java, el proyecto Android con Gradle y la interfaz con Jetpack Compose y Material 3: composables, Modifier, estado, recomposición y listas."
+icon: Smartphone
+---
+
+Este bloque es la base de todo lo que se hizo en Android: **el lenguaje** (Kotlin, explicado para quien viene de Java), **el proyecto** (Android Studio y Gradle) y **la interfaz** (Jetpack Compose con Material 3). Lo que va por encima, como el ViewModel, Hilt y la navegación, o por debajo, como Retrofit, Room, DataStore y las corrutinas, está en los bloques de [arquitectura](/docs/2-dam/kotlin/arquitectura) y de [datos](/docs/2-dam/kotlin/datos). Lo que piden los requisitos y no se dio está en [Android para el proyecto](/docs/2-dam/kotlin/para-el-proyecto).
+
+## Páginas, en orden de estudio
+
+<Cards>
+  <Card icon="Code" title="Kotlin desde Java: lo básico" href="/docs/2-dam/kotlin/compose/kotlin-basico" description="val y var, tipos, funciones con parámetros por defecto, if y when como expresión, null safety y colecciones." />
+  <Card icon="Braces" title="Kotlin desde Java: clases y funciones" href="/docs/2-dam/kotlin/compose/kotlin-clases-y-funciones" description="data class y copy(), sealed class, when exhaustivo, lambdas, referencias con ::, extensiones y by." />
+  <Card icon="Wrench" title="El proyecto Android y Gradle" href="/docs/2-dam/kotlin/compose/proyecto-y-gradle" description="MainActivity, recursos, libs.versions.toml, el BOM de Compose, los SDK y los errores de Gradle de clase." />
+  <Card icon="LayoutTemplate" title="Composables y layouts" href="/docs/2-dam/kotlin/compose/composables-y-layouts" description="@Composable, @Preview, Text, Button, Icon, Image, Column, Row y Box." />
+  <Card icon="SlidersHorizontal" title="Modifier y por qué importa el orden" href="/docs/2-dam/kotlin/compose/modifier" description="padding, background, clickable, clip... y un playground para ver el orden en vivo." />
+  <Card icon="RefreshCw" title="Estado y recomposición" href="/docs/2-dam/kotlin/compose/estado-y-recomposicion" description="remember, rememberSaveable, mutableStateOf, componentes controlados, state hoisting y LaunchedEffect." />
+  <Card icon="Palette" title="Material 3" href="/docs/2-dam/kotlin/compose/material-3" description="El tema, Scaffold e innerPadding, TopAppBar, iconos, botones flotantes y NavigationBar." />
+  <Card icon="List" title="Listas con LazyColumn" href="/docs/2-dam/kotlin/compose/listas" description="items con key, item, el error de LazyListScope y el callback que baja hasta la navegación." />
+</Cards>
+
+Si ya sabes Kotlin, puedes empezar directamente por [Composables y layouts](/docs/2-dam/kotlin/compose/composables-y-layouts) y volver a las dos primeras páginas cuando algo no se entienda.
+
+## Qué clases cubre
+
+En clase no hubo un tema separado de Kotlin ni de Compose: se fueron viendo a la vez que se hacían los proyectos. Esto es lo que salió de este bloque en cada clase:
+
+| Fecha | Proyecto | Lo de este bloque |
+| --- | --- | --- |
+| 07/10 | TipCalculator | `remember`, `rememberSaveable`, `mutableStateOf`, `TextField` y `TextFieldState`, `Switch`, `Slider`, `Row` con `Arrangement` y `Alignment`, `stringResource`, `@Preview`. En Kotlin: `data class` y `copy()`, `if` como expresión, *backing property*, referencia a función `::`. |
+| 09/10 | ToDoApp | `Card` con `Modifier.clickable`, `LargeFloatingActionButton`, `LazyColumn` con `items` y `key`, callbacks `() -> Unit` y `(Int) -> Unit`, nulables y `?.let`, `=` frente a `by`. |
+| 16/10 | ToDoApp | `TextFieldState` y `OutlinedTextField`, `Button` con referencia a función, depuración con Recomposition State. |
+| 23/10 | ToDoApp | Pantalla con estado y sin estado (*state hoisting*), `when` exhaustivo, `sealed class` e `interface`, `item { }` y el error de `LazyListScope`, `CircularProgressIndicator`, `TODO()`. |
+| 26/10 | PokeApp2627 | Funciones de extensión (`toModel()`), `!!`, colecciones y `for`. |
+| 09/11 | PokeApp2627 | La fila de la lista con `AsyncImage` (Coil), `clip(CircleShape)` y `MaterialTheme.typography`; interfaces con propiedades. |
+| 13/11 | Room | Proyecto nuevo, Gradle con el catálogo `libs.versions.toml`, `compileSdk`/`minSdk`/`targetSdk` y sus errores; `vararg`, `Duration`. Teoría de Material 3 Expressive. |
+| 18/11 | ToDoOfflineFirst | `TopAppBar` reutilizable con `@OptIn`, `IconButton`, iconos `ImageVector` en código, `ExtendedFloatingActionButton`, el tema (`Theme.kt`), Logcat y `.also { }`. |
+
+<Callout type="warn" title="Huecos en las capturas">
+  Del 07/10 faltan las capturas de 00:00 a 15:42 (el vídeo se grabó mal), así que no se sabe qué se explicó al principio de la TipCalculator. Del 23/10 no hay código entre 24:29 y 26:26, y del 09/11, entre 08:39 y 11:24 y entre 21:08 y 25:41.
+</Callout>
+
+## Cómo leer estas páginas
+
+El material sale de capturas de los vídeos de clase, así que verás estas marcas:
+
+- <DeClase fecha="07/10" proyecto="TipCalculator" /> indica cuándo y en qué proyecto se vio algo.
+- <NoDadoEnClase inline /> marca lo que **no** se dio en clase: es la forma estándar de hacerlo, pero si te preguntan, di que lo has buscado tú.
+- <Dudoso>Un fragmento así</Dudoso> no se leía bien en las capturas. Se deja como se leyó, sin corregir.
+- Los recuadros "Esto no se llega a ver en clase" señalan código que falta en las capturas: no está rellenado a propósito.
+
+Cada página tiene al final un test, tarjetas de repaso y ejercicios con solución.
+
+<MarcarCompletado />

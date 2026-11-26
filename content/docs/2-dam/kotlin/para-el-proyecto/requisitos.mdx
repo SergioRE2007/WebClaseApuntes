@@ -1,0 +1,212 @@
+---
+title: Requisitos de la app Android
+description: Qué piden los requisitos de la app Android de PMDMO y PSPRO, en qué clase se dio cada uno, qué falta y dónde está explicado.
+icon: ListChecks
+---
+
+La app Android es **de tema libre** y se hace junto con el proyecto intermodular: sirve para evaluar a la vez **PMDMO** (Programación Multimedia y Dispositivos Móviles) y **PSPRO** (Programación de Servicios y Procesos). Tiene que demostrar que dominas lo que se ha estudiado en clase y las buenas prácticas.
+
+<Callout type="idea" title="Lo que vas a sacar de esta página">
+  - Qué pide cada requisito, contado en corto.
+  - Si se dio en clase entero, a medias o nada, y en qué fecha.
+  - Qué te falta para cumplirlo y en qué página está.
+  - Qué demostraciones te pueden pedir en la defensa.
+</Callout>
+
+## Los once requisitos
+
+Esto es lo que dicen los requisitos de los profesores, resumido:
+
+<Accordions type="multiple">
+  <Accordion title="1. Persistencia local con Room">
+    La app guarda datos en el móvil con **Room**. Tienes que diseñar las entidades y las **relaciones** que necesites.
+  </Accordion>
+  <Accordion title="2. Internet con Retrofit o Ktor">
+    La app consume datos de **la API que diseñas en el proyecto intermodular** (no de una API pública). Sirve para sincronizar datos o consultar información en tiempo real. En clase se usó Retrofit.
+  </Accordion>
+  <Accordion title="3. CRUD completo en varios modelos">
+    Al menos **dos CRUD completos** (crear, leer, actualizar y borrar) en modelos **relacionados**, por ejemplo usuarios y publicaciones, o pedidos y productos. La relación tiene que estar en la base de datos y en la API.
+  </Accordion>
+  <Accordion title="4. Navegación con Compose">
+    Un flujo de navegación claro con Compose y el componente de navegación (Navigation Compose).
+  </Accordion>
+  <Accordion title="5. Material Design 3">
+    La interfaz usa componentes de Material 3 y sigue buenas prácticas de diseño visual.
+  </Accordion>
+  <Accordion title="6. Inyección de dependencias con Hilt">
+    Hilt inyecta los repositorios, los ViewModels y los servicios de Retrofit (o Ktor).
+  </Accordion>
+  <Accordion title="7. Estado con ViewModel">
+    Los datos de la interfaz los maneja un ViewModel, para que no se pierdan y la app esté desacoplada y ordenada.
+  </Accordion>
+  <Accordion title="8. Concurrencia con corrutinas">
+    Las tareas asíncronas (llamadas de red, consultas a la base de datos) van en corrutinas, para que la interfaz no se congele.
+  </Accordion>
+  <Accordion title="9. Localización en inglés y español">
+    La app está traducida a los dos idiomas.
+  </Accordion>
+  <Accordion title="10. Intent implícito">
+    Al menos un intent implícito: compartir contenido, abrir una ubicación en el mapa, mandar un correo…
+  </Accordion>
+  <Accordion title="11. DataStore para preferencias">
+    DataStore guarda preferencias del usuario: idioma, tema de la app o preferencias personales.
+  </Accordion>
+</Accordions>
+
+## Qué se dio y qué falta
+
+Leyenda: **Dado** (se vio entero en clase), **A medias** (se vio una parte) y **No dado** (no salió en ninguna clase).
+
+| Requisito | Estado | Dónde se dio | Qué falta y dónde está |
+| --- | --- | --- | --- |
+| Room (entidades y relaciones) | A medias | 13/11: Room 3 con KSP y Hilt, `@Entity`, `@Dao` y `@Database`. 16/11: PokeApp leyendo de Room (3 minutos). | Las relaciones (`ForeignKey`, `@Relation`), las `@Query` corregidas y leer de Room con `Flow`: [Room con relaciones](/docs/2-dam/kotlin/para-el-proyecto/room-relaciones) y [Room como fuente de verdad](/docs/2-dam/kotlin/para-el-proyecto/offline-first). |
+| Retrofit o Ktor contra tu API | A medias | 26/10: Retrofit 3 con Gson, `Response<T>`, DataSource y `toModel()`. 09/11: con `Flow`. | En clase solo hubo `GET` contra PokeAPI. Faltan `POST`, `PUT` y `DELETE`, llamar a tu API desde el emulador y mandar el token: [Conectar con tu API](/docs/2-dam/kotlin/para-el-proyecto/conectar-con-tu-api) y [CRUD con Retrofit](/docs/2-dam/kotlin/para-el-proyecto/crud-con-retrofit). |
+| Dos CRUD en modelos relacionados | A medias | ToDoApp (09/10 a 23/10): crear, listar y ver el detalle de tareas en memoria. | Editar y borrar, y que los dos modelos estén relacionados en Room y en la API: [Room con relaciones](/docs/2-dam/kotlin/para-el-proyecto/room-relaciones) y [CRUD con Retrofit](/docs/2-dam/kotlin/para-el-proyecto/crud-con-retrofit). |
+| Navegación con Compose | Dado | 09/10: rutas tipadas, `NavHost` y `toRoute`. 09/11: `savedStateHandle.toRoute`. 18/11: grafos anidados. | No es obligatorio, pero casi todas las apps lo necesitan: barra inferior, login con `popUpTo` y volver atrás después de guardar. Está en [Navegación del proyecto](/docs/2-dam/kotlin/para-el-proyecto/navegacion-del-proyecto). |
+| Material 3 | Dado | Todo el curso. 18/11: `TopAppBar`. | Nada. |
+| Hilt en repositorios, ViewModels y red | Dado | 09/10: `@Binds` y `@HiltViewModel`. 26/10: `NetworkModule` con `@Provides` y `@HiltAndroidApp`. 13/11: módulo de Room. | Poner `@Singleton` en el `@Provides` de la base de datos de Room (el 13/11 no lo llevaba; el `NetworkModule` del 26/10 sí): [Prácticas raras](/docs/2-dam/kotlin/para-el-proyecto/practicas-raras). |
+| ViewModel para el estado | Dado | 07/10, 16/10 (`StateFlow`), 23/10 (estados sellados) y 09/11 (`stateIn`). | Nada. |
+| Corrutinas | Dado | 23/10: `suspend` y `viewModelScope.launch`. 09/11: `Flow` y por qué no `GlobalScope`. | Capturar los errores de red para que la app no se caiga: [Room como fuente de verdad](/docs/2-dam/kotlin/para-el-proyecto/offline-first). |
+| Localización inglés y español | No dado | 07/10: solo se nombra `stringResource`. | Todo: [Intent implícito y localización](/docs/2-dam/kotlin/para-el-proyecto/intent-y-localizacion). |
+| Intent implícito | No dado | Nunca. | Todo: [Intent implícito y localización](/docs/2-dam/kotlin/para-el-proyecto/intent-y-localizacion). |
+| DataStore para preferencias | A medias | 18/11: modo oscuro con `booleanPreferencesKey`. | No se ve el módulo que crea el `DataStore` ni cómo llega el modo oscuro al tema: [DataStore](/docs/2-dam/kotlin/para-el-proyecto/datastore). |
+
+Lo que está como **Dado** lo tienes en el resto del módulo de [Kotlin](/docs/2-dam/kotlin). Los requisitos del backend (Prisma, la API REST, el token) son de [Infraestructuras de Servicios y APIs](/docs/2-dam/apis).
+
+<Mermaid
+  titulo="Cuántos requisitos hay de cada estado"
+  chart={`pie showData
+    "Dado" : 5
+    "A medias" : 4
+    "No dado" : 2`}
+/>
+
+## Entregas
+
+<Steps>
+  <Step>
+
+#### Diseño preliminar (14 de octubre de 2026)
+
+  Un diseño de la interfaz (en Figma, a mano o con lo que quieras), de la base de datos local y de la remota, y una descripción corta del alcance del proyecto.
+
+  </Step>
+  <Step>
+
+#### Entrega parcial (fecha por decidir)
+
+  Lo que lleves hecho, para revisar cómo vas y que te den ideas.
+
+  </Step>
+  <Step>
+
+#### Entrega final (fecha por decidir)
+
+  El proyecto completo, con todos los requisitos.
+
+  </Step>
+  <Step>
+
+#### Defensa (fecha por decidir)
+
+  Expones el proyecto y explicas por qué lo has hecho así y cómo has implementado cada requisito.
+
+  </Step>
+</Steps>
+
+## Cómo se evalúa
+
+| Criterio | Qué miran |
+| --- | --- |
+| Funcionalidad | Que haya CRUD, persistencia, consumo de la API y DataStore para las preferencias. |
+| Calidad de código | Que uses bien Hilt, ViewModel, corrutinas y DataStore. |
+| Diseño de interfaz | Que apliques bien Material Design. |
+| Usabilidad y navegación | Una navegación clara y la localización bien hecha. |
+| Documentación y defensa | Que expliques tus decisiones y cada componente. Te pueden pedir **demostraciones prácticas**. |
+
+## Lo que te pueden pedir en la defensa
+
+Los requisitos dicen que "se pueden solicitar demostraciones prácticas". Lo más probable, por requisito:
+
+- **Room:** añadir un campo a una entidad. Si no haces nada más, la app se cae al abrirla, porque la base guardada en el móvil ya no coincide. Hay que subir `version` en `@Database` y dar una migración; en desarrollo basta con desinstalar la app.
+- **Retrofit:** añadir un endpoint nuevo a la interfaz y llamarlo desde el repositorio.
+- **Hilt:** explicar quién crea cada objeto. Por ejemplo, cómo llega el DAO al repositorio sin hacer `new` (en Kotlin, sin llamar al constructor).
+- **ViewModel y estado:** girar el móvil y ver que no se pierde nada.
+- **Corrutinas:** quitar el wifi y enseñar que la app no se cae.
+- **Localización:** cambiar el idioma del emulador.
+- **Intent:** pulsar el botón y que se abra la otra app.
+- **DataStore:** cambiar una preferencia, cerrar la app y volver a abrirla.
+
+<Callout type="warn" title="Ensaya las demostraciones antes">
+  Cada una de estas pruebas tarda un minuto en hacerse, pero si es la primera vez que la haces delante del tribunal puede salir mal. Pruébalas todas con tu app antes de la defensa.
+</Callout>
+
+## Practica
+
+<Quiz titulo="Test: los requisitos de la app">
+  <Pregunta enunciado="¿Contra qué API tiene que trabajar tu app Android?" explicacion="Los requisitos piden consumir la API diseñada en el proyecto intermodular. PokeAPI solo se usó en clase para aprender Retrofit.">
+    <Opcion>Contra PokeAPI, como en clase</Opcion>
+    <Opcion correcta>Contra la API que diseñas en el proyecto intermodular</Opcion>
+    <Opcion>Contra cualquier API pública</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cuántos CRUD completos piden, y cómo tienen que ser los modelos?" explicacion="Al menos dos CRUD completos en modelos relacionados, por ejemplo pedidos y productos.">
+    <Opcion>Uno, de cualquier modelo</Opcion>
+    <Opcion>Dos, de modelos independientes</Opcion>
+    <Opcion correcta>Al menos dos, en modelos relacionados</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué requisitos están como No dado en la tabla?" explicacion="El intent implícito no salió nunca, y de la localización solo se nombró `stringResource` el 07/10. La navegación y Hilt se dieron enteros.">
+    <Opcion correcta>Intent implícito</Opcion>
+    <Opcion correcta>Localización en inglés y español</Opcion>
+    <Opcion>Navegación con Compose</Opcion>
+    <Opcion>Hilt</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="En clase se vio cómo llega el modo oscuro guardado en DataStore hasta el tema de la app." respuesta={false} explicacion="El 18/11 se guardó el modo oscuro y se enseñó `Theme.kt`, pero las capturas terminan antes de conectarlo. Por eso DataStore está a medias." />
+  <Pregunta enunciado="En la defensa te piden añadir un campo a una entidad de Room y la app se cae al abrirla. ¿Qué ha pasado?" explicacion="La base guardada en el móvil tiene el esquema viejo. Se sube `version` en `@Database` y se da una migración; en desarrollo basta con desinstalar la app.">
+    <Opcion>Falta `@Singleton` en el módulo de Room</Opcion>
+    <Opcion correcta>La base guardada en el móvil ya no coincide con la entidad</Opcion>
+    <Opcion>Room no admite añadir campos</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué le falta al Hilt de clase para estar bien?" explicacion="El `@Provides` de la base de datos (13/11) no llevaba `@Singleton`, así que se creaba una base de datos nueva en cada inyección. El `NetworkModule` del 26/10 sí lo llevaba.">
+    <Opcion correcta>`@Singleton` en el `@Provides` de la base de datos de Room</Opcion>
+    <Opcion>Cambiar `@Binds` por `@Provides` en todo</Opcion>
+    <Opcion>Quitar `@HiltAndroidApp`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: requisitos">
+  <Tarjeta frente="¿Qué dos módulos evalúa la app Android?">**PMDMO** (Programación Multimedia y Dispositivos Móviles) y **PSPRO** (Programación de Servicios y Procesos).</Tarjeta>
+  <Tarjeta frente="¿Qué demostración típica hay para las corrutinas?">Quitar el wifi y enseñar que la app no se cae.</Tarjeta>
+  <Tarjeta frente="¿Y para DataStore?">Cambiar una preferencia, cerrar la app y volver a abrirla: la preferencia sigue ahí.</Tarjeta>
+  <Tarjeta frente="¿Qué se entrega el 14/10/2026?">El diseño preliminar: la interfaz, las bases de datos local y remota y una descripción corta del alcance.</Tarjeta>
+  <Tarjeta frente="¿Qué requisito de navegación falta en clase?">Ninguno obligatorio. Faltan cosas que casi todas las apps usan: barra inferior, login con `popUpTo` y volver atrás tras guardar.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Tu lista de comprobación" dificultad="facil">
+  Copia la tabla de "Qué se dio y qué falta" y añade una columna **"En mi app"**. Para cada requisito, escribe el archivo o la pantalla de tu proyecto donde lo cumples (por ejemplo, "Intent implícito: botón Compartir en `DetalleScreen.kt`"). Marca los que todavía no tienes.
+
+  <Pista>Empieza por los que dependen de otros: sin Room y Retrofit no puedes tener el CRUD.</Pista>
+
+  <Solucion>
+
+  No hay una única solución. Una lista bien hecha tiene **una fila por requisito** y, en cada una, un sitio concreto del código. Si una fila se queda vacía o pone algo genérico ("en toda la app"), ese requisito es el que te pueden pillar en la defensa.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Ensaya la defensa" dificultad="media">
+  Elige tres demostraciones de la lista de la defensa (por ejemplo, Room, corrutinas y DataStore) y hazlas con tu app. Para cada una, apunta qué pasos sigues y qué explicarías mientras.
+
+  <Pista>Para corrutinas: pon el modo avión en el emulador y pulsa el botón que refresca. La app debe enseñar los datos guardados o un error, nunca cerrarse.</Pista>
+
+  <Solucion>
+
+  - **Room:** añade un campo a una entidad y enseña que la app se cae al abrirla. Después, sube `version` en `@Database` y añade una migración (o, en desarrollo, desinstala la app) y enseña que vuelve a abrir. Subir `version` sin migración no basta: Room también se cae, porque no sabe pasar de la versión vieja a la nueva.
+  - **Corrutinas:** modo avión, refrescar, y la app sigue con lo que había en Room. Explica que la llamada va en `viewModelScope.launch` y que el `try/catch` captura la `IOException`.
+  - **DataStore:** activa el modo oscuro, cierra la app del todo (desde recientes) y ábrela: sigue en oscuro porque se leyó del archivo de preferencias.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

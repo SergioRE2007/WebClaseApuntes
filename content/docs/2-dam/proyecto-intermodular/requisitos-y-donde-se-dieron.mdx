@@ -1,0 +1,287 @@
+---
+title: Requisitos y dónde se dieron
+description: "Punto de partida para preparar el proyecto: cada requisito de la app Android, el backend y la web Angular, en qué clase salió, qué falta y qué te pueden pedir en la defensa."
+icon: ListChecks
+---
+
+import { ChecklistRequisitos } from '@/components/temas/proyecto/checklist-requisitos';
+
+El proyecto intermodular junta tres piezas, y cada una la piden profesores distintos con su propia lista de requisitos:
+
+- **La app Android** (PMDMO y PSPRO): Kotlin, Compose, Room, Retrofit, Hilt... En esta web está en [Kotlin](/docs/2-dam/kotlin).
+- **El backend y la base de datos** (Acceso a Datos): Node con Express, Prisma y PostgreSQL. En esta web está en [APIs](/docs/2-dam/apis).
+- **La web Angular** (también de Acceso a Datos: en Classroom las actividades de Angular salen como "2627 Acceso a Datos"). En esta web está en [Acceso a Datos](/docs/2-dam/acceso-a-datos).
+
+En esta página tienes, requisito por requisito, **en qué clase salió** (con la fecha, para que lo busques en los apuntes de ese día) y **qué te falta** para cumplirlo. Lo que no se dio en clase está explicado, con código, en estas tres secciones:
+
+<Cards>
+  <Card icon="Smartphone" title="App Android: lo que falta" href="/docs/2-dam/kotlin/para-el-proyecto" description="Localización, intent implícito, relaciones de Room, POST/PUT/DELETE con Retrofit, DataStore..." />
+  <Card icon="Server" title="Backend: lo que falta" href="/docs/2-dam/apis/backend-proyecto" description="Seed, búsqueda con paginación, consultas relacionadas, transacciones, CORS y token." />
+  <Card icon="LayoutTemplate" title="Angular: lo que falta" href="/docs/2-dam/acceso-a-datos/angular-avanzado/listado-filtros-y-token" description="Listado con filtros y paginación contra tu API, estados de carga y error, borrar con confirmación." />
+</Cards>
+
+<Callout type="idea" title="Cómo leer el estado">
+  **Dado**: se dio entero en clase. **A medias**: salió algo, pero no todo lo que pide el requisito. **No dado**: no ha salido en clase. Si en la defensa te preguntan por algo "No dado", di que lo has buscado tú.
+</Callout>
+
+## Tu checklist
+
+Marca lo que ya tienes hecho. Se guarda en tu navegador, así que puedes volver cuando quieras. El estado que sale a la derecha es el de las clases, no el tuyo.
+
+<ChecklistRequisitos
+  grupos={[
+    {
+      titulo: 'App Android',
+      enlace: '/docs/2-dam/kotlin/para-el-proyecto',
+      items: [
+        { nombre: 'Room (entidades y relaciones)', estado: 'medias' },
+        { nombre: 'Retrofit o Ktor contra tu API', estado: 'medias' },
+        { nombre: 'Dos CRUD en modelos relacionados', estado: 'medias' },
+        { nombre: 'Navegación con Compose', estado: 'dado' },
+        { nombre: 'Material 3', estado: 'dado' },
+        { nombre: 'Hilt en repositorios, ViewModels y red', estado: 'dado' },
+        { nombre: 'ViewModel para el estado', estado: 'dado' },
+        { nombre: 'Corrutinas', estado: 'dado' },
+        { nombre: 'Localización inglés y español', estado: 'no' },
+        { nombre: 'Intent implícito', estado: 'no' },
+        { nombre: 'DataStore para preferencias', estado: 'medias' },
+      ],
+    },
+    {
+      titulo: 'Backend y base de datos',
+      enlace: '/docs/2-dam/apis/backend-proyecto',
+      items: [
+        { nombre: 'PostgreSQL', estado: 'dado' },
+        { nombre: 'Prisma o TypeORM', estado: 'dado' },
+        { nombre: 'Varias entidades relacionadas', estado: 'medias' },
+        { nombre: 'Relaciones 1 y N', estado: 'medias' },
+        { nombre: 'Migraciones', estado: 'dado' },
+        { nombre: 'Seed de datos', estado: 'no' },
+        { nombre: 'Operaciones CRUD', estado: 'dado' },
+        { nombre: 'Consultas relacionales y por criterios', estado: 'medias' },
+        { nombre: 'Búsqueda y filtrado', estado: 'no' },
+        { nombre: 'Ordenación y paginación', estado: 'no' },
+        { nombre: 'API REST', estado: 'dado' },
+        { nombre: 'Validación en el backend', estado: 'dado' },
+        { nombre: 'Gestión de errores', estado: 'dado' },
+        { nombre: 'Operación de negocio', estado: 'no' },
+        { nombre: 'Transacciones', estado: 'no' },
+        { nombre: 'Consumo de la API desde Angular', estado: 'medias' },
+        { nombre: 'Variables de entorno', estado: 'dado' },
+      ],
+    },
+    {
+      titulo: 'Web Angular',
+      enlace: '/docs/2-dam/acceso-a-datos/angular-avanzado/listado-filtros-y-token',
+      items: [
+        { nombre: 'Navegación entre vistas (Router)', estado: 'dado' },
+        { nombre: 'Componentes reutilizables', estado: 'dado' },
+        { nombre: 'Listados y detalle', estado: 'dado' },
+        { nombre: 'Formularios de crear y editar', estado: 'dado' },
+        { nombre: 'Borrar con confirmación', estado: 'medias' },
+        { nombre: 'Búsqueda, filtro y orden', estado: 'medias' },
+        { nombre: 'Paginación', estado: 'medias' },
+        { nombre: 'Estados de carga, vacío y error', estado: 'medias' },
+        { nombre: 'HTTP solo en servicios', estado: 'dado' },
+        { nombre: 'Validación con mensajes', estado: 'dado' },
+      ],
+    },
+  ]}
+/>
+
+## App Android (PMDMO y PSPRO)
+
+Los requisitos dicen que la app es de **tema libre**, que consume **la API que diseñáis en el Proyecto Intermodular** y que sirve para evaluar PMDMO y PSPRO. Los apuntes de clase están en [Kotlin](/docs/2-dam/kotlin) y lo que falta, en [Kotlin: para el proyecto](/docs/2-dam/kotlin/para-el-proyecto).
+
+| Requisito | Estado | Dónde se dio | Qué falta |
+| --- | --- | --- | --- |
+| Room (entidades y relaciones) | **A medias** | 13/11: Room 3 con KSP y Hilt, `@Entity`, `@Dao` y `@Database`. 16/11: la PokeApp leyendo de Room (solo 3 minutos). | Las relaciones (`ForeignKey`, `@Relation`), las `@Query` corregidas y leer de Room con `Flow`. Ojo: Room 3 no escribe `@Relation` igual que Room 2. |
+| Retrofit o Ktor contra tu API | **A medias** | 26/10: Retrofit 3 con Gson, `Response<T>`, DataSource y `toModel()`. 09/11: con `Flow`. | En clase solo hubo `GET` contra PokeAPI. Faltan `POST`, `PUT` y `DELETE`, llamar a tu API desde el emulador y mandar el token. |
+| Dos CRUD en modelos relacionados | **A medias** | ToDoApp (09/10 a 23/10): crear, listar y ver el detalle de tareas en memoria. | Editar y borrar, y que los dos modelos estén relacionados (en Room y en la API). |
+| Navegación con Compose | **Dado** | 09/10: rutas tipadas, `NavHost` y `toRoute`. 09/11: `savedStateHandle.toRoute`. 18/11: grafos anidados. | No es obligatorio, pero casi todas las apps lo necesitan: barra inferior, login con `popUpTo` y volver atrás después de guardar. |
+| Material 3 | **Dado** | Todo el curso. 18/11: `TopAppBar`. | Nada. |
+| Hilt en repositorios, ViewModels y red | **Dado** | 09/10: `@Binds` y `@HiltViewModel`. 26/10: `NetworkModule` con `@Provides` y `@HiltAndroidApp`. 13/11: el módulo de Room. | Poner `@Singleton` en los `@Provides` del módulo de Room (el 13/11 no lo llevaban; el `@Provides` de Retrofit del 26/10 sí lo tenía). |
+| ViewModel para el estado | **Dado** | 07/10, 16/10 (`StateFlow`), 23/10 (estados sellados) y 09/11 (`stateIn`). | Nada. |
+| Corrutinas | **Dado** | 23/10: `suspend` y `viewModelScope.launch`. 09/11: `Flow` y por qué no `GlobalScope`. | Capturar los errores de red para que la app no se caiga. |
+| Localización inglés y español | **No dado** | 07/10: la TipCalculator usa `stringResource(R.string.x)` y ya trae `values-es/strings.xml`, pero no se explicó cómo localizar la app. | Todo. |
+| Intent implícito | **No dado** | Nunca. | Todo. |
+| DataStore para preferencias | **A medias** | 18/11: modo oscuro con `booleanPreferencesKey`. | No se ve el módulo que crea el `DataStore` ni cómo llega el modo oscuro al tema. |
+
+### Entregas y evaluación de la app
+
+Según los requisitos de PMDMO y PSPRO:
+
+- **Diseño preliminar (14 de octubre de 2026):** diseño de la interfaz (en Figma, a mano o con lo que quieras), de la base de datos local y de la remota, y una descripción breve del alcance.
+- **Entrega parcial**, **entrega final** y **defensa**: con fecha por decidir.
+- **Criterios:** funcionalidad (CRUD, persistencia, consumo de la API y DataStore), calidad del código (Hilt, ViewModel, corrutinas y DataStore bien usados), diseño con Material, usabilidad y navegación (con la localización), y **documentación y defensa**: explicar tus decisiones y el uso de cada componente. Pueden pedirte **demostraciones prácticas**.
+
+## Backend y base de datos (Acceso a Datos)
+
+Es la tabla de la sección 8 de los requisitos ("Requisitos mínimos de Acceso a Datos"), más las variables de entorno, que se piden en la sección 7. La arquitectura que piden: Angular → HTTP/JSON → API REST → servicios → ORM → PostgreSQL, y no vale meter rutas, lógica y acceso a datos en un solo fichero. Los apuntes de clase están en [APIs](/docs/2-dam/apis) y lo que falta, en [APIs: backend del proyecto](/docs/2-dam/apis/backend-proyecto).
+
+| Requisito | Estado | Dónde se dio | Qué falta |
+| --- | --- | --- | --- |
+| PostgreSQL | **Dado** | 20/10: Postgres 16 en `docker-compose.yml`. 03/11: Supabase. | Nada. |
+| Prisma o TypeORM | **Dado** | 27/10: `schema.prisma` y la migración `init`. 03/11: migraciones, drift y `db pull`. | Nada. |
+| Varias entidades relacionadas | **A medias** | El repositorio del profesor solo tiene `User` (y `Media`, con su FK a `User`, en la v1.1). | Tu modelo, con varias relaciones y qué pasa al borrar (`onDelete`). |
+| Relaciones 1 y N | **A medias** | Igual que la fila anterior. | Igual que la fila anterior. |
+| Migraciones | **Dado** | 27/10 y 03/11. | Nada. Sube la carpeta `prisma/migrations` al repositorio. |
+| Seed de datos | **No dado** | Nunca. | Todo. |
+| Operaciones CRUD | **Dado** | 27/10: módulo `users` con routes, controller, service y schema. P2025 → 404 y P2002 → 409. | Nada. |
+| Consultas relacionales y por criterios | **A medias** | Solo el `select` que quita `passwordHash`. | `include`, `where` y `_count`. |
+| Búsqueda y filtrado | **No dado** | En el backend, nunca. En Angular (12/11), solo con JSON Server (`_page`, `_limit`). | Todo, hecho con Prisma. |
+| Ordenación y paginación | **No dado** | Igual que la fila anterior. | Igual que la fila anterior, y devolver el total. |
+| API REST | **Dado** | Del 20/10 al 03/11. | Nada. |
+| Validación en el backend | **Dado** | 27/10: Zod 4 y el middleware `validate`. | Validar también los query params del listado. |
+| Gestión de errores | **Dado** | 20/10: `errorHandler`. 27/10: códigos de Prisma. 03/11: Winston. | Nada. Si quieres, una clase de error propia. |
+| Operación de negocio | **No dado** | Nunca. | Todo. |
+| Transacciones | **No dado** | Nunca. | Todo. |
+| Consumo de la API desde Angular | **A medias** | 27/10 y 28/10: servicios con `HttpClient` contra JSONPlaceholder, Fake Store y JSON Server. | Contra tu API: CORS (el error salió el 18/11) y el token. |
+| Variables de entorno | **Dado** | 20/10: `env.ts` y dotenv. | Nada. |
+
+### Planificación por hitos (Acceso a Datos)
+
+El profesor de Acceso a Datos reparte el proyecto en **hitos semanales acumulativos**: cada semana se revisa una evidencia que funcione, y cada hito amplía el anterior. Los hitos son genéricos; cada equipo los adapta a su modelo.
+
+| Hito | Semana | Foco | Qué tiene que haber |
+| --- | --- | --- | --- |
+| H1 | 29-30 oct. | Creación y estructura | Proyecto creado y **versionado**. Angular y Express separados, carpetas básicas y las dos apps arrancando. |
+| H2 | 2-6 nov. | Layout y estilos | Layout general, Tailwind CSS y criterios visuales comunes (estructura, espaciado, tipografía y navegación). |
+| H3 | 9-13 nov. | Componentes y navegación | Componentes principales y reutilizables, y Angular Router con navegación entre las vistas. |
+| H4 | 16-20 nov. | Vistas, formularios e interacción | Listados, detalle y formularios, comunicación entre componentes y primeras validaciones. Puede ser con datos simulados. |
+| H5 | 23-27 nov. | Servicios Angular | Servicios de acceso a datos e interfaces o tipos. Componentes separados de la comunicación con la futura API. |
+| H6 | 30 nov.-4 dic. | Diseño de la API REST | Recursos, rutas, parámetros, cuerpos y respuestas. Express en rutas, controladores y servicios. Contrato entre frontend y backend. |
+| H7 | 9-11 dic. | ORM y modelo | Modelo con Prisma o TypeORM, relaciones, restricciones y conexión con PostgreSQL. Primeras migraciones y preparación del seed. |
+| H8 | 14-18 dic. | Endpoints y acceso a datos | Endpoints conectados a la base de datos, CRUD y consultas con el ORM, y el seed funcionando. |
+| — | 21 dic.-10 ene. | Navidad | Sin hitos obligatorios. |
+| H9 | 11-15 ene. | Integración | Datos reales en lugar de simulados: Angular consume la API y las operaciones atraviesan todas las capas. |
+| H10 | 18-22 ene. | Consultas y negocio | Búsqueda, filtro, orden y paginación desde el backend. Consultas relacionales y la operación de negocio con transacción. |
+| H11 | 25-29 ene. | Revisión final | Validaciones en los dos lados, errores HTTP, integridad, estados de carga y de "sin resultados". Migraciones, seed y configuración. |
+
+En cada revisión semanal se mira: que el proyecto **arranca** y se puede enseñar el avance, que el hito nuevo **no rompe** lo anterior, que se mantiene la **separación por capas**, la **trazabilidad** (el repositorio refleja el avance con commits y una estructura comprensible), que el equipo sabe **explicar** sus decisiones y lo pendiente, y en algunos hitos una **rúbrica**. Para la trazabilidad te sirve lo de [Git: ramas, tags y Git Graph](/docs/2-dam/proyecto-intermodular/git-ramas-y-tags).
+
+## Web Angular
+
+Es la sección 2 de los requisitos de Acceso a Datos. Además de la tabla, piden que la app esté bien **componentizada**, que el HTTP vaya en **servicios** y que se use **Angular Router**; se valoran especialmente los **formularios reactivos**. Los apuntes de clase están en [Acceso a Datos](/docs/2-dam/acceso-a-datos) y lo que falta, en [Acceso a Datos: listado con filtros, paginación y token](/docs/2-dam/acceso-a-datos/angular-avanzado/listado-filtros-y-token) (y el resto de la carpeta Angular avanzado).
+
+| Requisito | Estado | Dónde se dio | Qué falta |
+| --- | --- | --- | --- |
+| Navegación entre vistas (Router) | **Dado** | 27/10: `loadComponent`. 19/11: `provideRouter`, rutas hijas y `routerLinkActive`. | `:id`, query params y `**` solo salen en el enunciado de la Act 12 y en la guía de routing. |
+| Componentes reutilizables | **Dado** | 14/10: padre e hijo. 12/11: `input.required` y `output`. | Nada. |
+| Listados y detalle | **Dado** | `proj-fakestore` y `proj-game`. | Nada. |
+| Formularios de crear y editar | **Dado** | 05/11 y 12/11 (template-driven). 18/11: reactivos. | Nada. Se valoran los reactivos. |
+| Borrar con confirmación | **A medias** | Solo en la guía: `confirm()` dentro de un `CanDeactivate`. | El borrado con confirmación en tu listado. |
+| Búsqueda, filtro y orden | **A medias** | 12/11: buscar por id y paginar con JSON Server. | Mandar los criterios a tu API. |
+| Paginación | **A medias** | 12/11: `_page`, `_limit` y `observe: 'response'`. | Igual que la fila anterior. |
+| Estados de carga, vacío y error | **A medias** | 27/10: las plantillas las generó la IA de Cursor. | Hacerlos tú en cada listado. |
+| HTTP solo en servicios | **Dado** | 27/10 y 28/10. | Nada. |
+| Validación con mensajes | **Dado** | 05/11 y 18/11. | Nada. |
+
+<Callout type="warn" title="Búsqueda y paginación: en el backend, no en Angular">
+  Los requisitos dicen que los criterios se envían desde Angular al backend y se convierten en consultas del ORM. Si hay muchos datos, **no vale descargar todo y filtrar en Angular**. Y la API tiene que devolver lo necesario para paginar (por ejemplo, el total).
+</Callout>
+
+## Lo que te pueden pedir en la defensa
+
+Los requisitos de la app dicen que "se pueden solicitar demostraciones prácticas", y en Acceso a Datos cada revisión pide que sepas explicar tus decisiones. Lo más probable, requisito por requisito:
+
+| Requisito | Demostración probable |
+| --- | --- |
+| Room | Añadir un campo a una entidad. Si no subes `version` en `@Database` y das una migración, la app se cae al abrirla porque la base guardada en el móvil ya no coincide. En desarrollo basta con desinstalar la app. |
+| Retrofit | Añadir un endpoint nuevo a la interfaz y llamarlo desde el repositorio. |
+| Hilt | Explicar quién crea cada objeto. Por ejemplo, cómo llega el DAO al repositorio sin hacer `new`. |
+| ViewModel y estado | Girar el móvil y ver que no se pierde nada. |
+| Corrutinas | Quitar el wifi y enseñar que la app no se cae. |
+| Localización <NoDadoEnClase inline /> | Cambiar el idioma del emulador. |
+| Intent <NoDadoEnClase inline /> | Pulsar el botón y que se abra la otra app. |
+| DataStore | Cambiar una preferencia, cerrar la app y volver a abrirla. |
+| Prisma | Añadir un campo, crear la migración y enseñar el SQL que genera. |
+| Seed <NoDadoEnClase inline /> | `npx prisma migrate reset` y ver que la base vuelve con datos. |
+| Listado <NoDadoEnClase inline /> | Cambiar el filtro en Angular y enseñar la petición en la pestaña Red del navegador: los parámetros viajan en la URL. |
+| Transacción <NoDadoEnClase inline /> | Forzar un error en mitad de la operación y comprobar que no se guardó nada. |
+| Errores HTTP | Provocar un 400 (dato mal), un 404 (id que no existe) y un 409 (duplicado). |
+
+Repasa con estas tarjetas: en el frente está lo que te pueden pedir y detrás, cómo responder.
+
+<Flashcards titulo="Simulacro de defensa">
+  <Tarjeta frente="Room: «añade un campo a esta entidad y arranca la app»">Sube `version` en `@Database` y añade una migración. Si no, Room ve que el esquema guardado en el móvil no coincide y la app se cae al abrirla. En desarrollo, desinstalar la app también vale.</Tarjeta>
+  <Tarjeta frente="Retrofit: «añade un endpoint nuevo»">Un método nuevo en la interfaz de Retrofit (con `@GET`, `@POST`... y `@Path` o `@Body`), que devuelve `Response<T>`, y una llamada desde el DataSource o el repositorio.</Tarjeta>
+  <Tarjeta frente="Hilt: «¿quién crea el DAO que usa tu repositorio?»">Hilt. El módulo de Room tiene un `@Provides` que crea la base de datos (mejor con `@Singleton`) y otro, `providesPokemonDao` en clase, que devuelve el DAO con `db.pokemonDao()`. El repositorio lo pide en su `@Inject constructor`; nadie hace `new`.</Tarjeta>
+  <Tarjeta frente="ViewModel: «gira el móvil»">El estado vive en el ViewModel (`StateFlow`), que sobrevive al giro. La pantalla se vuelve a crear y recoge el mismo estado: no se pierde nada.</Tarjeta>
+  <Tarjeta frente="Corrutinas: «quita el wifi»">Sin red, Retrofit lanza una excepción (`IOException`) y, si nadie la captura, la app se cierra. La llamada va en `viewModelScope.launch` dentro de un `try`/`catch`, y en el `catch` el ViewModel pasa a un estado de error que la pantalla enseña. Comprobar `isSuccessful` no basta: solo cubre las respuestas con error del servidor.</Tarjeta>
+  <Tarjeta frente="DataStore: «cambia una preferencia y reinicia»">La preferencia se guarda en DataStore (por ejemplo, con `booleanPreferencesKey`) y se lee como `Flow` al arrancar, así que al volver a abrir la app sigue igual.</Tarjeta>
+  <Tarjeta frente="Prisma: «añade un campo al modelo»">Cambias `schema.prisma`, `npx prisma migrate dev --name ...` crea la carpeta de la migración con su `migration.sql` (el SQL que se enseña) y la aplica. La migración se sube al repositorio.</Tarjeta>
+  <Tarjeta frente="Seed: «deja la base como al principio»">`npx prisma migrate reset`: borra la base, aplica todas las migraciones y ejecuta el seed. No se dio en clase: di que lo has buscado tú.</Tarjeta>
+  <Tarjeta frente="Listado: «¿dónde se filtra?»">En el backend. En la pestaña Red del navegador se ve que los criterios viajan en la URL como query params y que la respuesta solo trae una página, con el total. En el backend no se dio en clase.</Tarjeta>
+  <Tarjeta frente="Errores HTTP: «provoca un 400, un 404 y un 409»">400: datos que no pasan la validación de Zod (o un id que no es número). 404: un id que no existe (P2025 de Prisma). 409: un valor `@unique` repetido (P2002).</Tarjeta>
+  <Tarjeta frente="Transacción: «¿qué pasa si falla a la mitad?»">Con `prisma.$transaction` se deshace todo: no queda ninguna modificación a medias. Se demuestra forzando el error y mirando la base. No se dio en clase.</Tarjeta>
+</Flashcards>
+
+## Comprueba lo que sabes
+
+<Quiz titulo="Test: requisitos del proyecto" descripcion="Dónde se dio cada cosa y qué piden">
+  <Pregunta enunciado="¿Cuáles de estos requisitos de Acceso a Datos no se han dado nunca en clase?" explicacion="Seed, operación de negocio y transacciones no han salido. Las migraciones se vieron el 27/10 y el 03/11.">
+    <Opcion correcta>Seed de datos</Opcion>
+    <Opcion correcta>Transacciones</Opcion>
+    <Opcion correcta>Operación de negocio</Opcion>
+    <Opcion>Migraciones</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En clase, la paginación de Angular se hizo con..." explicacion="El 12/11 se paginó contra JSON Server con `_page`, `_limit` y `observe: 'response'`. Contra tu API con Prisma no se ha hecho.">
+    <Opcion>Prisma, con `skip` y `take`</Opcion>
+    <Opcion correcta>JSON Server, con `_page` y `_limit`</Opcion>
+    <Opcion>Filtrando el array en el componente</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Si tu listado tiene muchos datos, vale con descargarlos todos y filtrar y ordenar en Angular." respuesta={false} explicacion="Los requisitos lo dicen expresamente: los criterios se mandan al backend y se convierten en consultas del ORM." />
+  <Pregunta enunciado="¿Qué le faltaba al módulo de Room que se hizo con Hilt el 13/11?" explicacion="Sus `@Provides` no llevaban `@Singleton`, así que Hilt crearía una base de datos nueva en cada inyección. El `@Provides` de Retrofit del 26/10 sí lo llevaba, y `@HiltAndroidApp` y los `@Binds` ya estaban.">
+    <Opcion>`@HiltAndroidApp` en la clase `Application`</Opcion>
+    <Opcion correcta>`@Singleton` en los `@Provides`</Opcion>
+    <Opcion>`@Binds` para los repositorios</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Según la planificación de Acceso a Datos, ¿en qué hito se sustituyen los datos simulados por los reales?" explicacion="H9 (11-15 de enero): Angular consume la API y las operaciones atraviesan todas las capas.">
+    <Opcion>H5</Opcion>
+    <Opcion>H8</Opcion>
+    <Opcion correcta>H9</Opcion>
+    <Opcion>H11</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué se revisa en el aspecto «Trazabilidad» de la revisión semanal?" explicacion="Que el repositorio refleje el avance mediante commits y una estructura comprensible.">
+    <Opcion>Que las dos apps arranquen</Opcion>
+    <Opcion correcta>Que el repositorio refleje el avance con commits</Opcion>
+    <Opcion>Que haya tests</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="La localización en inglés y español se dio en clase el 07/10." respuesta={false} explicacion="El 07/10 la TipCalculator ya usaba `stringResource` y tenía `values-es/strings.xml`, pero no se explicó cómo localizar la app. La localización está como No dado." />
+</Quiz>
+
+## Ejercicios
+
+<Ejercicio titulo="Tu plan para lo que falta" dificultad="facil">
+  Con la checklist de arriba, apunta los requisitos que tu proyecto todavía no cumple y ordénalos según los hitos de Acceso a Datos y las entregas de Android. Para cada uno, escribe en qué sección de esta web está explicado y qué demostración harías en la defensa.
+
+  <Pista>Filtra la checklist por "No dado" y "A medias": son los que más trabajo te van a llevar.</Pista>
+  <Pista>El seed se prepara en H7 y tiene que funcionar en H8. La búsqueda con paginación y la transacción son de H10.</Pista>
+
+  <Solucion>
+
+Un ejemplo para el backend:
+
+| Requisito | Hito | Dónde está | Demostración |
+| --- | --- | --- | --- |
+| Seed | H7-H8 | [APIs: backend del proyecto](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) | `npx prisma migrate reset` y la base vuelve con datos |
+| Búsqueda, filtro, orden y paginación | H10 | [APIs: backend del proyecto](/docs/2-dam/apis/backend-proyecto/listado-paginado) | Cambiar el filtro en Angular y enseñar la petición en la pestaña Red |
+| Transacción | H10 | [APIs: backend del proyecto](/docs/2-dam/apis/backend-proyecto/transacciones) | Forzar un error a mitad y comprobar que no se guardó nada |
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Prepara tres respuestas de defensa" dificultad="media">
+  Elige tres requisitos que sí tengas hechos (uno de Android, uno del backend y uno de Angular) y escribe en dos o tres frases cómo explicarías **quién hace qué** en tu código. Después, prepara la demostración práctica de cada uno.
+
+  <Pista>Las tarjetas del simulacro te dan el esquema: qué te piden, qué enseñas y por qué funciona.</Pista>
+
+  <Solucion>
+
+Por ejemplo, para Hilt: "El repositorio pide el DAO en su `@Inject constructor`. Hilt lo saca del módulo de Room, donde un `@Provides @Singleton` crea la base de datos una sola vez y otro `@Provides` devuelve el DAO. Así ninguna clase hace `new` de sus dependencias y en los tests se pueden cambiar por otras". La demostración: abrir el módulo y el constructor del repositorio, y enseñar que no hay ningún `new`.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

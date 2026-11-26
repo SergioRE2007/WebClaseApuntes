@@ -1,6 +1,7 @@
 'use client';
 
-import { Fragment, useCallback, useLayoutEffect, useEffect, useState, type ReactNode, type RefObject } from 'react';
+import { Fragment, useCallback, useLayoutEffect, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 
 export const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
@@ -86,4 +87,38 @@ export function usePrefiereMenosMovimiento(): boolean {
     return () => mq.removeEventListener('change', on);
   }, []);
   return reducir;
+}
+
+/**
+ * Contenedor cuya altura se anima con suavidad cuando cambia su contenido
+ * (al pasar de un paso a otro, de una pestaña a otra…). Sin animación si el
+ * usuario prefiere menos movimiento.
+ */
+export function AlturaSuave({ children, className }: { children: ReactNode; className?: string }) {
+  const reducir = useReducedMotion();
+  const interior = useRef<HTMLDivElement>(null);
+  const [altura, setAltura] = useState<number | 'auto'>('auto');
+
+  useIsoLayoutEffect(() => {
+    const el = interior.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const medir = () => setAltura(el.offsetHeight);
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <motion.div
+      initial={false}
+      animate={{ height: altura }}
+      transition={{ duration: reducir ? 0 : 0.25, ease: 'easeOut' }}
+      style={{ overflow: 'hidden' }}
+    >
+      <div ref={interior} className={className}>
+        {children}
+      </div>
+    </motion.div>
+  );
 }

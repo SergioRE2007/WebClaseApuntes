@@ -1,0 +1,275 @@
+---
+title: PostgreSQL con Docker y Supabase
+description: "La base de datos de clase: PostgreSQL 16 en un contenedor con docker-compose, la cadena DATABASE_URL, Supabase con su pooler y por qué en Postgres hay que escribir \"Media\" entre comillas."
+icon: Database
+---
+
+La API guarda los datos en **PostgreSQL**. En clase se ve de dos formas: en local, dentro de un contenedor de Docker que se levanta con `docker-compose.yml` (20/10), y en la nube, con **Supabase** (03/11). Prisma se conecta a cualquiera de las dos con la misma variable, `DATABASE_URL`.
+
+<DeClase fecha="20/10, 03/11" proyecto="node-server-26-27" nota="v0.3.0 de la referencia" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué hace cada línea del `docker-compose.yml` de desarrollo.
+  - Cómo se lee una cadena de conexión `postgresql://…`.
+  - Cómo se conecta la API a Supabase por el pooler y qué herramientas tiene su panel.
+  - Por qué `select * from Media` falla y `select * from "Media"` funciona.
+</Callout>
+
+## PostgreSQL en un contenedor
+
+<Concepto termino="Docker" definicion="Ejecuta programas en contenedores: un Postgres, la API… sin instalarlos en el ordenador. Docker Compose arranca varios a la vez a partir de un fichero docker-compose.yml.">Docker</Concepto> permite tener un PostgreSQL funcionando sin instalarlo en el ordenador: se descarga la imagen oficial y se arranca en un contenedor. Todo lo que hace falta se describe en un fichero, `docker-compose.yml`, que va en el repositorio. Así todo el equipo tiene la misma base de datos con la misma configuración.
+
+El de desarrollo de la referencia **solo levanta Postgres**: la API se arranca aparte con `npm run dev`.
+
+<Recorrido
+  titulo="docker-compose.yml (desarrollo)"
+  lenguaje="yaml"
+  codigo={`version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: node-server-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:`}
+>
+  <Paso lineas="1" titulo="version">
+    La versión del formato de Compose. Hoy esta clave está obsoleta (Compose la ignora), pero es lo que hay en el proyecto.
+  </Paso>
+  <Paso lineas="3-6" titulo="Un servicio llamado postgres">
+    Usa la imagen oficial `postgres:16` y le pone nombre al contenedor para reconocerlo en Docker Desktop.
+  </Paso>
+  <Paso lineas="7-10" titulo="Variables de la imagen">
+    La imagen de Postgres lee `POSTGRES_USER`, `POSTGRES_PASSWORD` y `POSTGRES_DB` al crearse: el usuario, su contraseña y la base de datos que crea vacía.
+  </Paso>
+  <Paso lineas="11-12" titulo="Puertos host:contenedor">
+    El 5432 de tu ordenador va al 5432 del contenedor. Por eso la API se conecta a `localhost:5432`.
+  </Paso>
+  <Paso lineas="13-14, 21-22" titulo="Volumen con nombre">
+    Los datos de Postgres se guardan en el volumen `pgdata`, fuera del contenedor. Si borras el contenedor, los datos siguen ahí.
+  </Paso>
+  <Paso lineas="15-19" titulo="healthcheck">
+    Cada 10 s ejecuta `pg_isready` dentro del contenedor. Si falla 5 veces seguidas, el contenedor queda como *unhealthy*. El tooltip de `retries` en el editor explicaba que es el número de fallos seguidos que hacen falta para marcarlo *unhealthy* (por defecto, 3).
+  </Paso>
+</Recorrido>
+
+- El 20/10 el mapeo de puertos se estaba editando y se lee <Dudoso nota="La versión que queda en el fichero es la de 5432:5432.">`"5432:543…"`</Dudoso>.
+- En el `CHANGELOG.md` de la v0.3.0 ("PostgreSQL + Docker con Prisma") salían los comandos de Docker y Prisma. Para parar los contenedores, en clase sale `docker-compose down`.
+
+<NoDadoEnClase titulo="Arrancar el contenedor">
+  En las capturas no se ve el comando de arranque. El estándar es `docker compose up -d` desde la carpeta del `docker-compose.yml` (con Docker Desktop abierto en Windows). `-d` lo deja en segundo plano.
+</NoDadoEnClase>
+
+## La cadena de conexión
+
+Prisma no recibe el usuario, la contraseña y el host por separado: lo recibe todo junto en **`DATABASE_URL`**, en el `.env`.
+
+```bash title=".env"
+DATABASE_URL="postgresql://postgres:<contraseña>@localhost:5432/app_db"
+```
+
+| Trozo | Qué es | En el compose de desarrollo |
+| --- | --- | --- |
+| `postgresql://` | El protocolo | — |
+| `postgres` | Usuario | `POSTGRES_USER` |
+| `<contraseña>` | Contraseña | `POSTGRES_PASSWORD` |
+| `localhost` | Host | El ordenador, por el puerto publicado |
+| `5432` | Puerto | `ports: "5432:5432"` |
+| `app_db` | Base de datos | `POSTGRES_DB` |
+
+Cuando la API también corre en Docker (el compose de producción), el host ya no es `localhost` sino **el nombre del servicio**: `postgresql://postgres:postgres@db:5432/app_db`. Lo verás en [Docker y Swagger](/docs/2-dam/apis/backend/docker-swagger).
+
+## Supabase
+
+**Supabase** es un PostgreSQL en la nube con un panel web. El 03/11 la API del profesor no usaba el Postgres de Docker sino uno de Supabase: solo cambia la `DATABASE_URL` del `.env`.
+
+<DeClase fecha="03/11" proyecto="node-server-26-27" />
+
+- La conexión va por el **pooler**, en `aws-1-eu-west-1.pooler.supabase.com:5432`. Un <Concepto termino="Pooler" definicion="Intermediario que reparte unas pocas conexiones a la base de datos entre muchas peticiones. Supabase tiene uno delante de cada base.">pooler</Concepto> reparte pocas conexiones a la base entre muchos clientes.
+- En el panel **Connect to your project** se elige **Session pooler** con tipo URI, el recomendado para redes IPv4. De ahí se copia la cadena.
+- El diálogo **Reset database password** avisa de que la contraseña es la misma para todas las formas de conexión.
+- El profesor duplicó el `.env` como **`.env_local`**, un archivo sin seguimiento de Git. Las credenciales **nunca** se suben al repositorio (ni se ven en estos apuntes).
+
+Lo que se usó del panel:
+
+| Herramienta | Para qué |
+| --- | --- |
+| **Schema Visualizer** | Ver las tablas y sus relaciones como diagrama. Salían `_prisma_migrations`, `Media` y `User`, con la relación `Media.userId → User.id` (1:N). |
+| **SQL Editor** | Escribir consultas SQL a mano. |
+| **Table Editor** | Ver y editar las filas de una tabla como en una hoja de cálculo. También deja renombrar tablas, que es como se provocó el *drift* ([Prisma](/docs/2-dam/apis/backend/prisma)). |
+
+Al renombrar una tabla desde el panel, Supabase avisó de que **no tenía RLS activado** y quedaba con acceso anónimo. RLS (*Row Level Security*) son las reglas de quién puede leer cada fila cuando se entra por la API de Supabase; la API de Express se conecta directamente a Postgres y no la usa.
+
+<Mermaid
+  titulo="Las tablas de la base de datos del 03/11"
+  chart={`erDiagram
+  User ||--o{ Media : "tiene"
+  User {
+    int id PK
+    string email UK
+    string name
+    string passwordHash
+    datetime createdAt
+  }
+  Media {
+    int id PK
+    int userId FK
+    string publicId UK
+    string secureUrl
+    datetime createdAt
+  }`}
+/>
+
+## Mayúsculas y comillas en PostgreSQL
+
+Esto pilló a todo el mundo en el SQL Editor. PostgreSQL **pasa a minúsculas los nombres que no van entre comillas dobles**. Prisma crea las tablas con el nombre del modelo tal cual y entre comillas (`"User"`, `"Media"`), así que:
+
+<Terminal titulo="SQL Editor de Supabase">
+{`sql> select * from media;
+ERROR: 42P01: relation "media" does not exist
+sql> select * from Media;
+ERROR: 42P01: relation "media" does not exist
+sql> select * from "Media";
+(0 filas)`}
+</Terminal>
+
+- `Media` sin comillas se convierte en `media`, que no existe.
+- `"Media"` con comillas respeta la mayúscula y la encuentra.
+- Con `user` es aún más raro: `select * from user` sin comillas **no da error**, devuelve el usuario de la sesión (`postgres`). `user` es una palabra reservada de SQL. La tabla se consulta con `select * from "User"`.
+
+<CompletarCodigo
+  titulo="Consultas en el SQL Editor"
+  enunciado="Completa las consultas para que encuentren las tablas que crea Prisma."
+  lenguaje="sql"
+  codigo={`select * from [["Media"]];
+select * from [["User"]] where id = 1;
+select * from [[_prisma_migrations|"_prisma_migrations"]];`}
+/>
+
+`_prisma_migrations` va en minúsculas y sin comillas porque Prisma la crea así. Es la tabla donde apunta las migraciones aplicadas: `migration_name`, `checksum`, `started_at`, `finished_at` y `applied_steps_count`. El 03/11 tenía 2 filas, una por migración. Se explica en [Prisma 6](/docs/2-dam/apis/backend/prisma).
+
+## Para saber más (solo se mencionó)
+
+El 03/11 el profesor comentó **Guepard** (guepard.run) y **GFS** ("Git For database Systems"), herramientas que llevan la idea de las ramas de Git y la vuelta atrás a las bases de datos. No se usaron.
+
+## Errores típicos <NoDadoEnClase inline />
+
+No salieron en clase, pero son los primeros con los que te vas a encontrar:
+
+- **`P1001: Can't reach database server`**: Postgres no está arrancado (abre Docker Desktop y levanta el contenedor) o la `DATABASE_URL` tiene mal el puerto o la contraseña.
+- **Con Supabase, `migrate` se queda colgado**: pasa si usas el *Transaction pooler* (puerto 6543), que no admite migraciones. Usa el *Session pooler* o la conexión directa (puerto 5432), como en clase. Si necesitas el de 6543 para la app, en Prisma 6 se añade `directUrl = env("DIRECT_URL")` en el `datasource` con la conexión de 5432 para las migraciones, y `?pgbouncer=true` al final de la `DATABASE_URL`.
+
+## Practica
+
+<Quiz titulo="Test: PostgreSQL, Docker y Supabase" descripcion="7 preguntas">
+  <Pregunta enunciado='En el compose de desarrollo pone `ports: - "5432:5432"`. ¿Qué significa?' explicacion="Es `host:contenedor`. El puerto 5432 de tu ordenador va al 5432 del contenedor, y por eso la API se conecta a `localhost:5432`.">
+    <Opcion correcta>El puerto 5432 del ordenador se conecta al 5432 del contenedor</Opcion>
+    <Opcion>Postgres admite como mucho 5432 conexiones</Opcion>
+    <Opcion>El contenedor usa dos puertos distintos</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Para qué sirve el volumen `pgdata`?" explicacion="Guarda los datos de Postgres fuera del contenedor. Si se borra el contenedor, los datos se conservan.">
+    <Opcion>Para guardar las migraciones de Prisma</Opcion>
+    <Opcion correcta>Para que los datos de Postgres no se pierdan al borrar el contenedor</Opcion>
+    <Opcion>Para compartir el `.env` con el contenedor</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En `postgresql://postgres:clave@localhost:5432/app_db`, ¿qué es `app_db`?" explicacion="El último trozo es el nombre de la base de datos, el que crea la imagen con `POSTGRES_DB`.">
+    <Opcion>El usuario</Opcion>
+    <Opcion>El host</Opcion>
+    <Opcion correcta>La base de datos</Opcion>
+  </Pregunta>
+  <Pregunta enunciado='`select * from Media` da `relation "media" does not exist`. ¿Por qué?' explicacion='Sin comillas, Postgres pasa el nombre a minúsculas. Prisma creó la tabla como `"Media"`, con mayúscula.'>
+    <Opcion>Porque la tabla está vacía</Opcion>
+    <Opcion correcta>Porque sin comillas Postgres busca `media` en minúsculas y la tabla se llama `"Media"`</Opcion>
+    <Opcion>Porque falta el punto y coma</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`select * from user` sin comillas devuelve las filas de la tabla User." respuesta={false} explicacion='`user` es una palabra reservada: devuelve el usuario de la sesión (`postgres`). La tabla se consulta con `"User"`.' />
+  <Pregunta enunciado="¿Qué tipo de conexión de Supabase eligió el profesor en el panel Connect?" explicacion="Session pooler con tipo URI, el recomendado para redes IPv4, por el puerto 5432.">
+    <Opcion>Transaction pooler</Opcion>
+    <Opcion correcta>Session pooler</Opcion>
+    <Opcion>Conexión anónima por la API de Supabase</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué tienes que cambiar para pasar de la base de Docker a la de Supabase?" explicacion="Prisma solo sabe de `DATABASE_URL`. Cambiando la cadena del `.env`, el resto del código no se toca.">
+    <Opcion>El `schema.prisma` entero</Opcion>
+    <Opcion correcta>La `DATABASE_URL` del `.env`</Opcion>
+    <Opcion>Los servicios de la API</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: base de datos">
+  <Tarjeta frente="¿Qué levanta el `docker-compose.yml` de desarrollo?">Solo PostgreSQL 16. La API se arranca aparte con `npm run dev`.</Tarjeta>
+  <Tarjeta frente="Las tres variables de la imagen de Postgres">`POSTGRES_USER`, `POSTGRES_PASSWORD` y `POSTGRES_DB`.</Tarjeta>
+  <Tarjeta frente="¿Qué comprueba el healthcheck?">Ejecuta `pg_isready -U postgres` cada 10 s; con 5 fallos seguidos el contenedor queda *unhealthy*.</Tarjeta>
+  <Tarjeta frente="Formato de `DATABASE_URL`">`postgresql://usuario:contraseña@host:puerto/basededatos`.</Tarjeta>
+  <Tarjeta frente="¿Qué es el pooler de Supabase?">Un intermediario que reparte pocas conexiones a la base entre muchos clientes. En clase, el Session pooler por el 5432.</Tarjeta>
+  <Tarjeta frente="Schema Visualizer, SQL Editor y Table Editor">Diagrama de tablas, consultas SQL a mano y edición de filas (y de tablas) en el panel de Supabase.</Tarjeta>
+  <Tarjeta frente='¿Por qué `"Media"` entre comillas?'>Sin comillas, Postgres pasa los nombres a minúsculas, y Prisma crea las tablas con mayúscula.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Un compose para otra base" dificultad="facil">
+  Escribe un `docker-compose.yml` de desarrollo como el de clase, pero para una base que se llame `tienda_db`, con usuario `tienda` y contraseña `tienda`, y escribe la `DATABASE_URL` que tendría que ir en el `.env`.
+
+  <Pista>Copia el de clase y cambia las tres variables `POSTGRES_*`.</Pista>
+  <Pista>El `-U` de `pg_isready` es el usuario.</Pista>
+
+  <Solucion>
+
+```yaml title="docker-compose.yml"
+services:
+  postgres:
+    image: postgres:16
+    container_name: tienda-postgres
+    environment:
+      POSTGRES_USER: tienda
+      POSTGRES_PASSWORD: tienda
+      POSTGRES_DB: tienda_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tienda"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+```
+
+```bash title=".env"
+DATABASE_URL="postgresql://tienda:tienda@localhost:5432/tienda_db"
+```
+
+La clave `version` se puede quitar: hoy Compose la ignora.
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="docker-compose.yml">Describe los contenedores. El de desarrollo solo levanta `postgres:16`.</Termino>
+  <Termino nombre="Volumen">Almacenamiento fuera del contenedor (`pgdata`) para no perder los datos.</Termino>
+  <Termino nombre="healthcheck">Comando que Docker ejecuta para saber si el contenedor está sano (`pg_isready`).</Termino>
+  <Termino nombre="DATABASE_URL">La cadena de conexión que lee Prisma.</Termino>
+  <Termino nombre="Supabase">PostgreSQL en la nube con panel web. En clase, por el Session pooler.</Termino>
+  <Termino nombre="Comillas dobles">En Postgres respetan las mayúsculas: `"Media"`, `"User"`.</Termino>
+</Glosario>
+
+<MarcarCompletado />

@@ -1,0 +1,622 @@
+---
+title: Estado y recomposición
+description: "Qué es la recomposición, remember, rememberSaveable y mutableStateOf, el delegado by, TextFieldState, componentes controlados (Switch, Slider), state hoisting con pantalla con estado y sin estado, y efectos secundarios con LaunchedEffect."
+icon: RefreshCw
+---
+
+import { SimuladorRecomposicion } from '@/components/temas/compose/simulador-recomposicion';
+
+Este es el tema que hace que Compose "encaje". Una pantalla de Compose es una función que pinta la interfaz **a partir de unos datos**: el **estado**. Cuando el estado cambia, Compose vuelve a ejecutar las funciones que lo leen y la pantalla se actualiza sola. Si el estado no está bien guardado, pasan cosas raras: el contador que no sube, el valor que se pierde al girar el móvil, la lista que no se actualiza... Todo eso salió en clase.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué es la <Concepto termino="Recomposición" definicion="Cuando Compose vuelve a ejecutar un composable porque ha cambiado un estado que lee.">recomposición</Concepto> y cuándo ocurre.
+  - Guardar estado con `remember`, `rememberSaveable` y `mutableStateOf`, y usarlo con `by`.
+  - Los campos de texto con `TextFieldState` y los componentes **controlados** (`Switch`, `Slider`).
+  - El *state hoisting*: subir el estado y separar la pantalla con estado de la pantalla sin estado.
+  - Por qué no hay que hacer cosas (cargar datos, navegar) en mitad de la composición, y para qué sirve `LaunchedEffect`.
+</Callout>
+
+## Qué es la recomposición
+
+Un composable se ejecuta una primera vez para pintar la pantalla (la **composición**). Después, cada vez que cambia un **estado que ese composable lee**, Compose lo vuelve a ejecutar: eso es **recomponer**. Compose es listo y solo vuelve a ejecutar las partes que leen el estado que ha cambiado, no la pantalla entera.
+
+Para que funcione, Compose tiene que **enterarse** de que algo ha cambiado. Con una variable normal de Kotlin no se entera; con un **estado de Compose** (`mutableStateOf`), sí. Y como la función se vuelve a ejecutar desde el principio, cualquier variable local que declares dentro **se vuelve a crear** en cada recomposición, salvo que la guardes con `remember`.
+
+Pruébalo con el mismo contador escrito de cuatro formas:
+
+<SimuladorRecomposicion />
+
+Lo que enseña el simulador:
+
+| Código | Al pulsar | Al girar el móvil |
+| --- | --- | --- |
+| `var clics = 0` | La variable cambia, pero **no es estado**: Compose no se entera y la pantalla sigue en 0. | Vuelve a 0. |
+| `var clics by mutableStateOf(0)` | Compose recompone, pero **sin `remember`** la función crea un estado nuevo que empieza en 0. Sigue en 0. Compila, pero Android Studio lo subraya en rojo (un aviso de *lint*: *Creating a state object during composition without using remember*). | Vuelve a 0. |
+| `var clics by remember { mutableStateOf(0) }` | Funciona: `remember` devuelve el mismo estado en cada recomposición. | **Se pierde**: la Activity se recrea y la composición empieza de cero. |
+| `var clics by rememberSaveable { mutableStateOf(0) }` | Funciona. | **Se mantiene**: se guarda al recrear la Activity. |
+
+## `remember` y `mutableStateOf`
+
+<DeClase fecha="07/10" proyecto="TipCalculator" nota="el punto de partida, con todo el estado en la pantalla" />
+
+<Recorrido
+  titulo="TipCalculatorScreen.kt (punto de partida del 07/10)"
+  lenguaje="kotlin"
+  codigo={`@Composable
+fun TipCalculatorScreen() {
+    var totalAmount by rememberSaveable { mutableStateOf("0.0") }
+    val guestNumberState = remember { TextFieldState(initialText = "0") }
+    var checked by rememberSaveable { mutableStateOf(false) }
+    var tipValue by rememberSaveable { mutableFloatStateOf(0.0F) }
+    var splitResult by rememberSaveable { mutableStateOf("") }
+
+    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+        // ... los campos, el Switch, el Slider y el botón
+    }
+}`}
+>
+  <Paso lineas="3" titulo="mutableStateOf: un estado observable">
+    `mutableStateOf("0.0")` crea un estado de Compose con un valor inicial. Cuando cambia su valor, Compose recompone lo que lo lee.
+  </Paso>
+  <Paso lineas="3, 5-7" titulo="rememberSaveable: que sobreviva al giro">
+    `rememberSaveable { ... }` guarda el estado entre recomposiciones **y** cuando Android recrea la Activity (al girar la pantalla, al cambiar el tema...). Sin `remember`, cada recomposición crearía un estado nuevo.
+  </Paso>
+  <Paso lineas="6" titulo="mutableFloatStateOf">
+    Para un `Float` hay una versión especial, `mutableFloatStateOf`, que guarda el número sin envolverlo en un objeto. En clase se usó para el valor del `Slider` de la propina.
+  </Paso>
+  <Paso lineas="3, 5-7" titulo="El delegado by">
+    Con `var x by ...` usas `x` como una variable normal: `checked = true` cambia el estado y `Text(splitResult)` lo lee. Sin `by` tendrías que escribir `.value` cada vez.
+  </Paso>
+  <Paso lineas="4" titulo="TextFieldState con remember">
+    El estado de un campo de texto (`TextFieldState`) también se guarda con `remember`. No lleva `by` porque no es un `MutableState`, sino un objeto que el `TextField` modifica por dentro.
+  </Paso>
+</Recorrido>
+
+### `by` frente a `.value`
+
+Estas dos formas hacen lo mismo:
+
+```kotlin
+// Con =, el tipo es MutableState<Int> y se usa .value
+val clics = remember { mutableStateOf(0) }
+Text("${clics.value}")
+Button(onClick = { clics.value++ }) { Text("Sumar") }
+
+// Con by, se usa como un Int normal
+var clics2 by remember { mutableStateOf(0) }
+Text("$clics2")
+Button(onClick = { clics2++ }) { Text("Sumar") }
+```
+
+Con `by`, la variable tiene que ser `var` si la vas a cambiar, y necesitas los imports **`androidx.compose.runtime.getValue`** y **`setValue`** (Android Studio los propone con Alt+Intro). Recuerda que `by` solo vale con estados: con un `NavHostController` dio error (ver [Delegados con `by`](/docs/2-dam/kotlin/compose/kotlin-clases-y-funciones#delegados-con-by)).
+
+### `remember` frente a `rememberSaveable`
+
+- **`remember`** sobrevive a las **recomposiciones**, pero no a que Android recree la Activity.
+- **`rememberSaveable`** sobrevive también a la **recreación de la Activity** (giro de pantalla, cambio de modo oscuro, cambio de idioma) y a que Android mate la app en segundo plano. Lo consigue guardando el valor en el `Bundle` del estado de la Activity, así que solo vale para cosas que se puedan guardar ahí: números, textos, booleanos...
+- Para el estado de **una pantalla entera** (una lista que viene de la API, el resultado de un cálculo), en clase se pasó a un **ViewModel**, que también sobrevive al giro. Se explica en el [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura/viewmodel-y-stateflow).
+
+## Campos de texto: `TextField` y `TextFieldState`
+
+<DeClase fecha="07/10, 16/10" proyecto="TipCalculator y ToDoApp" />
+
+En clase se usaron las dos formas que tiene Material 3 de hacer un campo de texto:
+
+<Tabs items={['Con value y onValueChange', 'Con TextFieldState']}>
+  <Tab value="Con value y onValueChange">
+
+```kotlin
+var totalAmount by rememberSaveable { mutableStateOf("0.0") }
+
+TextField(
+    value = totalAmount,
+    onValueChange = { totalAmount = it },
+    keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Decimal),
+)
+```
+
+El campo enseña `value` y, cuando escribes, llama a `onValueChange` con el texto nuevo. **Si no actualizas el estado en `onValueChange`, lo que escribes no aparece**: el campo siempre enseña lo que diga `value`.
+
+Del `TextField` de clase solo se ve `value = totalAmount` <Dudoso nota="El resto de parámetros del TextField del 07/10 no es visible en las capturas." /> (y que había un `KeyboardOptions` decimal guardado en un `val`). El `onValueChange` de este ejemplo <NoDadoEnClase inline /> es la forma estándar de completarlo, no lo que escribió el profesor.
+
+  </Tab>
+  <Tab value="Con TextFieldState">
+
+```kotlin
+val titleState = rememberTextFieldState()      // o remember { TextFieldState() }
+
+OutlinedTextField(state = titleState)
+
+Button(onClick = { guardar(titleState.text.toString()) }) {
+    Text("Save")
+}
+```
+
+Con `TextFieldState` no hace falta `onValueChange`: el campo guarda el texto en el objeto, y lo lees con **`.text.toString()`**. Es lo que se usó en el formulario de crear tarea.
+
+  </Tab>
+</Tabs>
+
+- **`KeyboardOptions` con `KeyboardType.Decimal`** hace que salga el teclado numérico con coma decimal (07/10).
+- **`OutlinedTextField`** es igual que `TextField`, pero con borde en vez de fondo relleno.
+- El 16/10, en el formulario de la ToDoApp, el `TextFieldState` se puso **en el ViewModel** (`val titleState = TextFieldState()`), y la pantalla solo lo enlazaba: `OutlinedTextField(state = viewModel.titleState)`. Al principio dio el error *Property must be initialized or be abstract* hasta que se le puso `= TextFieldState()`.
+- `rememberTextFieldState()` no se usó en clase: es la forma corta de `remember { TextFieldState() }`.
+- Los campos del formulario de clase **no tenían `label`**, y en la app no se distinguía cuál era cuál. Con `OutlinedTextField(state = titleState, label = { Text("Título") })` se arregla.
+
+## Componentes controlados: `Switch` y `Slider`
+
+<DeClase fecha="07/10, 18/11" proyecto="TipCalculator y ToDoOfflineFirst" />
+
+Un componente **controlado** no guarda su propio valor: lo **recibe** (del estado) y, cuando el usuario lo toca, **avisa** con un callback. Quien lo usa decide si cambia el estado o no.
+
+```kotlin title="TipCalculatorScreen.kt"
+Switch(
+    checked = viewModel.state.tip,
+    onCheckedChange = viewModel::changeTip
+)
+Slider(
+    enabled = viewModel.state.tip,
+    value = viewModel.state.tipAmount,
+    onValueChange = { },
+    steps = 3,
+    valueRange = 0f..4f
+)
+```
+
+- **`Switch(checked, onCheckedChange)`**: `checked` es lo que enseña; `onCheckedChange` recibe el `Boolean` nuevo. Con `onCheckedChange = null`, el `Switch` es de solo lectura (así iba en `TaskCard`).
+- **`Slider(value, onValueChange, steps, valueRange)`**: `valueRange = 0f..4f` es el rango, y `steps = 3` son las paradas **intermedias**, así que el `Slider` solo puede valer 0, 1, 2, 3 o 4.
+- En clase, el `onValueChange` del `Slider` se quedó **vacío** (con `tipValue = it` comentado): como no cambia el estado, el `Slider` no se mueve. Es lo mismo que pasa con un `TextField` sin `onValueChange`.
+- El 18/11, el `Switch` del modo oscuro empezó con un `var checked = true` local y acabó leyendo del ViewModel: `Switch(checked = uiState.darkMode, onCheckedChange = { viewModel.changeMode(it) })`.
+
+## Práctica rara: un estado que Compose no ve
+
+<DeClase fecha="07/10" proyecto="TipCalculator" />
+
+El 07/10, al pasar el estado de la TipCalculator a un ViewModel, quedó así:
+
+<Comparar titulo="El estado de la TipCalculator">
+  <Lado tipo="evitar">
+
+```kotlin
+class TipCalculatorViewModel(): ViewModel() {
+    private var _state = TipCalculatorScreenState()
+    val state: TipCalculatorScreenState
+        get() = _state
+
+    fun changeTip(isEnabled: Boolean) {
+        _state = _state.copy(tip = isEnabled, /* ... */)
+    }
+}
+
+// En la pantalla
+Switch(
+    checked = viewModel.state.tip,
+    onCheckedChange = viewModel::changeTip
+)
+```
+
+`_state` es una **variable normal**: `changeTip` la cambia, pero Compose no se entera y **no recompone**. El `Switch` no se mueve. El profesor dejó `TODO Corregir esto para que vaya perfecto` y la clase acabó probando `var screenState by rememberSaveable { viewModel.state }` <Dudoso nota="Así aparece al final del 07/10, con errores en el panel. No se sabe cómo lo dejó." />.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Mejor así (el patrón de la ToDoApp)">
+
+```kotlin
+class TipCalculatorViewModel : ViewModel() {
+    private val _state = MutableStateFlow(TipCalculatorScreenState())
+    val state: StateFlow<TipCalculatorScreenState>
+        get() = _state.asStateFlow()
+
+    fun changeTip(isEnabled: Boolean) {
+        _state.value = _state.value.copy(tip = isEnabled, /* ... */)
+    }
+}
+
+// En la pantalla
+val state by viewModel.state.collectAsStateWithLifecycle()
+Switch(checked = state.tip, onCheckedChange = viewModel::changeTip)
+```
+
+Un `StateFlow` sí avisa, y `collectAsStateWithLifecycle()` lo convierte en un estado de Compose. Es lo que se hizo en la ToDoApp el 16/10 y el 23/10; a la TipCalculator no se le llegó a aplicar en clase.
+
+  </Lado>
+</Comparar>
+
+Otro detalle de ese día: el ViewModel se creaba como **valor por defecto del parámetro**, `viewModel: TipCalculatorViewModel = TipCalculatorViewModel()`. Así es un objeto normal: Android no lo guarda ni sobrevive al giro, y se crea otro cada vez que se llama a la pantalla. Desde el 09/10 se usó `hiltViewModel()`, que sí lo hace bien (ver el [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura/hilt)).
+
+## State hoisting: pantalla con estado y sin estado
+
+<DeClase fecha="23/10, 09/11, 18/11" proyecto="ToDoApp, PokeApp2627 y ToDoOfflineFirst" />
+
+*State hoisting* ("subir el estado") significa sacar el estado de un composable y pasárselo **desde arriba**, por parámetros, junto con callbacks para avisar de los cambios. El composable que queda es **sin estado** (*stateless*): solo pinta lo que le dan.
+
+<Mermaid
+  titulo="El estado baja, los eventos suben"
+  chart={`flowchart TB
+  VM["ViewModel<br/>(dueño del estado)"] -- "estado: isLoading, tasks" --> S["TaskListScreen con estado<br/>(lee el ViewModel)"]
+  S -- "isLoading, tasks" --> P["TaskListScreen sin estado<br/>(solo pinta)"]
+  P -- "tasks de una en una" --> C[TaskCard]
+  C -. "toDetail()" .-> P
+  P -. "toDetail(id)" .-> S
+  S -. "toDetail(id)" .-> N[NavHost]`}
+/>
+
+El 23/10, la `TaskListScreen` se partió en **dos funciones con el mismo nombre** (sobrecarga): una que tiene el ViewModel y otra que solo recibe datos.
+
+<Recorrido
+  titulo="TaskListScreen.kt (23/10)"
+  lenguaje="kotlin"
+  codigo={`@Composable
+fun TaskListScreen(
+    modifier: Modifier = Modifier,
+    toCreate: () -> Unit,
+    toDetail: (Int) -> Unit,
+    viewModel: TaskListViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    when (state) {
+        is TaskListScreenState.Success -> {
+            val tasks = (state as TaskListScreenState.Success).tasks
+            TaskListScreen(modifier = modifier, toCreate = toCreate, toDetail = toDetail,
+                isLoading = false, tasks = tasks)
+        }
+        is TaskListScreenState.Error -> TODO()
+        TaskListScreenState.Loading -> TaskListScreen(modifier = modifier, toCreate = toCreate,
+            toDetail = toDetail, isLoading = true)
+        TaskListScreenState.Initial -> {
+            viewModel.load()
+            TaskListScreen(modifier = modifier, toCreate = toCreate, toDetail = toDetail,
+                isLoading = true)
+        }
+    }
+}
+
+@Composable
+fun TaskListScreen(
+    modifier: Modifier = Modifier,
+    toCreate: () -> Unit,
+    toDetail: (Int) -> Unit,
+    isLoading: Boolean = true,
+    tasks: List<Task> = listOf(),
+) {
+    // Scaffold, FAB y LazyColumn: solo pinta isLoading y tasks
+}`}
+>
+  <Paso lineas="2-7" titulo="La pantalla con estado">
+    Recibe los callbacks de navegación y el ViewModel (con `hiltViewModel()` por defecto). Es la que se llama desde el `NavHost`.
+  </Paso>
+  <Paso lineas="8" titulo="Lee el estado del ViewModel">
+    `collectAsStateWithLifecycle()` convierte el `StateFlow` del ViewModel en un estado de Compose. Cada vez que el ViewModel publica un estado nuevo, esta función recompone.
+  </Paso>
+  <Paso lineas="9-23" titulo="Decide qué pintar">
+    Un `when` sobre el estado sellado y, en cada rama, llama a la **otra** `TaskListScreen` con los datos que tocan: `isLoading` y `tasks`. Los callbacks se pasan tal cual.
+  </Paso>
+  <Paso lineas="15" titulo="Error sin hacer">
+    La rama de error es un `TODO()`: en clase no se vio cómo se rellena el estado de error ni qué se pinta.
+  </Paso>
+  <Paso lineas="18-22" titulo="Una llamada en mitad de la composición">
+    En la rama `Initial` se llama a `viewModel.load()` **mientras se pinta**. Es una de las prácticas raras de clase: lo vemos más abajo.
+  </Paso>
+  <Paso lineas="26-35" titulo="La pantalla sin estado">
+    Mismo nombre, otros parámetros: `isLoading` y `tasks` con valores por defecto. No sabe que existe un ViewModel: solo pinta lo que le pasan y avisa con `toCreate` y `toDetail`.
+  </Paso>
+</Recorrido>
+
+Sobre este código, como se leyó en las capturas:
+
+- En la rama `Initial`, una captura lee <Dudoso nota="Otra captura lee `isLoading = false`.">`isLoading = true`</Dudoso>.
+- Además, `_state` empieza en `Loading` y el ViewModel ya tiene `init { load() }`, así que la rama `Initial` **nunca llega a ejecutarse**.
+- El IDE avisó *Parameter 'isLoading' is never used* hasta que la versión sin estado lo usó para enseñar el `CircularProgressIndicator`.
+
+**¿Por qué separar las dos?**
+
+- La versión sin estado se puede **previsualizar** con `@Preview` y datos de ejemplo, sin ViewModel, sin Hilt y sin red.
+- Se puede **reutilizar** y probar: es una función que recibe datos y pinta.
+- La pantalla no conoce el `navController`: recibe callbacks y el `NavHost` decide a dónde ir. El callback **baja** de composable en composable hasta la tarjeta (lo verás animado en [Listas](/docs/2-dam/kotlin/compose/listas#pulsar-una-fila-el-callback-que-baja)).
+
+El 18/11, en la ToDoOfflineFirst, se siguió el mismo patrón con más parámetros en la versión sin estado (`tasks`, `isLoading`, `isEmpty`, `onDelete`, `onSettings`).
+
+### Práctica rara: recoger el estado y no usarlo
+
+<DeClase fecha="16/10" proyecto="ToDoApp" />
+
+<Comparar titulo="La lista de tareas del 16/10">
+  <Lado tipo="evitar">
+
+```kotlin
+val state by viewModel.state.collectAsStateWithLifecycle()
+// ...
+LazyColumn(modifier = modifier) {
+    items(items = viewModel.readAll(), key = { it.id }) {
+        TaskCard(/* ... */)
+    }
+}
+```
+
+La pantalla ya recogía `state`, pero la lista seguía pintando `viewModel.readAll()`, una lista normal que Compose no observa. Además, ese `MutableStateFlow` se creaba una sola vez con `readAll()` y no cambiaba al crear una tarea, así que la lista no se actualizaba.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+val state by viewModel.state.collectAsStateWithLifecycle()
+// ...
+LazyColumn(modifier = modifier) {
+    items(items = state, key = { it.id }) {
+        TaskCard(/* ... */)
+    }
+}
+```
+
+Si recoges un estado, **pinta ese estado**. Y el ViewModel tiene que publicar un valor nuevo cada vez que cambian los datos. Es lo que se arregló el 23/10, con el estado sellado y `load()`.
+
+  </Lado>
+</Comparar>
+
+## Efectos secundarios: no hagas cosas mientras se pinta
+
+Un composable se puede ejecutar **muchas veces**: en cada recomposición, al animar, al volver a la pantalla... Por eso tiene que limitarse a **describir la interfaz**. Si dentro llamas a algo que *hace* cosas (cargar datos, navegar, guardar), se hará cada vez que se recomponga.
+
+<Comparar titulo="Cargar los datos de la lista">
+  <Lado tipo="evitar">
+
+```kotlin
+when (state) {
+    TaskListScreenState.Initial -> {
+        viewModel.load()
+        TaskListScreen(isLoading = true, /* ... */)
+    }
+    // ...
+}
+```
+
+`viewModel.load()` se llama **durante la composición**. Si la pantalla recompone, vuelve a cargar, y la carga cambia el estado, que provoca otra recomposición... La pantalla puede cargar una y otra vez. En clase no se comentó.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+@HiltViewModel
+class TaskListViewModel @Inject constructor(
+    private val _repository: TaskRepository
+) : ViewModel() {
+    init { load() }
+    // ...
+}
+
+// En la pantalla, la rama Initial solo pinta
+TaskListScreenState.Initial -> TaskListScreen(isLoading = true, /* ... */)
+```
+
+La carga va en el `init` del ViewModel, que se ejecuta **una vez** al crearlo. El `init { load() }` ya estaba en clase; lo que sobra es la llamada del `when`.
+
+  </Lado>
+</Comparar>
+
+### `LaunchedEffect` <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  `LaunchedEffect` no salió en clase. Es la herramienta estándar de Compose para lanzar algo desde un composable sin que se repita en cada recomposición.
+</NoDadoEnClase>
+
+**`LaunchedEffect(clave) { ... }`** lanza una corrutina cuando el composable **entra** en la pantalla, y la vuelve a lanzar (cancelando la anterior) **solo cuando cambia la `clave`**. En las recomposiciones en las que la clave es la misma, no hace nada. Dentro puedes llamar a funciones `suspend`.
+
+Un caso que en clase quedó sin resolver: **volver atrás después de guardar**. Guardar tarda (es una corrutina), así que hay que volver cuando el estado pase a `Created`, no al pulsar el botón:
+
+```kotlin title="CrearProductoScreen.kt"
+@Composable
+fun CrearProductoScreen(
+    onCreado: () -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: CrearProductoViewModel = hiltViewModel()
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(state) {
+        if (state is CrearProductoState.Created) {
+            onCreado()
+        }
+    }
+
+    CrearProductoContent(state = state, onGuardar = viewModel::onGuardar, modifier = modifier)
+}
+```
+
+- `LaunchedEffect(state)` se ejecuta una vez cada vez que cambia `state`. Si se llamara a `onCreado()` directamente en el composable, se ejecutaría en cada recomposición y navegaría varias veces.
+- En el `NavHost`: `CrearProductoScreen(onCreado = { navController.popBackStack() })`. La pantalla sigue sin conocer el `navController`, como en clase.
+- **`LaunchedEffect(Unit)`** usa una clave que nunca cambia: se ejecuta una sola vez al entrar en la pantalla (y otra vez si sales y vuelves).
+- Para cargar los datos de una pantalla, mejor el `init` del ViewModel que un `LaunchedEffect(Unit)`: el ViewModel sobrevive al giro y no vuelve a cargar.
+
+<NoSeVio titulo="Volver atrás después de guardar">
+  En clase no se vio cómo volver a la lista después de pulsar "Save" en el formulario de tareas: `popBackStack` solo aparece el 18/11, en un `onBack`.
+</NoSeVio>
+
+## Depurar la recomposición
+
+<DeClase fecha="16/10" proyecto="ToDoApp" />
+
+Con un breakpoint dentro de un composable, el depurador de Android Studio enseña el panel **Recomposition State**: por qué se ha vuelto a ejecutar y si cada argumento ha cambiado. En clase algunos argumentos salían como *Uncertain* (Compose no ha podido comprobar si han cambiado). Es útil cuando una pantalla recompone más de lo que esperas.
+
+## Errores típicos de pantalla
+
+<Accordions type="multiple">
+  <Accordion title="La pantalla carga una y otra vez (Salió en clase)">
+    Se llama a `load()` dentro del composable, que se ejecuta en cada recomposición. Ponlo en el `init` del ViewModel. Es la práctica rara del 23/10 que tienes arriba.
+  </Accordion>
+  <Accordion title="El contador, el Switch o el Slider no cambian (Salió en clase)">
+    El valor que pintas no es un estado de Compose (una variable normal, como el `_state` de la TipCalculator), o el callback (`onValueChange`, `onCheckedChange`) no actualiza el estado. Usa `mutableStateOf` con `remember`, o un `StateFlow` en el ViewModel recogido con `collectAsStateWithLifecycle()`.
+  </Accordion>
+  <Accordion title="El valor se pierde al girar el móvil">
+    Lo guardas con `remember`, que no sobrevive a la recreación de la Activity. Usa `rememberSaveable` o llévalo al ViewModel.
+  </Accordion>
+  <Accordion title="La pantalla se queda en blanco al arrancar (Salió en clase)">
+    El 09/11, la carga inicial de datos se hizo con `CoroutineScope(Dispatchers.IO).launch` en el `init` del repositorio, y la lista salía en blanco (con `runBlocking` funcionaba, pero congela la app). No se ve la explicación del profesor; probablemente <Dudoso nota="Interpretación de quien hizo los resúmenes, sin confirmar en clase." /> es porque el `Flow` del DataSource en memoria solo emitía una vez, antes de que llegaran los datos. La solución <NoDadoEnClase inline /> es lanzar la carga con `viewModelScope.launch` en el ViewModel; en clase no se llegó a hacer. Se explica en el [bloque de datos](/docs/2-dam/kotlin/datos/corrutinas).
+  </Accordion>
+</Accordions>
+
+## Practica
+
+<CompletarCodigo
+  titulo="Un contador que funciona y sobrevive al giro"
+  enunciado="Completa el estado del contador."
+  lenguaje="kotlin"
+  codigo={`@Composable
+fun Contador(modifier: Modifier = Modifier) {
+    var clics [[by]] [[rememberSaveable]] { [[mutableStateOf|mutableIntStateOf]](0) }
+    Column(modifier = modifier) {
+        Text("Has pulsado $clics veces")
+        Button(onClick = { [[clics++|clics += 1|clics = clics + 1]] }) {
+            Text("Pulsar")
+        }
+    }
+}`}
+/>
+
+<CompletarCodigo
+  titulo="Un Switch controlado y sin estado"
+  enunciado="La fila no guarda nada: recibe el valor y avisa del cambio."
+  lenguaje="kotlin"
+  codigo={`@Composable
+fun FilaModoOscuro(
+    activado: Boolean,
+    onCambio: ([[Boolean]]) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier = modifier) {
+        Text("Dark Mode")
+        Switch(checked = [[activado]], onCheckedChange = [[onCambio]])
+    }
+}`}
+/>
+
+<Quiz titulo="Test: estado y recomposición" descripcion="8 preguntas">
+  <Pregunta enunciado="¿Qué es la recomposición?" explicacion="Compose vuelve a ejecutar los composables que leen un estado cuando ese estado cambia, para actualizar lo que se ve.">
+    <Opcion>Compilar otra vez la app al cambiar el código.</Opcion>
+    <Opcion correcta>Volver a ejecutar los composables que leen un estado cuando ese estado cambia.</Opcion>
+    <Opcion>Recrear la Activity al girar el móvil.</Opcion>
+    <Opcion>Ordenar los elementos de una `Column`.</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Escribes `var clics by mutableStateOf(0)` dentro de un composable, sin `remember`. ¿Qué pasa al pulsar el botón que hace `clics++`?" explicacion="El cambio provoca una recomposición, pero la función vuelve a ejecutar `mutableStateOf(0)` y crea un estado nuevo que vale 0. El contador no sube.">
+    <Opcion>El contador sube con normalidad.</Opcion>
+    <Opcion>No compila.</Opcion>
+    <Opcion correcta>Recompone, pero se crea un estado nuevo que vuelve a valer 0.</Opcion>
+    <Opcion>La app se cierra.</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Un valor guardado con `remember` se mantiene al girar el móvil." respuesta={false} explicacion="Al girar, Android recrea la Activity y la composición empieza de cero. Para que sobreviva hace falta `rememberSaveable` (o un ViewModel)." />
+  <Pregunta enunciado="Un `TextField(value = texto, onValueChange = { })` no deja escribir. ¿Por qué?" explicacion="Es un componente controlado: siempre enseña `value`. Si `onValueChange` no actualiza el estado (`texto = it`), lo que escribes no llega a verse.">
+    <Opcion>Porque falta `keyboardOptions`.</Opcion>
+    <Opcion correcta>Porque `onValueChange` no actualiza el estado, y el campo siempre enseña `value`.</Opcion>
+    <Opcion>Porque `TextField` necesita un `TextFieldState`.</Opcion>
+    <Opcion>Porque `texto` es `val`.</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Con `Slider(value = v, onValueChange = { v = it }, steps = 3, valueRange = 0f..4f)`, ¿qué valores puede tomar?" explicacion="`steps` son las paradas intermedias entre los extremos: 3 paradas entre 0 y 4 dan 0, 1, 2, 3 y 4.">
+    <Opcion>Solo 0, 2 y 4.</Opcion>
+    <Opcion>0, 1, 2 y 3.</Opcion>
+    <Opcion correcta>0, 1, 2, 3 y 4.</Opcion>
+    <Opcion>Cualquier decimal entre 0 y 4.</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cuáles son ventajas de separar la pantalla en una versión con estado y otra sin estado?" explicacion="La versión sin estado solo recibe datos y callbacks: se previsualiza con datos de ejemplo, se reutiliza y no depende del ViewModel ni de la navegación. No hace la app más rápida por sí sola.">
+    <Opcion correcta>La versión sin estado se puede previsualizar con `@Preview` y datos de ejemplo.</Opcion>
+    <Opcion correcta>La versión sin estado no depende del ViewModel ni del `navController`.</Opcion>
+    <Opcion>Así Compose no necesita recomponer nunca.</Opcion>
+    <Opcion>Así no hace falta `remember` en ninguna parte de la app.</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué no conviene llamar a `viewModel.load()` directamente dentro de un composable?" explicacion="Un composable se ejecuta en cada recomposición; la llamada se repetiría y podría entrar en un bucle de cargas.">
+    <Opcion>Porque `load()` es `private`.</Opcion>
+    <Opcion correcta>Porque el composable se ejecuta en cada recomposición y cargaría una y otra vez.</Opcion>
+    <Opcion>Porque Compose prohíbe llamar a funciones de un ViewModel.</Opcion>
+    <Opcion>Porque no compila sin `suspend`.</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cuándo se ejecuta el bloque de `LaunchedEffect(state) { ... }`?" explicacion="Al entrar en la composición y cada vez que cambia la clave (`state`), cancelando la ejecución anterior. No en cada recomposición.">
+    <Opcion>En cada recomposición.</Opcion>
+    <Opcion correcta>Al entrar en la pantalla y cada vez que cambia `state`.</Opcion>
+    <Opcion>Solo una vez en toda la vida de la app.</Opcion>
+    <Opcion>Cuando el usuario pulsa la pantalla.</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: estado y recomposición">
+  <Tarjeta frente="¿Qué hace `mutableStateOf`?">Crea un estado observable: cuando cambia su valor, Compose recompone lo que lo lee.</Tarjeta>
+  <Tarjeta frente="¿Qué hace `remember`?">Guarda un valor entre recomposiciones. Sin él, la función crearía uno nuevo cada vez.</Tarjeta>
+  <Tarjeta frente="`remember` frente a `rememberSaveable`">`rememberSaveable` además sobrevive a la recreación de la Activity (giro de pantalla).</Tarjeta>
+  <Tarjeta frente="`var x by remember { mutableStateOf(0) }`">Con `by` usas `x` como un `Int` normal, sin `.value`. Necesita importar `getValue` y `setValue`.</Tarjeta>
+  <Tarjeta frente="Leer un `TextFieldState`">`state.text.toString()`. Se enlaza con `OutlinedTextField(state = state)`, sin `onValueChange`.</Tarjeta>
+  <Tarjeta frente="Componente controlado">Recibe su valor (`checked`, `value`) y avisa del cambio con un callback. Si el callback no cambia el estado, no se mueve.</Tarjeta>
+  <Tarjeta frente="*State hoisting*">Sacar el estado de un composable y pasárselo por parámetros, con callbacks para los eventos. El estado baja, los eventos suben.</Tarjeta>
+  <Tarjeta frente="¿Para qué sirve `LaunchedEffect`?">Para lanzar algo (una corrutina) al entrar en la pantalla o cuando cambia una clave, no en cada recomposición. No se dio en clase.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Un formulario sin estado" dificultad="media">
+  Escribe un composable sin estado `FormularioTarea` que reciba el título actual, un callback para cuando cambia y otro para guardar. Debe tener un `OutlinedTextField` con `label` y un botón "Guardar" desactivado si el título está vacío. Después escribe una versión con estado que guarde el título con `rememberSaveable` y llame a la primera.
+
+  <Pista>La versión sin estado recibe `titulo: String`, `onTituloCambia: (String) -> Unit` y `onGuardar: () -> Unit`.</Pista>
+  <Pista>Usa la versión con `value` y `onValueChange` del `OutlinedTextField`.</Pista>
+
+  <Solucion>
+
+```kotlin
+@Composable
+fun FormularioTarea(
+    titulo: String,
+    onTituloCambia: (String) -> Unit,
+    onGuardar: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        OutlinedTextField(
+            value = titulo,
+            onValueChange = onTituloCambia,
+            label = { Text("Título") }
+        )
+        Button(onClick = onGuardar, enabled = titulo.isNotBlank()) {
+            Text("Guardar")
+        }
+    }
+}
+
+@Composable
+fun FormularioTarea(onGuardar: (String) -> Unit, modifier: Modifier = Modifier) {
+    var titulo by rememberSaveable { mutableStateOf("") }
+    FormularioTarea(
+        titulo = titulo,
+        onTituloCambia = { titulo = it },
+        onGuardar = { onGuardar(titulo) },
+        modifier = modifier,
+    )
+}
+```
+
+  Las dos se llaman igual, como en clase, y Kotlin distingue cuál usar por los parámetros. La primera se puede previsualizar con cualquier título de ejemplo.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Arregla la TipCalculator con estado de Compose" dificultad="dificil">
+  Sin usar `StateFlow`, arregla el `TipCalculatorViewModel` de clase para que la pantalla se repinte al cambiar la propina, pero sin que la pantalla pueda cambiar el estado desde fuera.
+
+  <Pista>Un `mutableStateOf` también funciona dentro de un ViewModel: Compose se entera igual cuando cambia.</Pista>
+  <Pista>`private set` deja leer una propiedad desde fuera y solo cambiarla desde dentro de la clase.</Pista>
+
+  <Solucion>
+
+```kotlin
+class TipCalculatorViewModel : ViewModel() {
+    var state by mutableStateOf(TipCalculatorScreenState())
+        private set
+
+    fun changeTip(isEnabled: Boolean) {
+        state = state.copy(
+            tip = isEnabled,
+            tipAmount = if (!isEnabled) 0.0f else state.tipAmount
+        )
+    }
+}
+```
+
+  La pantalla puede seguir leyendo `viewModel.state.tip` como en clase, y ahora sí recompone. `private set` hace el papel de la *backing property*. En clase se usó `MutableStateFlow` (que es lo que verás en el resto del curso); esta forma <NoDadoEnClase inline /> no salió, pero también es estándar.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

@@ -1,0 +1,643 @@
+---
+title: Eventos
+description: Emisor y receptores, declarar y lanzar un evento, suscribirse con += de tres formas, darse de baja con -=, la captura de variables, el aviso CS8618 y el patrón sender/EventArgs del PDF (clase del 19/11).
+icon: Bell
+---
+
+import { RelojEventos } from '@/components/temas/csharp/reloj-eventos';
+
+Un **evento** es la forma que tiene un objeto de avisar de que "ha pasado algo" sin saber quién está escuchando. Es lo que usan todas las interfaces gráficas: el botón lanza `Click` y tu código reacciona. El 19/11 se vio con un ejemplo de consola: un **reloj que lanza un evento cada segundo**.
+
+<DeClase fecha="19/11" proyecto="Clase1" nota="archivos Reloj.cs y Program.cs; PDF Creación de interfaces, págs. 12-16" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué son el **emisor** y los **receptores** de un evento.
+  - Declarar un evento a partir de un delegado y lanzarlo con `Invoke()`.
+  - Suscribirse con `+=` de tres formas y darse de baja con `-=`, incluso desde dentro de un manejador.
+  - Qué pasa con varios manejadores y cómo una lambda usa variables de fuera (*closure*).
+  - El aviso CS8618 y el patrón estándar `object sender, EventArgs e` del PDF.
+</Callout>
+
+## Emisor y receptores
+
+- El **emisor** (o publicador) es la clase que **lanza** el evento. En clase, `Reloj`.
+- Los **receptores** (o suscriptores) son los que **se suscriben** para enterarse. En clase, el código de `Program.cs`.
+- El emisor **no sabe quién le escucha**: solo lanza el evento. Puede haber cero, uno o muchos receptores.
+
+El PDF define el delegado como *"un contrato entre el emisor y el receptor"* que *"determina la firma de un gestor de eventos en el receptor y puede contener muchos punteros de métodos"*. Es decir: el delegado fija **qué forma** tienen que tener los métodos que escuchan, y el evento guarda la lista de esos métodos.
+
+Si vienes de Java, es la idea de los *listeners* de Swing o JavaFX, pero integrada en el lenguaje: no hay interfaz `XListener` ni método `addXListener`, sino un miembro `event` y los operadores `+=` y `-=`.
+
+## El reloj, paso a paso
+
+<Steps>
+  <Step>
+
+#### La clase y el bucle
+
+  Se crea `Reloj` con un método `Iniciar()` que tiene un `while (true)` y `Thread.Sleep(1000)`: espera un segundo, una y otra vez. (Durante un momento aparece una propiedad `public int Id { get; set; }`, que parece una sugerencia del autocompletado que no se aceptó.)
+
+  </Step>
+  <Step>
+
+#### El delegado
+
+  `public delegate void CadaSegundoHandler();` dentro de `Reloj`. Fija la firma de los manejadores: sin parámetros y sin devolver nada.
+
+  </Step>
+  <Step>
+
+#### El evento
+
+  `public event CadaSegundoHandler OnSegundo;`. El **tipo del evento es el delegado**: el profesor lo resaltó señalando las dos apariciones de `CadaSegundoHandler`. El autocompletado propuso el nombre `CadaSegundo`, pero se quedó `OnSegundo`.
+
+  </Step>
+  <Step>
+
+#### Lanzarlo
+
+  Dentro del bucle, `OnSegundo.Invoke();`. El evento **no se lanza solo**: tiene que pasar algo que lo provoque, y aquí es el bucle de `Iniciar()`.
+
+  </Step>
+  <Step>
+
+#### Suscribirse
+
+  En `Program.cs`, `Reloj reloj = new Reloj();` y `reloj.OnSegundo += ImprimeHaPasadoUnSegundo;`. Después, `reloj.Iniciar();`. Al compilar salió **CS1002**: faltaba el `;` después de `OnSegundo.Invoke()` en `Reloj.cs`.
+
+  </Step>
+  <Step>
+
+#### Ejecutar
+
+  La consola escribe "Ha pasado un segundo" cada segundo. Salió también **MSB3026**, porque la consola de una ejecución anterior seguía abierta.
+
+  </Step>
+</Steps>
+
+<Recorrido
+  titulo="Reloj.cs (19/11, versión final)"
+  lenguaje="csharp"
+  codigo={`using System;
+
+public class Reloj
+{
+    public delegate void CadaSegundoHandler();
+    public event CadaSegundoHandler OnSegundo;
+
+    public void Iniciar()
+    {
+        while (true)
+        {
+            Thread.Sleep(1000);
+            OnSegundo.Invoke();
+        }
+    }
+}`}
+>
+  <Paso lineas="5" titulo="El delegado">
+    La firma que tendrán los manejadores: `void` y sin parámetros.
+  </Paso>
+  <Paso lineas="6" titulo="El evento">
+    `event` + el tipo delegado + el nombre. Por convención en clase, el nombre empieza por `On`.
+  </Paso>
+  <Paso lineas="8-11" titulo="Lo que provoca el evento">
+    `Iniciar()` entra en un bucle infinito.
+  </Paso>
+  <Paso lineas="12" titulo="Esperar un segundo">
+    `Thread.Sleep(1000)` para el programa 1000 milisegundos. Funciona sin `using System.Threading;` gracias a los *usings* implícitos de .NET 8.
+  </Paso>
+  <Paso lineas="13" titulo="Lanzar el evento">
+    `Invoke()` llama a **todos** los manejadores suscritos, en el orden en que se suscribieron. Si no hay ninguno, el evento vale `null` y esta línea revienta: es lo que avisa CS8618.
+  </Paso>
+</Recorrido>
+
+## El programa que escucha
+
+<Recorrido
+  titulo="Program.cs (19/11, versión final)"
+  lenguaje="csharp"
+  codigo={`// See https://aka.ms/new-console-template for more information
+
+int segundo = 0;
+Reloj reloj = new Reloj();
+reloj.OnSegundo += ImprimeHaPasadoUnSegundo;
+reloj.OnSegundo += () =>
+{
+    segundo = segundo + 1;
+    Console.WriteLine($"Han pasado {segundo} segundos");
+    if (segundo == 20)
+    {
+        reloj.OnSegundo -= ImprimeHaPasadoUnSegundo;
+    }
+};
+
+reloj.Iniciar();
+
+void ImprimeHaPasadoUnSegundo()
+{
+    Console.WriteLine("Ha pasado un segundo");
+}`}
+>
+  <Paso lineas="3-4" titulo="El contador y el emisor">
+    `segundo` es una variable local de las instrucciones de nivel superior. `reloj` es el emisor.
+  </Paso>
+  <Paso lineas="5" titulo="Primer manejador: método con nombre">
+    Se suscribe la función local `ImprimeHaPasadoUnSegundo`, **sin paréntesis**.
+  </Paso>
+  <Paso lineas="6-14" titulo="Segundo manejador: lambda">
+    Una lambda sin parámetros, `() => { ... }`, que **usa y cambia** la variable `segundo` de fuera.
+  </Paso>
+  <Paso lineas="10-13" titulo="Darse de baja">
+    Al llegar a 20, la lambda quita al otro manejador con `-=`. Se puede hacer mientras el programa está en marcha y desde dentro de otro manejador.
+  </Paso>
+  <Paso lineas="16" titulo="Arrancar el emisor">
+    `Iniciar()` no vuelve nunca (es un `while (true)`): a partir de aquí todo pasa por los eventos.
+  </Paso>
+  <Paso lineas="18-21" titulo="La función local">
+    Está declarada al final, pero se puede usar arriba. No es `static`: en la sección de captura de variables verás por qué.
+  </Paso>
+</Recorrido>
+
+<Terminal titulo="Consola de depuración de Microsoft Visual Studio">
+{`Ha pasado un segundo
+Han pasado 1 segundos
+Ha pasado un segundo
+Han pasado 2 segundos
+...
+Ha pasado un segundo
+Han pasado 20 segundos
+Han pasado 21 segundos
+Han pasado 22 segundos
+...`}
+</Terminal>
+
+Con **dos manejadores** en el mismo evento, la salida va alternando las dos frases, en el orden en que se suscribieron. Desde el segundo 21 solo queda la lambda. Se ejecutó con `Ctrl+F5`.
+
+Así viaja cada aviso:
+
+<Flujo
+  titulo="Un segundo en la vida del reloj"
+  nodos={["Program.cs", "Reloj", "ImprimeHaPasadoUnSegundo", "lambda"]}
+>
+  <Mensaje de="Program.cs" a="Reloj" titulo="+= y Iniciar()">
+    `Program.cs` suscribe los dos manejadores y llama a `reloj.Iniciar()`.
+  </Mensaje>
+  <Mensaje de="Reloj" a="Reloj" titulo="Thread.Sleep(1000)">
+    El reloj espera un segundo dentro del `while (true)`.
+  </Mensaje>
+  <Mensaje de="Reloj" a="ImprimeHaPasadoUnSegundo" titulo="OnSegundo.Invoke()">
+    `Invoke()` llama al primer manejador de la lista, que escribe "Ha pasado un segundo".
+  </Mensaje>
+  <Mensaje de="Reloj" a="lambda" titulo="OnSegundo.Invoke()">
+    Después, al segundo: la lambda suma 1 a `segundo` y escribe "Han pasado N segundos".
+  </Mensaje>
+  <Mensaje de="lambda" a="Reloj" tipo="respuesta" titulo="-= al llegar a 20">
+    Cuando `segundo` vale 20, la lambda quita a `ImprimeHaPasadoUnSegundo` del evento. En los siguientes segundos solo se llama a la lambda.
+  </Mensaje>
+</Flujo>
+
+### Pruébalo
+
+El simulador reproduce el `Program.cs` de clase. Suscribe y da de baja manejadores con `+=` y `-=`, cambia el orden (al volver a suscribir uno, se pone al final de la lista) y acelera el reloj para llegar al segundo 20. Si das de baja a todos y arrancas el reloj, verás qué pasa con el `Invoke()` sin comprobar null.
+
+<RelojEventos />
+
+## Tres formas de suscribirse
+
+Como con los delegados, el manejador puede ser un método con nombre, un método anónimo o una lambda:
+
+<Tabs items={['Método con nombre', 'Método anónimo', 'Lambda']}>
+  <Tab value="Método con nombre">
+
+```csharp
+reloj.OnSegundo += ImprimeHaPasadoUnSegundo;
+
+void ImprimeHaPasadoUnSegundo()
+{
+    Console.WriteLine("Ha pasado un segundo");
+}
+```
+
+El nombre va **sin paréntesis** (*method group*): se suscribe el método, no se llama.
+
+  </Tab>
+  <Tab value="Método anónimo">
+
+```csharp
+reloj.OnSegundo += delegate ()
+{
+    Console.WriteLine("Ha pasado un segundo (función anónima)");
+};
+```
+
+Se probó en el minuto 06:33.
+
+  </Tab>
+  <Tab value="Lambda">
+
+```csharp
+reloj.OnSegundo += () => Console.WriteLine($"Han pasado 1 segundo. Hora actual: {DateTime.Now}");
+```
+
+La primera lambda que se escribió (minuto 04:19), que luego se borró para usar un método con nombre.
+
+  </Tab>
+</Tabs>
+
+- Al escribir `reloj.OnSegundo +=`, IntelliSense ofrece **generar el manejador** `Reloj_OnSegundo` pulsando **TAB**.
+- Mientras se escribían el método anónimo y la lambda salió **CS0029** (*no se puede convertir `void` en el delegado*). En las capturas no se ve qué línea a medio escribir lo provocó. Este error sale cuando a la derecha del `+=` hay algo que no es un método, sino el resultado de llamarlo: por ejemplo, `+= ImprimeHaPasadoUnSegundo()` con paréntesis.
+
+## Varios manejadores y darse de baja
+
+- Un evento puede tener **varios manejadores**. Al lanzarlo se ejecutan **todos**, en el orden en que se suscribieron.
+- **`-=`** quita un manejador. Se puede hacer en cualquier momento, también **desde dentro de otro manejador** mientras el reloj está en marcha, como hace la lambda al llegar a 20.
+
+<NoDadoEnClase titulo="Dar de baja una lambda">
+  En clase solo se dio de baja un método con nombre. Con una lambda o un método anónimo no vale volver a escribirlos detrás del `-=`: cada vez que escribes una lambda se crea un delegado nuevo, así que `reloj.OnSegundo -= () => { ... };` no quita nada. Si vas a querer darla de baja, guárdala antes en una variable (`Reloj.CadaSegundoHandler contar = () => { ... };`, con el prefijo porque el delegado está declarado dentro de `Reloj`) y usa esa variable en el `+=` y en el `-=`.
+</NoDadoEnClase>
+
+## Captura de variables
+
+Una lambda, un método anónimo o una función local **no estática** pueden **leer y cambiar** las variables locales del código que las rodea. Es lo que hace la lambda del reloj con `segundo`. Se llama **captura de variables** o *closure*: la variable "vive" mientras la lambda la necesite, aunque el código que la declaró ya haya pasado.
+
+Así se llegó a la versión final:
+
+1. Primero el contador se llamó `x` (`int x = 0;` y `x++`, luego `x = x + 1`). Salió **CS0136**: ya había otra `x` más abajo en el mismo `Program.cs`, en el código del validador de la clase anterior. En un `Program.cs` con instrucciones de nivel superior no puede haber dos variables con el mismo nombre en ámbitos anidados.
+2. La variable pasó a llamarse `segundo`.
+3. Se intentó que la función local `static` sumara los segundos, y salió **CS8421**.
+4. Se quitó `static`. Al final, la que suma es la lambda y la función local solo escribe en consola.
+
+<Comparar titulo="Una función local que usa segundo">
+  <Lado tipo="evitar" titulo="Da CS8421">
+
+```csharp
+static void ImprimeHaPasadoUnSegundo()
+{
+    segundo += 1;   // CS8421
+    Console.WriteLine("Ha pasado un segundo");
+}
+```
+
+*"Una función local estática no puede contener una referencia a 'segundo'"*. `static` le prohíbe usar variables de fuera.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Sin static">
+
+```csharp
+void ImprimeHaPasadoUnSegundo()
+{
+    Console.WriteLine("Ha pasado un segundo");
+}
+```
+
+Sin `static` podría usar `segundo`. En la versión final no lo usa: el contador lo lleva la lambda.
+
+  </Lado>
+</Comparar>
+
+- En una captura el error sale como <Dudoso nota="El código correcto es CS8421, que es el que sale en las demás capturas.">"CS0421"</Dudoso>.
+- En el minuto 08:05 se lee `x =++;` a medio escribir; después queda `x = x + 1;`.
+- Visual Studio preguntó si se quería ejecutar la última versión que compiló bien: si dices que sí, pruebas el código de antes.
+
+## El aviso CS8618: el evento puede ser null
+
+Con el evento declarado así, Visual Studio da el aviso **CS8618**: el evento **no admite null** pero queda sin valor al salir del constructor. Tiene sentido: hasta que alguien se suscribe con `+=`, `OnSegundo` vale `null`. Si nadie se suscribe y se llega a `OnSegundo.Invoke()`, el programa lanza una `NullReferenceException`.
+
+<NoSeVio titulo="Cómo se arregla el CS8618">
+  En clase el aviso se queda sin resolver. No se ve ni `?.Invoke()` ni el evento declarado como anulable en código escrito en clase.
+</NoSeVio>
+
+<NoDadoEnClase titulo="La forma habitual de lanzar un evento">
+  Se declara el evento como anulable y se lanza con el operador `?.`, que solo llama a `Invoke()` si el evento no es null. Así desaparece el aviso y, si nadie escucha, no pasa nada. La reconstrucción del patrón del PDF (más abajo, marcada como dudosa) también usa `?.Invoke`.
+</NoDadoEnClase>
+
+<Comparar titulo="Lanzar el evento del reloj">
+  <Lado tipo="evitar">
+
+```csharp title="Reloj.cs"
+public event CadaSegundoHandler OnSegundo;   // CS8618
+
+public void Iniciar()
+{
+    while (true)
+    {
+        Thread.Sleep(1000);
+        OnSegundo.Invoke();   // NullReferenceException si nadie escucha
+    }
+}
+```
+
+  </Lado>
+  <Lado tipo="bien">
+
+```csharp title="Reloj.cs"
+public event CadaSegundoHandler? OnSegundo;
+
+public void Iniciar()
+{
+    while (true)
+    {
+        Thread.Sleep(1000);
+        OnSegundo?.Invoke();
+    }
+}
+```
+
+  </Lado>
+</Comparar>
+
+## El patrón estándar del PDF
+
+<DeClase fecha="19/11" nota="PDF Creación de interfaces en C#, v6, págs. 12-13" />
+
+En la teoría del PDF el reloj se escribe con el patrón que usa todo .NET (y WPF):
+
+- El delegado es **`EventHandler`**, que ya viene en `System`.
+- Los manejadores tienen la firma **`(object sender, EventArgs e)`**: quién lanza el evento y los datos del evento.
+- El emisor pasa **`this`** como `sender`: *"el objeto que lanza el evento soy yo mismo"*.
+- Un método protegido, `OnSegundoCambiado()`, es el que lanza el evento `SegundoCambiado`.
+
+```csharp title="Patrón del PDF (reconstruido)"
+// En Reloj
+public event EventHandler SegundoCambiado;
+protected virtual void OnSegundoCambiado()
+{
+    SegundoCambiado?.Invoke(this, EventArgs.Empty);
+}
+public void Iniciar()
+{
+    while (true)
+    {
+        Thread.Sleep(1000);     // espera 1 segundo
+        OnSegundoCambiado();    // lanza el evento
+    }
+}
+
+// En Program
+reloj.SegundoCambiado += Reloj_SegundoCambiado;
+static void Reloj_SegundoCambiado(object sender, EventArgs e)
+{
+    Console.WriteLine("¡Ha pasado un segundo!");
+}
+```
+
+Este código está reconstruido a partir de capturas incompletas:
+
+- <Dudoso nota="No se ve en las capturas.">La declaración `public event EventHandler SegundoCambiado;`</Dudoso>.
+- <Dudoso nota="No se ven los modificadores.">`protected virtual`</Dudoso> en `OnSegundoCambiado()`.
+- <Dudoso nota="No se ve el cuerpo del método; pasar this como sender sí sale en la explicación.">El cuerpo `SegundoCambiado?.Invoke(this, EventArgs.Empty);`</Dudoso>.
+- <Dudoso nota="La línea está tapada en la captura.">La suscripción `reloj.SegundoCambiado += Reloj_SegundoCambiado;`</Dudoso>.
+
+El flujo completo que viene en el PDF: `Main()` crea el reloj → se suscribe a `SegundoCambiado` → llama a `reloj.Iniciar()` → dentro del `while (true)` espera 1 segundo → llama a `OnSegundoCambiado()` → se dispara el evento → se ejecuta `Reloj_SegundoCambiado()` en `Program`.
+
+<Callout type="warn" title="Ojo con los nombres: OnSegundo no es lo mismo en clase que en el PDF">
+  En el código de clase, `OnSegundo` es **el evento**. En el patrón del PDF, `On...` es el **método protegido que lo lanza** (`OnSegundoCambiado`) y el evento se llama sin `On` (`SegundoCambiado`). La convención de .NET es la del PDF.
+</Callout>
+
+### El ejemplo del archivo descargado
+
+El PDF sigue (págs. 15-16) con un ejemplo de un emisor y varios receptores:
+
+<Mermaid
+  titulo="Emisor y receptores en el ejemplo del PDF"
+  chart={`flowchart LR
+    A[AsistenteDescarga] -- ArchivoDescargado --> B[ServicioDescomprimir]
+    A -- ArchivoDescargado --> C[ServicioNotificación]`}
+/>
+
+El paso 1 es *"Creamos la clase Archivo"*, dentro del proyecto `EventosyDelegados_v2`:
+
+```csharp title="Archivo.cs (PDF, solo el principio)"
+using System;
+using System.Threading.Tasks;
+
+namespace EventosyDelegados_v2
+{
+    public class Archivo
+    // ... no se ve el resto
+```
+
+<NoSeVio titulo="El resto del ejemplo Archivo">
+  De la clase `Archivo` solo se ve el principio. No se ven `AsistenteDescarga`, el evento `ArchivoDescargado` ni los servicios.
+</NoSeVio>
+
+## Ejercicios 6 y 7 de Moodle
+
+<DeClase fecha="19/11" nota="enunciados repasados en clase; no hay código" />
+
+Los dos ejercicios piden lo mismo con distintos escenarios: una clase **emisora** con un evento y su propio `EventArgs`, y una o varias clases **receptoras** que se suscriben.
+
+**Ejercicio 6 (eventos y delegados I)**
+
+- `RegistroVentas` con el evento `VentaRealizada`, el método `ProcesarVenta` y `VentaEventArgs`. Lo escuchan `ServicioRegistro.RegistrarVenta` y `ServicioNotificacion.EnviarNotificacionVenta`.
+- `ControlTemperatura` con `TemperaturaAlta` y `TemperaturaEventArgs`. Lo escuchan `ServicioAlerta` y `ServicioRegistroTemperatura`.
+- `GestorBackups` con `BackupCompletado` y `BackupEventArgs`. Lo escucha `ServicioLog`.
+- `MonitorEnergia` con `ConsumoExcesivoDetectado` y `EnergiaEventArgs`. Lo escuchan `ServicioNotificacion` y `ServicioAjusteAutomatizado`.
+
+**Ejercicio 7 (eventos y delegados II)**
+
+- `ProcesoProduccion` con `ProduccionCompletada`.
+- `ControlTransmision` con `TransmisionFinalizada`.
+- `GestorPedidos` con `PedidoConfirmado`. Lo escuchan `ServicioCocina` y `ServicioNotificacionCliente`.
+- `ControlStock` con `StockBajo`. Lo escuchan `ServicioPedidoReposicion` y `ServicioAlertaStock`.
+- `GestorReservas` con `ReservaConfirmada`. Lo escuchan `ServicioLimpieza` y `ServicioNotificacionCliente`.
+- `GestorIncidencias` con `IncidenciaReportada`. Lo escuchan `ServicioTecnico`, `ServicioNotificacionCliente` y `ServicioRegistroIncidencias`.
+- Cada uno tiene su clase `XEventArgs`.
+
+**Notas del ejercicio 7**
+
+- Definir una clase propia que **herede de `EventArgs`**.
+- En el ejercicio 1, usar `TimeSpan` para los tiempos.
+- Escribir el argumento de `WriteLine` con `$`.
+- Usar **`EventHandler`** como delegado.
+- Usar `DateTime` para las fechas de entrada y salida.
+- En el ejercicio 6, elegir el técnico al azar de un array de una clase general.
+- Lanzar el evento con **`Invoke`**.
+
+### Tu propio `EventArgs` <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  En clase no se escribió ningún `EventArgs` propio: solo sale en los enunciados. Esta es la forma estándar de hacerlo, con el reloj como ejemplo para no darte resuelto ningún ejercicio.
+</NoDadoEnClase>
+
+Para mandar datos con el evento, creas una clase que **hereda de `EventArgs`** y usas el delegado genérico **`EventHandler<T>`**, que tiene la firma `(object? sender, T e)`:
+
+```csharp title="Reloj.cs"
+public class SegundoEventArgs : EventArgs
+{
+    public int Segundo { get; }
+    public DateTime Hora { get; }
+
+    public SegundoEventArgs(int segundo, DateTime hora)
+    {
+        Segundo = segundo;
+        Hora = hora;
+    }
+}
+
+public class Reloj
+{
+    public event EventHandler<SegundoEventArgs>? SegundoCambiado;
+
+    protected virtual void OnSegundoCambiado(SegundoEventArgs e)
+    {
+        SegundoCambiado?.Invoke(this, e);
+    }
+
+    public void Iniciar(int segundos)
+    {
+        for (int i = 1; i <= segundos; i++)
+        {
+            Thread.Sleep(1000);
+            OnSegundoCambiado(new SegundoEventArgs(i, DateTime.Now));
+        }
+    }
+}
+```
+
+```csharp title="Program.cs"
+Reloj reloj = new Reloj();
+reloj.SegundoCambiado += Reloj_SegundoCambiado;
+reloj.Iniciar(5);
+
+void Reloj_SegundoCambiado(object? sender, SegundoEventArgs e)
+{
+    Console.WriteLine($"Segundo {e.Segundo} a las {e.Hora:T}");
+}
+```
+
+- `public int Segundo { get; }` es una **propiedad** de solo lectura: se da valor en el constructor y fuera solo se puede leer. Es lo que en Java sería un campo `private final` con su *getter*.
+- `object?` lleva `?` porque con los tipos anulables activados la firma de `EventHandler<T>` es `(object? sender, T e)`. Con `object` a secas sale un aviso.
+- `{e.Hora:T}` usa el especificador de hora larga dentro de la interpolación.
+- Para medir tiempos (la nota de `TimeSpan`): restar dos `DateTime` da un `TimeSpan`, por ejemplo `TimeSpan duracion = fin - inicio;`, y `duracion.TotalSeconds` da los segundos.
+
+### ¿Para qué sirve la palabra `event`? <NoDadoEnClase inline />
+
+Sin `event`, `OnSegundo` sería un campo público de tipo delegado y cualquiera podría hacer `reloj.OnSegundo = null;` (borrando a todos los suscriptores) o `reloj.OnSegundo.Invoke();` (lanzando el evento desde fuera). Con `event`, **desde fuera de la clase solo se permiten `+=` y `-=`**: lanzarlo es cosa del emisor.
+
+## Practica
+
+<Quiz titulo="Test: eventos">
+  <Pregunta enunciado="¿Cuál es la declaración del evento del reloj de clase?" explicacion="`event` + el tipo delegado + el nombre.">
+    <Opcion correcta>`public event CadaSegundoHandler OnSegundo;`</Opcion>
+    <Opcion>`public delegate event OnSegundo();`</Opcion>
+    <Opcion>`public CadaSegundoHandler event OnSegundo();`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cómo se lanza el evento dentro de `Reloj` en el código de clase?" explicacion="Dentro de la clase emisora, con `Invoke()`.">
+    <Opcion>`reloj.OnSegundo += Invoke;`</Opcion>
+    <Opcion correcta>`OnSegundo.Invoke();`</Opcion>
+    <Opcion>`event OnSegundo();`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Hay dos manejadores suscritos: primero `ImprimeHaPasadoUnSegundo` y después la lambda. ¿En qué orden se ejecutan cada segundo?" explicacion="Siempre en el orden en que se suscribieron.">
+    <Opcion correcta>Primero `ImprimeHaPasadoUnSegundo` y después la lambda</Opcion>
+    <Opcion>Primero la lambda, porque es más corta</Opcion>
+    <Opcion>En un orden distinto cada vez</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="En el `Program.cs` final, ¿en qué segundo se escribe «Ha pasado un segundo» por última vez?" respuesta={["20", "el 20"]} explicacion="En el segundo 20 se ejecutan los dos manejadores; al final de ese segundo la lambda da de baja al otro, así que desde el 21 solo sale la lambda." />
+  <Pregunta enunciado="¿Por qué sale CS8421 si `ImprimeHaPasadoUnSegundo` es `static` y usa `segundo`?" explicacion="Una función local estática no puede capturar variables de alrededor.">
+    <Opcion>Porque `segundo` es un `int`</Opcion>
+    <Opcion correcta>Porque una función local `static` no puede usar variables locales de fuera</Opcion>
+    <Opcion>Porque falta el `;` después de `Invoke()`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Se puede dar de baja un manejador con `-=` desde dentro de otro manejador mientras el reloj está en marcha." respuesta={true} explicacion="Es lo que hace la lambda al llegar a 20." />
+  <Pregunta enunciado="¿Qué pasa si nadie se suscribe a `OnSegundo` y se llama a `reloj.Iniciar()`?" explicacion="Sin suscriptores el evento vale null, y `OnSegundo.Invoke()` lanza una excepción. Es lo que avisa CS8618.">
+    <Opcion>No pasa nada: el reloj espera en silencio</Opcion>
+    <Opcion correcta>Al primer segundo, `OnSegundo.Invoke()` lanza una `NullReferenceException`</Opcion>
+    <Opcion>No compila</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En el patrón del PDF, ¿qué se pasa como `sender`?" explicacion="«El objeto que lanza el evento soy yo mismo».">
+    <Opcion correcta>`this`, el propio objeto que lanza el evento</Opcion>
+    <Opcion>`EventArgs.Empty`</Opcion>
+    <Opcion>`null`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: eventos">
+  <Tarjeta frente="Emisor y receptor">El emisor lanza el evento y no sabe quién escucha. Los receptores se suscriben con `+=`.</Tarjeta>
+  <Tarjeta frente="Declarar un evento">`public event CadaSegundoHandler OnSegundo;`: el tipo del evento es un delegado.</Tarjeta>
+  <Tarjeta frente="Lanzar un evento (en clase)">`OnSegundo.Invoke();`, dentro de la clase emisora.</Tarjeta>
+  <Tarjeta frente="Tres formas de suscribirse">Método con nombre (sin paréntesis), método anónimo `delegate () { ... }` y lambda `() => { ... }`.</Tarjeta>
+  <Tarjeta frente="Darse de baja">`reloj.OnSegundo -= ImprimeHaPasadoUnSegundo;`</Tarjeta>
+  <Tarjeta frente="Captura de variables (closure)">Una lambda o función local no estática puede leer y cambiar variables locales de fuera, como `segundo`.</Tarjeta>
+  <Tarjeta frente="CS8421">Una función local `static` no puede usar variables de fuera.</Tarjeta>
+  <Tarjeta frente="Firma estándar de un manejador (PDF)">`(object sender, EventArgs e)`, con `EventHandler` como delegado y `this` como `sender`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Múltiplos de 5" dificultad="facil">
+  Partiendo del `Program.cs` final de clase, añade un **tercer manejador** (una lambda) que escriba `"N es múltiplo de 5"` cuando `segundo` sea múltiplo de 5. ¿Dónde tienes que suscribirlo para que use el valor ya actualizado de `segundo`?
+
+  <Pista>Los manejadores se ejecutan en el orden en que se suscriben. ¿Quién suma 1 a `segundo`?</Pista>
+
+  <Solucion>
+
+Solución propia. Se suscribe **después** de la lambda que cuenta y antes de `reloj.Iniciar()`:
+
+```csharp title="Program.cs"
+reloj.OnSegundo += () =>
+{
+    if (segundo % 5 == 0)
+    {
+        Console.WriteLine($"{segundo} es múltiplo de 5");
+    }
+};
+
+reloj.Iniciar();
+```
+
+Si lo suscribes **antes** que la lambda que cuenta, en cada segundo vería el valor anterior: en el primer segundo `segundo` aún vale 0 y escribiría "0 es múltiplo de 5", y después iría siempre un segundo por detrás.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Cuenta atrás" dificultad="media">
+  Crea una clase `CuentaAtras` con dos eventos: `OnTick`, que avisa de los segundos que quedan (recibe un `int`), y `OnFin`, que avisa al terminar. `Iniciar(int segundos)` cuenta hacia atrás de uno en uno. En `Program.cs`, suscríbete con lambdas para que con 3 salga:
+
+```text
+Quedan 3 segundos
+Quedan 2 segundos
+Quedan 1 segundos
+¡Despegue!
+```
+
+  <Pista>Necesitas dos delegados propios, como `CadaSegundoHandler`: uno que reciba un `int` y otro sin parámetros.</Pista>
+  <Pista>En vez de `while (true)`, un `for` que vaya de `segundos` a 1.</Pista>
+
+  <Solucion>
+
+Solución propia. Usa `?` y `?.Invoke()`, que no se vieron en clase (ver más arriba), para evitar el aviso CS8618:
+
+```csharp title="Program.cs"
+CuentaAtras cuenta = new CuentaAtras();
+cuenta.OnTick += (int restantes) => Console.WriteLine($"Quedan {restantes} segundos");
+cuenta.OnFin += () => Console.WriteLine("¡Despegue!");
+cuenta.Iniciar(3);
+
+public class CuentaAtras
+{
+    public delegate void TickHandler(int restantes);
+    public delegate void FinHandler();
+
+    public event TickHandler? OnTick;
+    public event FinHandler? OnFin;
+
+    public void Iniciar(int segundos)
+    {
+        for (int i = segundos; i > 0; i--)
+        {
+            OnTick?.Invoke(i);
+            Thread.Sleep(1000);
+        }
+        OnFin?.Invoke();
+    }
+}
+```
+
+Con el estilo de clase (`event TickHandler OnTick;` y `OnTick.Invoke(i);`) también funciona, pero con el aviso CS8618.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

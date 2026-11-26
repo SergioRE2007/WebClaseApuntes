@@ -1,0 +1,124 @@
+---
+title: Backend para el proyecto
+description: Lo que el proyecto intermodular pide al backend y a la base de datos y no se ha dado en clase, explicado con Express 5, Prisma 6 y Zod 4 sobre la misma estructura del repositorio de clase.
+icon: ServerCog
+---
+
+En clase de APIs se montó un backend con **Node, Express 5, Prisma 6 y Zod 4** (clases del 20/10, 27/10 y 03/11): estructura por módulos, CRUD de usuarios, validación, errores, autenticación con JWT, migraciones, logs, tests y Docker. Eso está en los apuntes de clase: [Backend con Node](/docs/2-dam/apis/backend).
+
+Este bloque es **lo que falta**: lo que piden los requisitos del proyecto y no ha salido en clase (seed, listado con búsqueda y paginación, transacciones, CORS para tu web…) y cómo se cumple cada requisito.
+
+<Callout type="info" title="¿Por qué está esto en APIs si los documentos son de Acceso a Datos?">
+  Los requisitos y la planificación por hitos del proyecto se llaman "de Acceso a Datos", pero en clase **Acceso a Datos se ha dado sobre todo con Angular** y **el backend con Node se ha dado en APIs**. Por eso lo que esos documentos piden al backend y a la base de datos está aquí, y la parte de Angular está en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado). En cada requisito se dice de qué apartado del documento sale.
+</Callout>
+
+## Cómo usar este bloque
+
+<Steps>
+  <Step>
+
+#### Mira qué te piden y qué se dio
+
+  [Requisitos de backend y base de datos](/docs/2-dam/apis/backend-proyecto/requisitos) recorre el documento de requisitos apartado por apartado: qué se dio entero, qué a medias y qué no, con enlace a la página que lo explica. Tiene una lista de comprobación para ir marcando lo que ya tienes.
+
+  </Step>
+  <Step>
+
+#### Sitúalo en el calendario
+
+  [Planificación por hitos](/docs/2-dam/apis/backend-proyecto/hitos) dice qué hay que enseñar cada semana (H1 a H11) y qué parte del backend toca en cada hito.
+
+  </Step>
+  <Step>
+
+#### Hazlo en el orden de los hitos
+
+  Modelo y seed (H7 y H8), consultas y listado paginado (H10), errores y transacción (H10 y H11) y, para conectar Angular y la app, CORS y el token (H9).
+
+  </Step>
+</Steps>
+
+## Páginas
+
+<Cards>
+  <Card icon="ListChecks" title="Requisitos de backend y base de datos" href="/docs/2-dam/apis/backend-proyecto/requisitos" description="Cada requisito, de dónde sale, si se dio y dónde se explica." />
+  <Card icon="CalendarRange" title="Planificación por hitos" href="/docs/2-dam/apis/backend-proyecto/hitos" description="H1 a H11 y qué parte del backend toca en cada semana." />
+  <Card icon="Database" title="Modelo con relaciones y seed" href="/docs/2-dam/apis/backend-proyecto/modelo-y-seed" description="Varias entidades, claves ajenas, onDelete, índices, migración y datos de prueba." />
+  <Card icon="GitMerge" title="Consultas con datos relacionados" href="/docs/2-dam/apis/backend-proyecto/consultas-relacionadas" description="include, select, _count y where." />
+  <Card icon="ListFilter" title="Listado con búsqueda y paginación" href="/docs/2-dam/apis/backend-proyecto/listado-paginado" description="Búsqueda, filtro, orden y paginación con el total. Con simulador." />
+  <Card icon="TriangleExclamationPoint" title="Errores con su código HTTP" href="/docs/2-dam/apis/backend-proyecto/errores-http" description="HttpError, errorHandler y los códigos de Prisma." />
+  <Card icon="Repeat" title="Operación de negocio con transacción" href="/docs/2-dam/apis/backend-proyecto/transacciones" description="Todo o nada con prisma.$transaction. Con visualizador." />
+  <Card icon="ShieldCheck" title="CORS y rutas protegidas" href="/docs/2-dam/apis/backend-proyecto/cors-y-token" description="Dejar entrar a tu web y a la app, y exigir el token." />
+  <Card icon="Bug" title="Errores típicos en el backend" href="/docs/2-dam/apis/backend-proyecto/errores-tipicos" description="El mensaje que sale, por qué pasa y qué hacer." />
+</Cards>
+
+## Qué clases cubre
+
+| Fecha | Qué se vio que se usa aquí |
+| --- | --- |
+| 20/10 | `app.ts` con `helmet`, `cors()`, `express.json()` y `errorHandler`; `config/db.ts` con un solo `PrismaClient`; `schema.prisma` con `User`. |
+| 27/10 | Módulo `users` (routes, controller, service y schema), `validate` con Zod 4, `select` para no devolver `passwordHash`, P2025 → 404 y P2002 → 409, login con bcrypt y JWT. |
+| 03/11 | Migraciones, *drift*, `migrate reset`, `db pull` y el modelo `Media` (relación 1 a N con `User`), Winston, tests con Supertest y Swagger. |
+| 18/11 | En la clase de Angular sale el error de CORS de la web publicada llamando a `localhost`. |
+
+Todo lo demás de este bloque **no se ha dado en clase** y está marcado así:
+
+<NoDadoEnClase titulo="Cómo se marca lo que no se dio">
+  Es la forma más estándar de hacerlo, con las versiones de clase (Express 5, Prisma 6 y Zod 4) y la misma estructura `src/modules/<x>/` del repositorio del profesor. Si en la defensa te preguntan, di que lo has buscado tú.
+</NoDadoEnClase>
+
+## El ejemplo de todo el bloque
+
+Todas las páginas usan la misma tienda: **categorías**, **productos** y **pedidos** con sus **líneas**. Cambia los nombres por los de tu proyecto (reservas y huecos, incidencias e historial, recetas e ingredientes…): la forma del código es la misma.
+
+<Mermaid
+  titulo="El modelo de ejemplo"
+  chart={`erDiagram
+  CATEGORIA ||--o{ PRODUCTO : agrupa
+  PEDIDO ||--|{ LINEA_PEDIDO : tiene
+  PRODUCTO ||--o{ LINEA_PEDIDO : aparece_en`}
+/>
+
+<Files>
+  <Folder name="prisma" defaultOpen>
+    <File name="schema.prisma" />
+    <File name="seed.ts" />
+    <Folder name="migrations" />
+  </Folder>
+  <Folder name="src" defaultOpen>
+    <Folder name="config">
+      <File name="db.ts" />
+      <File name="env.ts" />
+    </Folder>
+    <Folder name="middleware" defaultOpen>
+      <File name="auth.ts" />
+      <File name="error.ts" />
+      <File name="validate.ts" />
+    </Folder>
+    <Folder name="modules" defaultOpen>
+      <Folder name="productos" defaultOpen>
+        <File name="productos.routes.ts" />
+        <File name="productos.controller.ts" />
+        <File name="productos.service.ts" />
+        <File name="productos.schema.ts" />
+      </Folder>
+      <Folder name="pedidos">
+        <File name="pedidos.routes.ts" />
+        <File name="pedidos.controller.ts" />
+        <File name="pedidos.service.ts" />
+      </Folder>
+    </Folder>
+    <Folder name="utils">
+      <File name="httpError.ts" />
+      <File name="logger.ts" />
+    </Folder>
+    <File name="app.ts" />
+    <File name="index.ts" />
+  </Folder>
+</Files>
+
+<Callout type="warn" title="No cambies las versiones">
+  El código de este bloque está escrito para **Express 5, Prisma 6 y Zod 4**, que son las de clase. Mucho de lo que encuentres en internet es de Express 4, Prisma 7 o Zod 3 y no se escribe igual (por ejemplo, `z.string().email()` y `.flatten()` están obsoletos en Zod 4, y en Prisma 7 la configuración del seed cambia de sitio).
+</Callout>
+
+Para la parte de Angular de los mismos requisitos (listado con filtros, paginación, estados de carga, borrar con confirmación y guardar el token) ve a [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado). Para llamar a tu API desde la app Android, a [Kotlin para el proyecto](/docs/2-dam/kotlin/para-el-proyecto).

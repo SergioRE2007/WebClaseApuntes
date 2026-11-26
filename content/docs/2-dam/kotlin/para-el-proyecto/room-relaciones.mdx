@@ -1,0 +1,428 @@
+---
+title: Room con relaciones (1 a N)
+description: Dos tablas relacionadas en Room 3 con ForeignKey, índice, @Embedded y @Relation, @Upsert en vez de REPLACE, y el módulo de Hilt con @Singleton.
+icon: Database
+---
+
+import { LaboratorioClaves } from '@/components/temas/para-el-proyecto-android/laboratorio-claves';
+
+Los requisitos piden **entidades y relaciones** en Room, y dos CRUD en modelos relacionados. En clase solo hubo una tabla. Aquí pasas a dos tablas relacionadas, **categorías y productos** (una categoría tiene muchos productos), escritas para **Room 3**, que no se escribe igual que Room 2.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Las tres piezas de una relación: clave ajena, índice y clase con `@Relation`.
+  - Cómo se escribe `@Relation` en Room 3 (y por qué casi todo lo de internet no te vale).
+  - Qué hacen `CASCADE` y `RESTRICT`, y por qué `@Upsert` y no `REPLACE`.
+  - Por qué el módulo de Hilt de la base de datos lleva `@Singleton`.
+</Callout>
+
+## Lo que se vio en clase
+
+<DeClase fecha="13/11" proyecto="Room" nota="y el 16/11 en PokeApp2627, un fragmento de 3 minutos" />
+
+El 13/11 se montó Room 3 con KSP y Hilt sobre **una sola tabla**, `pokemon`:
+
+- Paquete `androidx.room3` (no `androidx.room`).
+- `@Entity(tableName)`, `@PrimaryKey` y `@ColumnInfo(name)`. Un tipo nulable (`String?`) es una columna que admite `NULL`.
+- Un `@Dao` (interfaz) con funciones `suspend`: `@Insert` sobrecargado (`vararg` y `List`), `@Update` y `@Query("... WHERE id = :id")`.
+- `@Database(entities, version)` sobre una `abstract class` que hereda de `RoomDatabase()`.
+- Un `AppModule` de Hilt con `@Provides` que construye la base con `Room.databaseBuilder` y `@ApplicationContext`, y otro `@Provides` para el DAO.
+- Room comprueba el SQL **al compilar**: el `FROM :pokemon` que se escribió daba error de KSP, porque el nombre de una tabla no puede ser un parámetro (tenía que ser `FROM pokemon`).
+- Salió el aviso *Schema export directory*, pero no se vio cómo quitarlo.
+
+Lo de clase lo tienes entero en [Room 3: entidades, DAO y base de datos con Hilt](/docs/2-dam/kotlin/datos/room).
+
+```kotlin title="PokemonEntity.kt (13/11)"
+@Entity(tableName = "pokemon")
+data class PokemonEntity(
+    @PrimaryKey
+    val id: Int,
+    val name: String,
+    val imageUrl: String?,
+)
+```
+
+- <Dudoso>`@Entity(tableName = "pokemon")`</Dudoso>: aparece en unas capturas y en otras no.
+- En una versión anterior, la columna era `@ColumnInfo(name = "image_url") val imageUrl: String?`.
+
+<NoSeVio titulo="Las @Query corregidas">
+  Después del error de `FROM :pokemon`, las `@Query` se dejaron comentadas y no se ve la versión corregida (13/11). El 16/11, en PokeApp2627, `readAllPokemon()` y `readPokemonById()` siguen leyendo de la API, no de Room.
+</NoSeVio>
+
+## Las tres piezas de una relación <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Las relaciones en Room (`ForeignKey`, `@Relation`) no salieron en clase. Ojo: casi todo lo que hay en internet es de Room 2 y no se escribe igual.
+</NoDadoEnClase>
+
+<Mermaid
+  titulo="Una categoría tiene muchos productos"
+  chart={`erDiagram
+    CATEGORIA ||--o{ PRODUCTO : tiene
+    CATEGORIA {
+      int id PK
+      string nombre
+    }
+    PRODUCTO {
+      int id PK
+      string nombre
+      double precio
+      int categoriaId FK
+    }`}
+/>
+
+Con dos tablas relacionadas hacen falta tres cosas:
+
+1. **La clave ajena (`ForeignKey`)** en la tabla hija, para que la base no deje guardar un producto con una categoría que no existe. Es la `FOREIGN KEY ... REFERENCES` de SQL.
+2. **Un índice** en la columna de la clave ajena. Si no, Room avisa al compilar.
+3. **Una clase con `@Embedded` y `@Relation`**, para leer de una vez una categoría junto con sus productos.
+
+### Las entidades
+
+<Recorrido
+  titulo="TiendaEntities.kt"
+  lenguaje="kotlin"
+  codigo={`@Entity(tableName = "categoria")
+data class CategoriaEntity(
+    @PrimaryKey val id: Int,
+    val nombre: String
+)
+
+@Entity(
+    tableName = "producto",
+    foreignKeys = [
+        ForeignKey(
+            entity = CategoriaEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["categoriaId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index("categoriaId")]
+)
+data class ProductoEntity(
+    @PrimaryKey val id: Int,
+    val nombre: String,
+    val precio: Double,
+    val categoriaId: Int
+)
+
+data class CategoriaConProductos(
+    @Embedded val categoria: CategoriaEntity,
+    @Relation(parentColumns = ["id"], entityColumns = ["categoriaId"])
+    val productos: List<ProductoEntity>
+)`}
+>
+  <Paso lineas="1-5" titulo="La tabla padre">
+    `CategoriaEntity` es una entidad normal, como la `PokemonEntity` de clase. El `id` es el que viene de la API, por eso no es autogenerado.
+  </Paso>
+  <Paso lineas="9-16" titulo="La clave ajena">
+    `foreignKeys` dice que `producto.categoriaId` apunta a `categoria.id`. `parentColumns` son las columnas del padre y `childColumns` las de esta tabla. En Kotlin, `[...]` dentro de una anotación es un array.
+  </Paso>
+  <Paso lineas="14" titulo="Qué pasa al borrar el padre">
+    `onDelete = ForeignKey.CASCADE`: si se borra una categoría, se borran sus productos. Con `ForeignKey.RESTRICT` no te dejaría borrar una categoría que tenga productos.
+  </Paso>
+  <Paso lineas="17" titulo="El índice">
+    `indices = [Index("categoriaId")]`. Sin él, Room avisa al compilar: cada cambio en la tabla padre obligaría a recorrer la tabla hija entera.
+  </Paso>
+  <Paso lineas="26-30" titulo="Leer el padre con sus hijos">
+    No es una entidad (no lleva `@Entity`): es lo que devuelve una consulta. `@Embedded` mete las columnas de la categoría y `@Relation` rellena la lista con los productos cuyo `categoriaId` coincide con el `id` de la categoría.
+  </Paso>
+  <Paso lineas="28" titulo="Room 3: en plural y con corchetes">
+    `parentColumns = ["id"]` y `entityColumns = ["categoriaId"]`. En Room 2 era `parentColumn = "id"` y `entityColumn = "categoriaId"`.
+  </Paso>
+</Recorrido>
+
+### Room 2 frente a Room 3
+
+<Comparar titulo="@Relation en Room 2 y en Room 3" columnas>
+  <Lado titulo="Room 2 (casi todo internet)">
+
+```kotlin
+import androidx.room.Relation
+
+@Relation(
+    parentColumn = "id",
+    entityColumn = "categoriaId"
+)
+val productos: List<ProductoEntity>
+```
+
+Con Room 3 da el error `Cannot have empty 'parentColumns' in @Relation`.
+
+  </Lado>
+  <Lado titulo="Room 3 (versiones de clase)">
+
+```kotlin
+import androidx.room3.Relation
+
+@Relation(
+    parentColumns = ["id"],
+    entityColumns = ["categoriaId"]
+)
+val productos: List<ProductoEntity>
+```
+
+  </Lado>
+</Comparar>
+
+Los imports también cambian: `androidx.room3.*` en vez de `androidx.room.*`. Todos los que usa esta página:
+
+```kotlin title="Imports de Room 3"
+import androidx.room3.Dao
+import androidx.room3.Database
+import androidx.room3.Delete
+import androidx.room3.Embedded
+import androidx.room3.Entity
+import androidx.room3.ForeignKey
+import androidx.room3.Index
+import androidx.room3.PrimaryKey
+import androidx.room3.Query
+import androidx.room3.Relation
+import androidx.room3.Room
+import androidx.room3.RoomDatabase
+import androidx.room3.Transaction
+import androidx.room3.Upsert
+```
+
+### El DAO
+
+<Recorrido
+  titulo="TiendaDao.kt"
+  lenguaje="kotlin"
+  codigo={`@Dao
+interface TiendaDao {
+    @Query("SELECT * FROM producto ORDER BY nombre")
+    fun observeProductos(): Flow<List<ProductoEntity>>
+
+    @Query("SELECT * FROM producto WHERE id = :id")
+    fun observeProducto(id: Int): Flow<ProductoEntity?>
+
+    @Transaction
+    @Query("SELECT * FROM categoria ORDER BY nombre")
+    fun observeCategoriasConProductos(): Flow<List<CategoriaConProductos>>
+
+    @Upsert
+    suspend fun upsertCategorias(categorias: List<CategoriaEntity>)
+
+    @Upsert
+    suspend fun upsertProductos(productos: List<ProductoEntity>)
+
+    @Delete
+    suspend fun deleteProducto(producto: ProductoEntity)
+}`}
+>
+  <Paso lineas="3-7" titulo="Consultas que se observan">
+    Devuelven un `Flow`: Room vuelve a emitir cada vez que cambia la tabla. Por eso **no** llevan `suspend`. `ProductoEntity?` es nulable porque puede que no exista ese id.
+  </Paso>
+  <Paso lineas="9-11" titulo="@Transaction con @Relation">
+    Room hace dos consultas (las categorías y luego sus productos). `@Transaction` hace que vayan juntas, sin que nada cambie en medio.
+  </Paso>
+  <Paso lineas="13-17" titulo="@Upsert">
+    Inserta si no existe y actualiza si ya existe. Es lo que necesitas al guardar lo que llega de la API.
+  </Paso>
+  <Paso lineas="19-20" titulo="Las que escriben sí son suspend">
+    `@Upsert` y `@Delete` hacen el trabajo una vez y terminan: son `suspend`, como las de clase.
+  </Paso>
+</Recorrido>
+
+### La base de datos
+
+```kotlin title="TiendaDatabase.kt"
+@Database(
+    entities = [CategoriaEntity::class, ProductoEntity::class],
+    version = 1,
+    exportSchema = false
+)
+abstract class TiendaDatabase : RoomDatabase() {
+    abstract fun tiendaDao(): TiendaDao
+}
+```
+
+`exportSchema = false` quita el aviso *Schema export directory* que salió en clase el 13/11. Si cambias una entidad, sube `version` y añade una migración (en desarrollo vale con desinstalar la app).
+
+## CASCADE, RESTRICT y el peligro de REPLACE <NoDadoEnClase inline />
+
+Prueba las tres situaciones que más fallan con claves ajenas:
+
+<LaboratorioClaves />
+
+- **El orden importa.** Si guardas un producto antes que su categoría, la clave ajena lo rechaza: `FOREIGN KEY constraint failed (code 787)`. Guarda siempre **primero los padres** y después los hijos.
+- **`CASCADE` frente a `RESTRICT`.** Con `CASCADE`, borrar una categoría borra sus productos. Con `RESTRICT`, no te deja borrarla mientras tenga productos.
+- **No uses `@Insert(onConflict = OnConflictStrategy.REPLACE)` en una tabla padre.** `REPLACE` no actualiza la fila: la **borra y la vuelve a crear**. Con `CASCADE`, ese borrado se lleva por delante todos sus hijos. `@Upsert` actualiza la fila sin borrarla.
+
+<Callout type="warn" title="El síntoma: al refrescar desaparecen los hijos">
+  Si al refrescar las categorías se te vacía la tabla de productos, casi seguro que tienes `REPLACE` en el `@Insert` de las categorías. Cámbialo por `@Upsert`.
+</Callout>
+
+## El módulo de Hilt <NoDadoEnClase inline />
+
+Es el `AppModule` de clase con dos cambios: `object` en vez de `class` (no hace falta crear instancias del módulo) y **`@Singleton`** en la base de datos.
+
+<Comparar titulo="Proveer la base de datos con Hilt">
+  <Lado tipo="evitar">
+
+```kotlin
+@Module
+@InstallIn(SingletonComponent::class)
+class AppModule {
+    @Provides
+    fun providesDatabase(@ApplicationContext context: Context): PokemonDatabase {
+        val db = Room.databaseBuilder<PokemonDatabase>(
+            context = context,
+            name = "pokemon_db"
+        ).build()
+        return db
+    }
+
+    @Provides
+    fun providesPokemonDao(db: PokemonDatabase): PokeDao {
+        return db.pokemonDao()
+    }
+}
+```
+
+Sin `@Singleton`, Hilt crea una base de datos nueva cada vez que alguien pide el DAO.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+@Module
+@InstallIn(SingletonComponent::class)
+object DatabaseModule {
+    @Provides
+    @Singleton
+    fun provideDatabase(@ApplicationContext context: Context): TiendaDatabase =
+        Room.databaseBuilder<TiendaDatabase>(context = context, name = "tienda_db").build()
+
+    @Provides
+    fun provideTiendaDao(db: TiendaDatabase): TiendaDao = db.tiendaDao()
+}
+```
+
+Una sola base de datos para toda la app. El DAO no necesita `@Singleton`: es barato y siempre sale de la misma base.
+
+  </Lado>
+</Comparar>
+
+## Practica
+
+<CompletarCodigo
+  titulo="La relación en Room 3"
+  enunciado="Completa la clase que lee una categoría con todos sus productos."
+  lenguaje="kotlin"
+  codigo={`data class CategoriaConProductos(
+    @[[Embedded]] val categoria: CategoriaEntity,
+    @Relation([[parentColumns]] = ["id"], [[entityColumns]] = ["[[categoriaId]]"])
+    val productos: List<ProductoEntity>
+)`}
+/>
+
+<Quiz titulo="Test: Room con relaciones">
+  <Pregunta enunciado="¿Cómo se escribe `@Relation` en Room 3?" explicacion="En Room 3 los parámetros van en plural y como arrays. La forma con singular y texto es la de Room 2.">
+    <Opcion>`@Relation(parentColumn = "id", entityColumn = "categoriaId")`</Opcion>
+    <Opcion correcta>`@Relation(parentColumns = ["id"], entityColumns = ["categoriaId"])`</Opcion>
+    <Opcion>`@Relation(foreignKey = "categoriaId")`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado='¿Por qué se pone `indices = [Index("categoriaId")]` en la tabla hija?' explicacion="Sin índice en la columna de la clave ajena, Room avisa al compilar: cada cambio en el padre obligaría a recorrer la tabla hija entera.">
+    <Opcion>Para que `categoriaId` no se pueda repetir</Opcion>
+    <Opcion correcta>Para que Room no avise al compilar y las búsquedas por esa columna sean rápidas</Opcion>
+    <Opcion>Es obligatorio en todas las columnas `Int`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Una consulta del DAO que devuelve `Flow` lleva `suspend`." respuesta={false} explicacion="El `Flow` ya avisa solo cada vez que cambia la tabla. Solo llevan `suspend` las que se ejecutan una vez, como `@Upsert` o `@Delete`." />
+  <Pregunta enunciado="Guardas los productos antes que sus categorías. ¿Qué pasa?" explicacion="La clave ajena no deja guardar un producto cuya categoría no existe todavía.">
+    <Opcion>Room crea las categorías que faltan</Opcion>
+    <Opcion correcta>`FOREIGN KEY constraint failed (code 787)`</Opcion>
+    <Opcion>Se guardan con `categoriaId` a `null`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Tienes `onDelete = ForeignKey.CASCADE` y guardas las categorías con `@Insert(onConflict = OnConflictStrategy.REPLACE)`. Al refrescar…" explicacion="REPLACE borra la fila y la vuelve a crear, y CASCADE borra los hijos de la fila borrada. Con `@Upsert` no pasa.">
+    <Opcion>Todo va bien</Opcion>
+    <Opcion correcta>Se borran los productos de las categorías que vuelves a guardar</Opcion>
+    <Opcion>Se duplican las categorías</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Para qué sirve `@Transaction` en la consulta de `CategoriaConProductos`?" explicacion="Room hace dos consultas y `@Transaction` las agrupa para que nada cambie entre una y otra.">
+    <Opcion correcta>Para que las dos consultas que hace Room vayan juntas</Opcion>
+    <Opcion>Para poder escribir en la base</Opcion>
+    <Opcion>Para que la consulta sea `suspend`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué pasa si el `@Provides` de la base de datos no lleva `@Singleton`?" explicacion="Hilt llama a la función cada vez que alguien necesita la base (por ejemplo, para crear el DAO), así que se construye una base nueva cada vez.">
+    <Opcion>No compila</Opcion>
+    <Opcion correcta>Se crea una base de datos nueva en cada inyección</Opcion>
+    <Opcion>La base se borra al cerrar la app</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: Room con relaciones">
+  <Tarjeta frente="Las tres piezas de una relación 1 a N">La `ForeignKey` en la hija, un `Index` en la columna de la clave ajena y una clase con `@Embedded` + `@Relation` para leer el padre con sus hijos.</Tarjeta>
+  <Tarjeta frente="`@Relation` en Room 3">`@Relation(parentColumns = ["id"], entityColumns = ["categoriaId"])`, en plural y con corchetes.</Tarjeta>
+  <Tarjeta frente="`CASCADE` frente a `RESTRICT`">`CASCADE`: borrar el padre borra los hijos. `RESTRICT`: no deja borrar un padre con hijos.</Tarjeta>
+  <Tarjeta frente="`@Upsert` frente a `REPLACE`">`@Upsert` actualiza la fila. `REPLACE` la borra y la crea otra vez, y con `CASCADE` se lleva los hijos.</Tarjeta>
+  <Tarjeta frente="Orden al guardar">Primero los padres (categorías) y después los hijos (productos).</Tarjeta>
+  <Tarjeta frente="`exportSchema = false`">Quita el aviso *Schema export directory* (salió en clase el 13/11).</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Productos de una categoría" dificultad="facil">
+  Añade al `TiendaDao` una consulta que devuelva, como `Flow`, los productos de una categoría ordenados por precio de menor a mayor.
+
+  <Pista>Es como `observeProductos()`, con un `WHERE` que usa un parámetro `:categoriaId`.</Pista>
+
+  <Solucion>
+
+```kotlin
+@Query("SELECT * FROM producto WHERE categoriaId = :categoriaId ORDER BY precio")
+fun observeProductosDeCategoria(categoriaId: Int): Flow<List<ProductoEntity>>
+```
+
+  Sin `suspend`, porque devuelve un `Flow`. El nombre del parámetro de la función tiene que ser igual que el `:categoriaId` del SQL.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Usuarios y pedidos" dificultad="media">
+  Tu app tiene **usuarios** y **pedidos** (un usuario tiene muchos pedidos). Escribe las dos entidades, con la clave ajena y el índice, y la clase `UsuarioConPedidos`. Si se borra un usuario, se tienen que borrar sus pedidos.
+
+  <Pista>Es la misma estructura que categorías y productos: el padre es el usuario y la hija, el pedido, con una columna `usuarioId`.</Pista>
+  <Pista>Que se borren los pedidos al borrar el usuario es `onDelete = ForeignKey.CASCADE`.</Pista>
+
+  <Solucion>
+
+```kotlin
+@Entity(tableName = "usuario")
+data class UsuarioEntity(
+    @PrimaryKey val id: Int,
+    val nombre: String
+)
+
+@Entity(
+    tableName = "pedido",
+    foreignKeys = [
+        ForeignKey(
+            entity = UsuarioEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["usuarioId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index("usuarioId")]
+)
+data class PedidoEntity(
+    @PrimaryKey val id: Int,
+    val total: Double,
+    val usuarioId: Int
+)
+
+data class UsuarioConPedidos(
+    @Embedded val usuario: UsuarioEntity,
+    @Relation(parentColumns = ["id"], entityColumns = ["usuarioId"])
+    val pedidos: List<PedidoEntity>
+)
+```
+
+  No olvides añadir `UsuarioEntity::class` y `PedidoEntity::class` a `entities` en `@Database`, y poner `@Transaction` en la consulta que devuelve `UsuarioConPedidos`.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

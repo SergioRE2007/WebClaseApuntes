@@ -1,0 +1,386 @@
+---
+title: Visual Studio y el proyecto Clase1
+description: El IDE y el tipo de proyecto que se usan en clase, las instrucciones de nivel superior, las funciones locales y las herramientas de Visual Studio.
+icon: Monitor
+---
+
+Todas las clases de C# se hacen en el mismo sitio: **Visual Studio** con un proyecto de consola llamado **Clase1**. Aquí tienes cómo es ese proyecto, por qué `Program.cs` no tiene `Main` y qué herramientas del IDE se usaron.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué versión de Visual Studio y de .NET se usa, y cómo está organizado el proyecto.
+  - Qué son las **instrucciones de nivel superior** y en qué orden hay que escribir el código.
+  - Qué es una **función local** y cómo se crea una clase nueva.
+  - Las herramientas del IDE que se usan en clase y los avisos que salen al compilar.
+</Callout>
+
+## Qué se usa
+
+<DeClase fecha="05/11, 09/11, 18/11, 19/11" proyecto="Clase1" />
+
+| Pieza | Detalle |
+| --- | --- |
+| IDE | Visual Studio Community 2022 (17.14), en español. Sale un aviso de "versión no soportada" que invita a instalar Visual Studio 2026. |
+| Configuración | *Debug* y *Any CPU* |
+| Plataforma | .NET 8 (`net8.0`). En la salida de depuración aparece el runtime `Microsoft.NETCore.App 8.0.20`. |
+| Tipo de proyecto | Aplicación de consola, con la plantilla nueva (`aka.ms/new-console-template`): instrucciones de nivel superior y tipos que admiten null activados. |
+| Paquetes NuGet | Ninguno |
+| Ayudas | IntelliSense, IntelliCode y GitHub Copilot (aparecen en la barra; algunas sugerencias en gris parecen de Copilot) |
+| Git | Repositorio `Clase1` en GitHub, rama `dev` (4 commits por delante de `master`), con `.gitignore` y `.gitattributes` |
+
+## Cómo es el proyecto
+
+Así queda Clase1 al final del 19/11. De una clase a otra se le fueron añadiendo archivos. Los nombres de los archivos y la ruta `bin\Debug\net8.0\Clase1.exe` salen en clase; el reparto en carpetas es el que crea Visual Studio por defecto:
+
+<Files>
+  <File name="Clase1.sln" />
+  <Folder name="Clase1" defaultOpen>
+    <File name="Clase1.csproj" />
+    <File name="Program.cs" />
+    <File name="Class1.cs" />
+    <File name="Validador.cs" />
+    <File name="Reloj.cs" />
+    <Folder name="bin">
+      <Folder name="Debug">
+        <Folder name="net8.0">
+          <File name="Clase1.exe" />
+        </Folder>
+      </Folder>
+    </Folder>
+  </Folder>
+  <File name=".gitignore" />
+  <File name=".gitattributes" />
+</Files>
+
+| Archivo | Clase | Qué tiene |
+| --- | --- | --- |
+| `Program.cs` | todas | El programa principal. Se va comentando el código de cada día y escribiendo el nuevo. |
+| `Class1.cs` | 05/11 | La clase vacía que genera la plantilla "Clase de C#". |
+| `Validador.cs` | 18/11 | La clase `Validador` con el delegado `ValidarNumero` y los métodos de validación. |
+| `Reloj.cs` | 19/11 | La clase `Reloj` con el delegado `CadaSegundoHandler` y el evento `OnSegundo`. |
+
+La clase `Calculadora` y el delegado `Operacion` del 09/11 no tienen archivo propio: están al final de `Program.cs`.
+
+<NoDadoEnClase titulo="Cómo se crea un proyecto así">
+  En clase el proyecto ya estaba creado. Si quieres uno igual: **Archivo → Nuevo → Proyecto → Aplicación de consola**, eliges **.NET 8.0** y dejas **sin marcar** "No usar instrucciones de nivel superior". El `.csproj` que genera es este (no se abrió en clase):
+
+```xml title="Clase1.csproj"
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
+```
+
+  `ImplicitUsings` añade solos los `using` más comunes (`System`, `System.Linq`, `System.Threading`…). Por eso en clase `Thread.Sleep` funciona sin escribir `using System.Threading;`. `Nullable` activa los avisos de null como CS8600 y CS8618.
+</NoDadoEnClase>
+
+## Instrucciones de nivel superior
+
+En la plantilla de consola nueva, `Program.cs` empieza así:
+
+```csharp title="Program.cs"
+// See https://aka.ms/new-console-template for more information
+Console.WriteLine("Hello, World DAM2!");
+```
+
+No hay `class Program` ni `static void Main()`: escribes las instrucciones directamente y el compilador genera el `Main` por ti. Los PDF de clase, en cambio, usan la forma clásica. Las dos funcionan:
+
+<Tabs items={['Plantilla de clase', 'Forma del PDF']}>
+  <Tab value="Plantilla de clase">
+
+```csharp title="Program.cs"
+Ejercicio1();
+
+void Ejercicio1()
+{
+    Console.WriteLine("Hola desde una función local");
+}
+```
+
+  </Tab>
+  <Tab value="Forma del PDF">
+
+```csharp title="Program.cs"
+class Program
+{
+    static void MiMetodo()
+    {
+        // Código a ejecutarse
+    }
+
+    static void Main()
+    {
+        MiMetodo();
+    }
+}
+```
+
+  </Tab>
+</Tabs>
+
+En la página 28 del PDF solo sale `MiMetodo` dentro de `class Program`; el `Main` que lo llama lo hemos añadido para que el ejemplo esté completo (los ejemplos del PDF de delegados sí llevan su `static void Main()`).
+
+En el PDF, `static` quiere decir que el método es de la clase y no de un objeto (como en Java) y `void`, que no devuelve nada.
+
+### El orden importa
+
+<DeClase fecha="09/11" proyecto="Clase1" nota="error CS8803" />
+
+Primero lo que se ejecuta y después los tipos. Con instrucciones de nivel superior, `Program.cs` tiene dos partes y **van en este orden**: arriba el código que se ejecuta y abajo las declaraciones de tipos (delegados y clases). El 09/11 el profesor dividió el archivo con comentarios de sección:
+
+<Recorrido
+  titulo="Program.cs (09/11, versión final)"
+  lenguaje="csharp"
+  codigo={`//Ejecución de la función principal
+Operacion op = Calculadora.Sumar;
+Calculadora calc = new Calculadora();
+op += calc.Restar;
+
+// Ejecucion del delegado
+foreach (Operacion operacion in op.GetInvocationList())
+{
+    int resultado = operacion(10, 5);
+    Console.WriteLine($"Resultado: {resultado}");
+}
+
+// Definiciones
+// Funciones
+delegate int Operacion(int a, int b);
+
+// Clases
+class Calculadora
+{
+    // ...
+}`}
+>
+  <Paso lineas="1-4" titulo="Instrucciones de nivel superior">
+    Lo primero del archivo es el código que se ejecuta al arrancar. Esto es lo que en Java iría dentro del `main`.
+  </Paso>
+  <Paso lineas="6-11" titulo="Más instrucciones">
+    Todo lo que se ejecuta tiene que ir seguido, antes de cualquier tipo.
+  </Paso>
+  <Paso lineas="13-15" titulo="Declaraciones de tipos">
+    Un `delegate` es un **tipo**, igual que una clase. Por eso va abajo.
+  </Paso>
+  <Paso lineas="17-21" titulo="Clases">
+    Las clases también van al final (o en su propio archivo, como `Validador.cs` y `Reloj.cs`).
+  </Paso>
+</Recorrido>
+
+Si subes la declaración del `delegate` encima del código que se ejecuta, sale el error **CS8803**: *"Las instrucciones de nivel superior deben preceder a las declaraciones de espacio de nombres y de tipos"*. En clase se probó y se deshizo el cambio.
+
+<Comparar titulo="Orden en Program.cs">
+  <Lado tipo="evitar" titulo="Da CS8803">
+
+```csharp
+delegate int Operacion(int a, int b);
+
+Operacion op = Calculadora.Sumar;
+op(4, 5);
+
+// class Calculadora { ... } más abajo
+```
+
+  </Lado>
+  <Lado tipo="bien" titulo="Compila">
+
+```csharp
+Operacion op = Calculadora.Sumar;
+op(4, 5);
+
+delegate int Operacion(int a, int b);
+// class Calculadora { ... } más abajo
+```
+
+  </Lado>
+</Comparar>
+
+### Funciones locales
+
+<DeClase fecha="05/11" proyecto="Clase1" nota="Ejercicio 1 de la hoja 1" />
+
+Como no hay clase `Program` donde meter métodos, en clase se escriben **funciones locales**: un método declarado entre las instrucciones de nivel superior. Se declara con su tipo y su nombre, y se llama como cualquier método:
+
+```csharp title="Program.cs"
+void Ejercicio1 ()
+{
+    Console.Write("Introduce número 1: ");
+    int num1 = Convert.ToInt32(Console.ReadLine());
+    // ...
+}
+
+Ejercicio1();
+```
+
+- Se puede llamar antes o después de declararla: `ImprimeHaPasadoUnSegundo()` del 19/11 está declarada al final y se usa arriba.
+- Si la declaras y no la llamas, sale el aviso **CS8321** (función local declarada que no se usa).
+- Mientras la escribes pueden salir **CS1547** (`void` en un sitio donde no va), **CS1001** (falta un identificador) o **CS1002** (falta un `;`).
+- Una función local puede usar las variables de alrededor (por ejemplo, un contador `segundo`). Si la marcas como `static`, ya no puede: error **CS8421**. Se vio el 19/11, en [Eventos](/docs/2-dam/desarrollo-de-interfaces/csharp/eventos#captura-de-variables).
+- Dentro de `Program.cs` no puedes declarar dos variables con el mismo nombre en ámbitos anidados: error **CS0136**. El 19/11 pasó con una `x` del ejercicio del validador.
+
+## Crear una clase nueva
+
+<DeClase fecha="05/11" proyecto="Clase1" />
+
+**Archivo → Nuevo → Archivo → "Clase de C#"**. La plantilla genera esto:
+
+```csharp title="Class1.cs"
+using System;
+
+public class Class1
+{
+    public Class1()
+    {
+    }
+}
+```
+
+Es como en Java: una clase pública con un constructor vacío. Fíjate en que la llave de apertura va en su propia línea y que el `using System;` hace lo que un `import`. `Validador.cs` (18/11) y `Reloj.cs` (19/11) empiezan igual, con `using System;` y `public class ...`. Desde `Program.cs` se usan sin `using`, porque están en el mismo proyecto y sin `namespace`.
+
+## Herramientas de Visual Studio que se usan en clase
+
+| Herramienta | Para qué |
+| --- | --- |
+| **IntelliSense** | Completa el código y enseña las sobrecargas de un método (por ejemplo, las de `Console.Write`), su documentación y el tipo de lo que tienes debajo del ratón (`System.String`, `System.Int32`…). |
+| **Fragmentos** (*snippets*) | Escriben estructuras enteras. En clase se usó el de `foreach`. |
+| **CodeLens** | El texto pequeño "N referencias" encima de cada método. |
+| **Resaltado de referencias** | Al poner el cursor en un nombre se marcan todos los sitios donde se usa. |
+| **Bombilla** (acciones rápidas) | `Ctrl+.` o `Alt+Entrar`. Propone correcciones. Ojo: no siempre aciertan. El 18/11 propuso "Generar class ValidarNumero", que no era la solución. |
+| **TAB para generar el manejador** | Al escribir `reloj.OnSegundo +=`, IntelliSense ofrece crear `Reloj_OnSegundo` pulsando TAB. |
+| **Lista de errores** y **ventana Salida** | La primera enseña los errores y avisos con su código (CS…). La segunda, lo que pasa al compilar. |
+| **`Ctrl+F5`** | Ejecuta sin depurar. |
+| **`//` y `/* */`** | En clase se comenta el código de días anteriores para dejarlo apartado sin borrarlo. |
+| **Cerrar la consola sola** | **Herramientas → Opciones → Depuración**: hay una opción para que la consola se cierre al terminar la depuración. Visual Studio lo recuerda al final de cada ejecución. |
+
+## Avisos del IDE que salen a menudo
+
+<Callout type="warn" title="MSB3026, MSB3027 y MSB3021: el .exe está bloqueado">
+  Salen al volver a compilar con la consola de la ejecución anterior **todavía abierta**: Visual Studio no puede sobrescribir `Clase1.exe` porque se está usando. Cierra la ventana de la consola y vuelve a ejecutar. Salió el 05/11 y el 19/11.
+</Callout>
+
+<Callout type="warn" title="ENC0118: Editar y continuar">
+  Si cambias el código de nivel superior mientras depuras, el cambio no se aplica hasta que reinicias la ejecución.
+</Callout>
+
+<Callout title="¿Ejecutar la última versión que compiló bien?">
+  Si hay errores de compilación y le das a ejecutar, Visual Studio pregunta si quieres lanzar la última versión buena (pasó el 19/11 con el CS0136). Si dices que sí, estarás probando **el código de antes**, no el que tienes en pantalla. Mejor arregla el error primero.
+</Callout>
+
+## Practica
+
+<Quiz titulo="Test: Visual Studio y Clase1">
+  <Pregunta enunciado="¿Qué versión de .NET usa el proyecto Clase1?" explicacion="El proyecto apunta a `net8.0`, que es también el nombre de la carpeta donde queda el `.exe`.">
+    <Opcion>.NET Framework 4.8</Opcion>
+    <Opcion>.NET 6</Opcion>
+    <Opcion correcta>.NET 8</Opcion>
+    <Opcion>.NET 9</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Con instrucciones de nivel superior, ¿dónde van las declaraciones de delegados y clases en `Program.cs`?" explicacion="El código que se ejecuta va primero; los tipos, después. Si no, error CS8803.">
+    <Opcion>Arriba del todo, antes del código</Opcion>
+    <Opcion correcta>Abajo, después de todas las instrucciones que se ejecutan</Opcion>
+    <Opcion>Da igual el orden</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿Qué código de error sale si declaras un tipo antes de las instrucciones de nivel superior? (escribe solo el código, por ejemplo CS0000)" respuesta="CS8803" />
+  <Pregunta enunciado="Compilas y salen MSB3026 y MSB3027 porque no se puede copiar `Clase1.exe`. ¿Qué haces?" explicacion="El `.exe` está bloqueado porque la consola de la ejecución anterior sigue abierta.">
+    <Opcion>Reinstalar .NET 8</Opcion>
+    <Opcion correcta>Cerrar la consola de la ejecución anterior y volver a ejecutar</Opcion>
+    <Opcion>Borrar `Program.cs`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Una función local se puede llamar desde una línea que está antes de su declaración." respuesta={true} explicacion="Sí. En el 19/11, `ImprimeHaPasadoUnSegundo` se declara al final de `Program.cs` y se usa arriba." />
+  <Pregunta enunciado="¿Qué atajo abre las acciones rápidas (la bombilla)?" explicacion="`Ctrl+.` o `Alt+Entrar`. `Ctrl+F5` ejecuta sin depurar.">
+    <Opcion correcta>`Ctrl+.`</Opcion>
+    <Opcion>`Ctrl+F5`</Opcion>
+    <Opcion>`F12`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Declaras `void Ejercicio2() { ... }` en `Program.cs` pero no la llamas. ¿Qué pasa?" explicacion="Es un aviso, no un error: el programa compila, pero la función no se ejecuta nunca.">
+    <Opcion>Error CS8803 y no compila</Opcion>
+    <Opcion correcta>Aviso CS8321: está declarada y no se usa</Opcion>
+    <Opcion>Se ejecuta sola al arrancar</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: el proyecto de clase">
+  <Tarjeta frente="Tipo de proyecto de Clase1">Aplicación de **consola** de .NET 8 con instrucciones de nivel superior.</Tarjeta>
+  <Tarjeta frente="Orden de `Program.cs`">Primero las instrucciones que se ejecutan; después los tipos (delegados y clases).</Tarjeta>
+  <Tarjeta frente="Función local">Un método declarado dentro de las instrucciones de nivel superior: `void Ejercicio1() { ... }`.</Tarjeta>
+  <Tarjeta frente="Crear una clase en Visual Studio">Archivo → Nuevo → Archivo → "Clase de C#". Genera `using System;` y una clase pública con constructor vacío.</Tarjeta>
+  <Tarjeta frente="`Ctrl+F5`">Ejecutar sin depurar.</Tarjeta>
+  <Tarjeta frente="MSB3026 / MSB3027 / MSB3021">El `.exe` está bloqueado porque la consola anterior sigue abierta.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Ordena Program.cs" dificultad="facil">
+  Este `Program.cs` no compila. Di qué error da y reordénalo:
+
+```csharp
+class Saludador
+{
+    public static void Saluda(string n) => Console.WriteLine($"Hola, {n}");
+}
+
+Saludador.Saluda("DAM2");
+```
+
+  <Pista>Fíjate en qué va primero: ¿una instrucción que se ejecuta o la declaración de un tipo?</Pista>
+
+  <Solucion>
+
+Da **CS8803**: las instrucciones de nivel superior tienen que ir antes que los tipos. Solución propia:
+
+```csharp title="Program.cs"
+Saludador.Saluda("DAM2");
+
+class Saludador
+{
+    public static void Saluda(string n) => Console.WriteLine($"Hola, {n}");
+}
+```
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="De la forma del PDF a la de clase" dificultad="facil">
+  Pasa este programa con `Main` a instrucciones de nivel superior con una función local:
+
+```csharp
+class Program
+{
+    static void Despedida()
+    {
+        Console.WriteLine("Hasta el lunes");
+    }
+
+    static void Main()
+    {
+        Console.WriteLine("Fin de la clase");
+        Despedida();
+    }
+}
+```
+
+  <Pista>Todo lo que hay dentro de `Main` pasa a ser instrucciones de nivel superior. `Despedida` pasa a ser una función local.</Pista>
+
+  <Solucion>
+
+Solución propia:
+
+```csharp title="Program.cs"
+Console.WriteLine("Fin de la clase");
+Despedida();
+
+void Despedida()
+{
+    Console.WriteLine("Hasta el lunes");
+}
+```
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

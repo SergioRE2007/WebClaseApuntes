@@ -1,0 +1,387 @@
+---
+title: Arrays, estructuras de control y métodos
+description: Arrays con inicializador y con expresión de colección, foreach y for, Array.Sort y LINQ, if, ternario, switch, bucles, break y continue, métodos y funciones locales (clase del 05/11).
+icon: Brackets
+---
+
+Segunda parte del repaso de la UD2 del 05/11: **arrays**, **estructuras de control** y **métodos**. Casi todo funciona igual que en Java, así que nos centramos en lo que cambia y en el código que se vio.
+
+<DeClase fecha="05/11" proyecto="Clase1" nota="PDF de la UD2, págs. 20-28" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Crear arrays con `{ ... }` y con la expresión de colección `[ ... ]` de C# 12.
+  - Recorrerlos con `foreach` y con `for`, ordenarlos con `Array.Sort` y usar `Max`, `Min` y `Sum`.
+  - `if`, el operador ternario, `switch`, `while`, `do/while`, `break` y `continue`.
+  - Cómo se escriben los métodos en el PDF y cómo se escribieron en clase.
+  - Los enunciados de la hoja 2.
+</Callout>
+
+## Arrays
+
+### Crear un array
+
+Hay dos formas, y en clase salieron las dos:
+
+<Tabs items={['Inicializador (PDF)', 'Expresión de colección (clase)']}>
+  <Tab value="Inicializador (PDF)">
+
+```csharp
+string[] coches = { "Ford", "Seat", "Audi" };
+```
+
+Igual que en Java.
+
+  </Tab>
+  <Tab value="Expresión de colección (clase)">
+
+```csharp
+int[] misNumeros = [1, 2, 3, 4, 5];
+```
+
+Es nueva de **C# 12**, que viene con .NET 8. Usa corchetes en vez de llaves.
+
+  </Tab>
+</Tabs>
+
+### Leer y cambiar valores
+
+- El índice empieza en 0: `coches[0]` es `"Ford"`.
+- Se cambia un valor asignándolo: `coches[0] = "Opel";`.
+- `Length` (con mayúscula) da el tamaño.
+
+<Callout type="warn" title="Erratas del PDF">
+  En los ejemplos de arrays del PDF se mezclan los nombres `coches` y `cars` para el mismo array. Es el mismo ejemplo: no busques dos arrays distintos.
+</Callout>
+
+### Recorrer un array
+
+<DeClase fecha="05/11" proyecto="Clase1" nota="escrito en clase y comentado después" />
+
+```csharp title="Program.cs (05/11)"
+int[] misNumeros = [1, 2, 3, 4, 5];
+
+foreach (int numero in misNumeros)
+{
+    Console.WriteLine(numero);
+}
+
+for (int i = 0; i < misNumeros.Length; i++)
+{
+    Console.WriteLine(misNumeros[i]);
+}
+```
+
+Los dos bucles escriben 1, 2, 3, 4 y 5. Cuándo usar cada uno:
+
+- **`foreach`** si solo necesitas cada elemento. Visual Studio tiene un fragmento (*snippet*) que lo escribe por ti.
+- **`for`** si necesitas el **índice** (para saber la posición o para cambiar el valor).
+
+### Ordenar y sacar máximo, mínimo y suma
+
+El PDF enseña `Array.Sort(cars)` para ordenar y, con `System.Linq`, los métodos `Max()`, `Min()` y `Sum()`. Con la plantilla de .NET 8 no hace falta escribir el `using System.Linq;`, porque viene entre los *usings* implícitos.
+
+Un ejemplo propio con números (`Sum()` solo funciona con arrays numéricos, no con un array de `string`):
+
+```csharp title="Ejemplo propio"
+int[] notas = [7, 3, 9, 5];
+Array.Sort(notas);               // queda 3, 5, 7, 9
+Console.WriteLine(notas.Max());  // 9
+Console.WriteLine(notas.Min());  // 3
+Console.WriteLine(notas.Sum());  // 24
+```
+
+`Array.Sort` cambia el array (no devuelve uno nuevo), igual que `Arrays.sort` en Java.
+
+## Estructuras de control
+
+<DeClase fecha="05/11" nota="PDF de la UD2, págs. 22-27" />
+
+### Comparaciones e `if`
+
+Los operadores son los de Java: `<`, `<=`, `>`, `>=`, `==` y `!=`. El `if` / `else if` / `else` también es igual.
+
+<Callout type="warn" title="Otra errata del PDF">
+  En el PDF aparecen `a> = b` y `a! = B`. Son `a >= b` y `a != b`: los operadores van juntos, sin espacio. Además, el apartado 5 se titula "Estructuras iterativas" aunque empieza por los condicionales.
+</Callout>
+
+### Operador ternario
+
+```csharp title="PDF, pág. 24"
+int hora = 13;
+string resultado = (hora < 12) ? "Buenos días" : "Buenas tardes";
+```
+
+Con `hora = 13` vale `"Buenas tardes"`. La forma es `variable = (condición) ? siVerdadero : siFalso;`.
+
+### `switch`
+
+```csharp title="PDF, pág. 25"
+int dia = 4;
+switch (dia)
+{
+    case 1: Console.WriteLine("Lunes"); break;
+    // ... así hasta case 7: "Domingo"
+    case 4: Console.WriteLine("Jueves"); break;
+}
+```
+
+Escribe `Jueves`. Lo que se explicó:
+
+- La expresión del `switch` se evalúa **una sola vez**.
+- Cada `case` acaba en `break`.
+- `default` es opcional: se ejecuta si no coincide ningún `case`.
+
+<NoDadoEnClase titulo="Diferencia con Java">
+  En C# el `break` no es opcional: si un `case` tiene código y no acaba en `break`, **no compila** (en Java pasaría al siguiente `case`). No se dijo en clase, pero es lo que te vas a encontrar si te lo dejas.
+</NoDadoEnClase>
+
+### `while` y `do/while`
+
+```csharp title="PDF, pág. 26"
+int i = 0;
+while (i < 5) { Console.WriteLine(i); i++; }
+```
+
+```csharp title="PDF, pág. 26"
+int i = 0;
+do { Console.WriteLine(i); i++; } while (i < 5);
+```
+
+- `while` comprueba la condición **antes** de entrar: puede no ejecutarse nunca.
+- `do/while` la comprueba **después**: se ejecuta **al menos una vez**.
+
+La diferencia solo se nota cuando la condición es falsa desde el principio. Un ejemplo propio, empezando con `i = 5`:
+
+<Comparar columnas titulo="Con int i = 5;">
+  <Lado titulo="while">
+
+```csharp
+int i = 5;
+while (i < 5)
+{
+    Console.WriteLine(i);
+    i++;
+}
+// no escribe nada
+```
+
+  </Lado>
+  <Lado titulo="do/while">
+
+```csharp
+int i = 5;
+do
+{
+    Console.WriteLine(i);
+    i++;
+} while (i < 5);
+// escribe 5
+```
+
+  </Lado>
+</Comparar>
+
+Con el `i = 0` del PDF, los dos escriben de 0 a 4. En el PDF son ejemplos sueltos (la `i` se declara en varios). El 18/11 se usó un `do/while` de verdad, que vuelve a pedir un número hasta que cumple todas las validaciones: lo tienes en [Validador, métodos anónimos y lambdas](/docs/2-dam/desarrollo-de-interfaces/csharp/validador-y-lambdas).
+
+### `break` y `continue`
+
+El ejemplo del PDF usa `break`. Al lado tienes lo que pasa si pones `continue` en su lugar (esa versión es nuestra):
+
+<Comparar columnas titulo="Una sola palabra de diferencia">
+  <Lado titulo="break (PDF, pág. 27)">
+
+```csharp
+for (int i = 0; i < 10; i++)
+{
+    if (i == 4) { break; }
+    Console.WriteLine(i);
+}
+```
+
+```text title="Salida"
+0
+1
+2
+3
+```
+
+  </Lado>
+  <Lado titulo="continue (ejemplo propio)">
+
+```csharp
+for (int i = 0; i < 10; i++)
+{
+    if (i == 4) { continue; }
+    Console.WriteLine(i);
+}
+```
+
+```text title="Salida"
+0
+1
+2
+3
+5
+6
+7
+8
+9
+```
+
+  </Lado>
+</Comparar>
+
+- `break` **sale** del bucle: al llegar a 4 se acaba, así que solo se escriben 0, 1, 2 y 3.
+- `continue` **salta a la siguiente vuelta** sin acabar la actual. Si en el ejemplo cambias `break` por `continue`, se escriben del 0 al 9 menos el 4.
+
+## Métodos
+
+<DeClase fecha="05/11" nota="PDF de la UD2, pág. 28, y Ejercicio 1 en clase" />
+
+En el PDF los métodos se escriben dentro de `class Program`, como en Java:
+
+```csharp title="PDF, pág. 28"
+class Program
+{
+    static void MiMetodo()
+    {
+        // Código a ejecutarse
+    }
+}
+```
+
+- `static`: el método es de la clase, no de un objeto. Se llama sin crear nada.
+- `void`: no devuelve nada.
+
+En clase, con la plantilla sin `Main`, se escriben como **funciones locales**: `void Ejercicio1() { ... }` y se llaman con `Ejercicio1();`. Lo tienes explicado en [Visual Studio y el proyecto Clase1](/docs/2-dam/desarrollo-de-interfaces/csharp/visual-studio-y-proyecto#funciones-locales). Los métodos con parámetros y valor de retorno, y la diferencia entre `static` y de instancia, se ven con la `Calculadora` en [Delegados](/docs/2-dam/desarrollo-de-interfaces/csharp/delegados).
+
+## Ejercicios de la hoja 2
+
+<DeClase fecha="05/11" nota="hoja Ejercicio 2_Estructuras iterativas, 3 páginas" />
+
+Los enunciados que se enseñaron en clase (resumidos):
+
+1. El mayor de dos números, con un solo `WriteLine` y **sin concatenar**.
+2. Factura de la luz por tramos: más de 1800, a 0,8; entre 1000 y 1800, a 0,12; menos de 1000, a 0,14.
+3. Estado civil (C, S, V o D) con `switch` y `default`.
+4. La tabla de multiplicar de un número del 1 al 9, comprobando el rango, con el formato "8 x 3 = 24".
+5. Métodos de `string` sobre un texto: longitud, si contiene un texto, reemplazar una letra, mayúsculas, minúsculas, quitar un carácter y sacar una subcadena.
+6. Factorial.
+7. El abecedario de la Z a la A con los códigos ASCII (90 a 65) y `Convert.ToString`.
+8. Un número aleatorio entre 10 y 30 con `Random`.
+9. Un array del tamaño que diga el usuario, diciendo qué valores son pares y cuáles impares.
+10. Un array de 10 enteros ordenado con `System.Array` y recorrido con `for`.
+11. Una pila con `System.Collections.Stack`: meter valores, mostrarlos, sacar dos y volver a mostrarlos.
+
+<NoSeVio titulo="Soluciones de la hoja 2">
+  No se resolvió ninguno en clase. Las hojas "Ejercicio 3_métodos y clases" y "Ejercicio 4/5 Refuerzo" existen, con sus soluciones, pero estaban ocultas en Moodle.
+</NoSeVio>
+
+## Practica
+
+<CompletarCodigo
+  titulo="Recorrer con foreach"
+  enunciado="Completa el código para sumar todos los números del array."
+  lenguaje="csharp"
+  codigo={`int[] misNumeros = [1, 2, 3, 4, 5];
+int suma = 0;
+[[foreach]] (int numero [[in]] misNumeros)
+{
+    suma += numero;
+}
+Console.WriteLine($"Hay {misNumeros.[[Length]]} números y suman {suma}");`}
+/>
+
+<Quiz titulo="Test: arrays y control">
+  <Pregunta enunciado="¿Cuál de estas líneas crea un array con una expresión de colección de C# 12?" explicacion="Las expresiones de colección usan corchetes. Las llaves son el inicializador de siempre.">
+    <Opcion>`int[] nums = { 1, 2, 3 };`</Opcion>
+    <Opcion correcta>`int[] nums = [1, 2, 3];`</Opcion>
+    <Opcion>`int[] nums = new int(1, 2, 3);`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Necesitas la posición de cada elemento mientras recorres el array. ¿Qué bucle usas?" explicacion="`foreach` solo te da el elemento; con `for` tienes el índice `i`.">
+    <Opcion>`foreach`</Opcion>
+    <Opcion correcta>`for`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿Cuántas líneas escribe el ejemplo de `break` del PDF (`for` de 0 a 9 con `if (i == 4) break;`)?" respuesta="4" explicacion="Escribe 0, 1, 2 y 3; al llegar a 4 sale del bucle antes del `WriteLine`." />
+  <Pregunta tipo="vf" enunciado="Un `do/while` se ejecuta al menos una vez aunque la condición sea falsa desde el principio." respuesta={true} explicacion="Comprueba la condición al final de cada vuelta." />
+  <Pregunta enunciado='Con `int hora = 13;`, ¿qué vale `(hora < 12) ? "Buenos días" : "Buenas tardes"`?' explicacion="13 no es menor que 12, así que se queda el valor de después de los dos puntos.">
+    <Opcion>`"Buenos días"`</Opcion>
+    <Opcion correcta>`"Buenas tardes"`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué hace `continue` dentro de un bucle?" explicacion="`break` sale del bucle; `continue` deja la vuelta actual y pasa a la siguiente.">
+    <Opcion>Sale del bucle</Opcion>
+    <Opcion correcta>Pasa a la siguiente vuelta sin acabar la actual</Opcion>
+    <Opcion>Repite la vuelta actual</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué escribe `Console.WriteLine(notas.Sum());` con `int[] notas = [7, 3, 9, 5];`?" explicacion="7 + 3 + 9 + 5 = 24. `Sum()` es de LINQ.">
+    <Opcion>`4`</Opcion>
+    <Opcion correcta>`24`</Opcion>
+    <Opcion>`9`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: arrays y control">
+  <Tarjeta frente="Tamaño de un array">`array.Length`</Tarjeta>
+  <Tarjeta frente="Ordenar un array">`Array.Sort(array)`. Cambia el propio array.</Tarjeta>
+  <Tarjeta frente="Máximo, mínimo y suma">`Max()`, `Min()` y `Sum()`, de `System.Linq` (incluido en los *usings* implícitos).</Tarjeta>
+  <Tarjeta frente="`while` frente a `do/while`">`while` comprueba antes de entrar; `do/while` se ejecuta al menos una vez.</Tarjeta>
+  <Tarjeta frente="Reglas del `switch` vistas en clase">La expresión se evalúa una vez, cada `case` acaba en `break` y `default` es opcional.</Tarjeta>
+  <Tarjeta frente="`static void MiMetodo()`">`static`: es de la clase, no de un objeto. `void`: no devuelve nada.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Hoja 2, ejercicio 1: el mayor sin concatenar" dificultad="facil">
+  Pide dos números y muestra el mayor con **un solo** `Console.WriteLine` y **sin** usar `+` para montar el texto.
+
+  <Pista>Usa un marcador `{0}` del formato compuesto.</Pista>
+  <Pista>El operador ternario te da el mayor en una sola expresión.</Pista>
+
+  <Solucion>
+
+Solución propia:
+
+```csharp title="Program.cs"
+Console.Write("Primer número: ");
+int a = Convert.ToInt32(Console.ReadLine());
+Console.Write("Segundo número: ");
+int b = Convert.ToInt32(Console.ReadLine());
+
+Console.WriteLine("El mayor es {0}", a > b ? a : b);
+```
+
+Con interpolación también vale: `Console.WriteLine($"El mayor es {(a > b ? a : b)}");`. El ternario va entre paréntesis porque los `:` dentro de las llaves se confundirían con un especificador de formato.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Hoja 2, ejercicio 4: tabla de multiplicar" dificultad="media">
+  Versión propia del ejercicio 4: pide un número del 1 al 9. Si está fuera de rango, **vuelve a pedirlo**. Después escribe su tabla del 1 al 10 con el formato `8 x 3 = 24`.
+
+  <Pista>Un `do/while` es perfecto para "pedir hasta que sea válido": se ejecuta al menos una vez.</Pista>
+  <Pista>Para el formato, `"{0} x {1} = {2}"` con tres argumentos.</Pista>
+
+  <Solucion>
+
+Solución propia:
+
+```csharp title="Program.cs"
+int n;
+do
+{
+    Console.Write("Número del 1 al 9: ");
+    n = Convert.ToInt32(Console.ReadLine());
+} while (n < 1 || n > 9);
+
+for (int i = 1; i <= 10; i++)
+{
+    Console.WriteLine("{0} x {1} = {2}", n, i, n * i);
+}
+```
+
+Con 8, la tercera línea es `8 x 3 = 24`.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

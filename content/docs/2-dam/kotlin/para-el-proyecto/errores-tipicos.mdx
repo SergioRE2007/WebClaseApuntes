@@ -1,0 +1,209 @@
+---
+title: Errores típicos en Android
+description: Los errores que más salen al hacer la app Android (red, Hilt, Room, Gradle y pantalla), con el mensaje, por qué pasa y cómo se arregla. Se marcan los que salieron en clase.
+icon: Bug
+---
+
+Cada error con el mensaje que sale (o lo que se ve), por qué pasa y qué hacer. Busca el mensaje con Ctrl+F o abre el grupo que te toque.
+
+<NoDadoEnClase>
+  Los errores marcados con **(salió en clase)** se vieron en clase, con su fecha. Dos más llevan una nota con lo que sí se vio (la anotación de la `Application` y el `minSdk 35`). El resto no salieron: son los típicos al hacer el proyecto, sobre todo al pasar de PokeAPI a tu propia API.
+</NoDadoEnClase>
+
+<Callout type="idea" title="Antes de buscar aquí">
+  Lee el **primer** error de Build Output (los demás suelen ser consecuencia de ese), como se hizo en clase el 13/11. Si la app se cierra al ejecutar, el error está en el **Logcat**: filtra por `package:mine` (18/11) y busca la línea `Caused by:`.
+</Callout>
+
+## Red y API
+
+<Accordions type="multiple">
+  <Accordion title="CLEARTEXT communication to 10.0.2.2 not permitted by network security policy">
+    Android no deja usar `http`, solo `https`. Hay que permitirlo para tu ordenador con `network_security_config.xml` y enlazarlo en el manifest con `android:networkSecurityConfig`. Está en [Conectar con tu API](/docs/2-dam/kotlin/para-el-proyecto/conectar-con-tu-api).
+  </Accordion>
+  <Accordion title="Failed to connect to localhost/127.0.0.1:3000">
+    En el emulador, `localhost` es el propio emulador. Usa `10.0.2.2`. En un móvil de verdad, la IP del ordenador en la wifi (y los dos en la misma red).
+  </Accordion>
+  <Accordion title="SecurityException: Permission denied (missing INTERNET permission?) (salió en clase)">
+    <DeClase fecha="26/10" proyecto="PokeApp2627" nota="se añadió el permiso" />
+
+    Falta `<uses-permission android:name="android.permission.INTERNET" />` en el manifest, fuera de `<application>`.
+  </Accordion>
+  <Accordion title="IllegalArgumentException: baseUrl must end in /">
+    La `baseUrl` de Retrofit tiene que acabar en `/`, y las rutas de `@GET` no deben empezar por `/`: `BASE_URL = "http://10.0.2.2:3000/"` y `@GET("api/productos")`.
+  </Accordion>
+  <Accordion title="Expected BEGIN_OBJECT but was BEGIN_ARRAY (o al revés)">
+    El tipo de la función de Retrofit no coincide con el JSON. Pasa mucho con los listados paginados: la API devuelve `{ "items": [...], "total": ... }` (un objeto) y la función dice `List<ProductoDto>` (una lista). Usa `PaginaDto<ProductoDto>`, como en [CRUD con Retrofit](/docs/2-dam/kotlin/para-el-proyecto/crud-con-retrofit).
+  </Accordion>
+  <Accordion title="Los datos llegan, pero las propiedades salen null o 0">
+    El nombre de la propiedad no es igual que en el JSON (por ejemplo, `imageUrl` y `image_url`). Se arregla con `@SerializedName("image_url")` encima de la propiedad, como el `front_default` de clase.
+  </Accordion>
+  <Accordion title="Todo va bien en debug, pero en release los DTO llegan vacíos">
+    R8 renombra las propiedades al optimizar y Gson ya no las encuentra. Pon `@Keep` en los DTO o reglas de ProGuard para ellos.
+  </Accordion>
+</Accordions>
+
+## Hilt
+
+<Accordions type="multiple">
+  <Accordion title="Cannot create an instance of class ...ViewModel, con NoSuchMethodException (salió en clase)">
+    <DeClase fecha="18/11" proyecto="ToDoOfflineFirst" />
+
+    Al ViewModel le falta `@HiltViewModel` o el `@Inject constructor`, o la pantalla lo crea con `viewModel()` en vez de con `hiltViewModel()`. Sin `@HiltViewModel`, se intenta crear con un constructor vacío que no existe. `@Inject constructor()` hace falta aunque no tenga parámetros.
+  </Accordion>
+  <Accordion title="Hilt Activity must be attached to an @HiltAndroidApp Application">
+    <DeClase fecha="26/10" proyecto="PokeApp2627" nota="salió la anotación equivocada en la Application, no este mensaje" />
+
+    Falta `android:name=".MainApplication"` (o como se llame tu clase) en el `<application>` del manifest, o la clase `Application` no tiene `@HiltAndroidApp`. El 26/10 se le puso `@AndroidEntryPoint` por error: esa anotación es para la Activity.
+  </Accordion>
+  <Accordion title="[Dagger/MissingBinding] ... cannot be provided without an @Provides-annotated method">
+    Hilt no sabe crear algo que se pide. Normalmente falta el `@Binds` de una interfaz (por ejemplo, `ProductoRepository` → `ProductoRepositoryImpl`) o el `@Inject constructor` de una clase. Si es el `DataStore<Preferences>`, falta el `DataStoreModule` de [DataStore](/docs/2-dam/kotlin/para-el-proyecto/datastore).
+  </Accordion>
+  <Accordion title="[Dagger/DuplicateBindings]">
+    Dos módulos dan lo mismo (por ejemplo, dos `@Provides` de `DataStore<Preferences>`). Deja solo uno.
+  </Accordion>
+</Accordions>
+
+## Room
+
+<Accordions type="multiple">
+  <Accordion title="Room cannot verify the data integrity. Looks like you've changed schema but forgot to update the version number">
+    Has cambiado una entidad y en el móvil sigue la base vieja. Sube `version` en `@Database` y añade una migración. En desarrollo, basta con desinstalar la app. Es justo la demostración que te pueden pedir en la defensa.
+  </Accordion>
+  <Accordion title="Errores de KSP con el SQL de una @Query (salió en clase)">
+    <DeClase fecha="13/11" proyecto="Room" />
+
+    Room comprueba las consultas al compilar. Los nombres de tablas no pueden ser parámetros: el `FROM :pokemon` de clase tenía que ser `FROM pokemon`. Los `:nombre` solo valen para valores (`WHERE id = :id`).
+  </Accordion>
+  <Accordion title="Cannot have empty 'parentColumns' in @Relation">
+    Estás usando Room 3 con la forma de Room 2. En Room 3 es `@Relation(parentColumns = ["id"], entityColumns = ["categoriaId"])`. Mira [Room con relaciones](/docs/2-dam/kotlin/para-el-proyecto/room-relaciones).
+  </Accordion>
+  <Accordion title="FOREIGN KEY constraint failed (code 787)">
+    Se guarda un hijo cuyo padre aún no está. Guarda antes los padres: las categorías y después los productos.
+  </Accordion>
+  <Accordion title="Al refrescar desaparecen los hijos">
+    `@Insert(onConflict = REPLACE)` en una tabla padre borra la fila y la vuelve a crear, y `CASCADE` se lleva los hijos por delante. Usa `@Upsert`.
+  </Accordion>
+  <Accordion title="Schema export directory was not provided (salió en clase)">
+    <DeClase fecha="13/11" proyecto="Room" />
+
+    Es un aviso, no un error. Se quita con `exportSchema = false` en `@Database`.
+  </Accordion>
+</Accordions>
+
+## Gradle y compilación
+
+<Accordions type="multiple">
+  <Accordion title="Unresolved reference: collectAsStateWithLifecycle">
+    Falta la dependencia `lifecycle-runtime-compose`.
+  </Accordion>
+  <Accordion title="Unresolved reference: Icons (o Home, Settings…)">
+    Falta `androidx.compose.material:material-icons-core`, sin versión, porque la pone el BOM de Compose. Mira [Dependencias de Gradle](/docs/2-dam/kotlin/para-el-proyecto/dependencias-gradle).
+  </Accordion>
+  <Accordion title="Unresolved reference: BuildConfig">
+    Falta `buildConfig = true` en `buildFeatures`, o no has compilado después de añadir el `buildConfigField`.
+  </Accordion>
+  <Accordion title="KSP falla al sincronizar el proyecto">
+    Usa la versión de KSP de clase (2.3.12). Las versiones antiguas, del tipo `2.0.21-1.0.28`, solo funcionan con una versión concreta de Kotlin.
+  </Accordion>
+  <Accordion title="INSTALL_FAILED_OLDER_SDK en tu móvil">
+    <DeClase fecha="13/11" proyecto="Room" nota="se puso minSdk 35; el error no salió" />
+
+    En clase se puso `minSdk 35`, que solo instala en Android 15 o más. Bájalo (por ejemplo, a 26) y vuelve a compilar para comprobar que ninguna librería pide más. Mira [Dependencias de Gradle](/docs/2-dam/kotlin/para-el-proyecto/dependencias-gradle).
+  </Accordion>
+</Accordions>
+
+## Pantalla
+
+<Accordions type="multiple">
+  <Accordion title="Hueco doble arriba o abajo">
+    Hay un `Scaffold` dentro de otro y los dos dejan sitio para la barra de estado. Pasa `Modifier.consumeWindowInsets(innerPadding)` junto al `padding`, o quita uno de los dos.
+  </Accordion>
+  <Accordion title="La pantalla carga una y otra vez (salió en clase)">
+    <DeClase fecha="23/10" proyecto="ToDoApp" />
+
+    Se llama a `load()` dentro del composable, que se ejecuta en cada recomposición. Ponlo en el `init` del ViewModel. Mira [Prácticas raras](/docs/2-dam/kotlin/para-el-proyecto/practicas-raras).
+  </Accordion>
+  <Accordion title="La pantalla se queda en blanco al arrancar (salió en clase)">
+    <DeClase fecha="09/11" proyecto="PokeApp2627" />
+
+    Carga de datos con `CoroutineScope(Dispatchers.IO).launch` en el `init` del repositorio. Usa `viewModelScope.launch` en el ViewModel y lee de un `Flow` que avise de los cambios, como en [Room como fuente de verdad](/docs/2-dam/kotlin/para-el-proyecto/offline-first).
+  </Accordion>
+</Accordions>
+
+## Practica
+
+<Quiz titulo="Test: ¿qué error es?">
+  <Pregunta enunciado="Tu app llama a `http://10.0.2.2:3000/` y sale `CLEARTEXT communication ... not permitted`. ¿Qué arreglas?" explicacion="Android solo deja `https`. Hay que permitir `http` para `10.0.2.2` con `network_security_config.xml`.">
+    <Opcion>Cambias a `localhost`</Opcion>
+    <Opcion correcta>Añades `network_security_config.xml` y lo enlazas en el manifest</Opcion>
+    <Opcion>Añades `@SerializedName`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="La app se cae al abrir una pantalla con `NoSuchMethodException` en su ViewModel. ¿Qué es lo primero que miras?" explicacion="Que el ViewModel tenga `@HiltViewModel` y `@Inject constructor`, y que la pantalla use `hiltViewModel()`. Salió en clase el 18/11.">
+    <Opcion correcta>Si el ViewModel tiene `@HiltViewModel` y `@Inject constructor`</Opcion>
+    <Opcion>Si el manifest tiene el permiso de internet</Opcion>
+    <Opcion>Si la `baseUrl` acaba en `/`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Añades un campo a una entidad y la app se cae al abrirla con `Room cannot verify the data integrity`. En desarrollo, ¿qué es lo más rápido?" explicacion="Desinstalar la app borra la base vieja. En una app publicada habría que subir `version` y dar una migración.">
+    <Opcion>Borrar la entidad</Opcion>
+    <Opcion correcta>Desinstalar la app del emulador</Opcion>
+    <Opcion>Poner `exportSchema = false`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Las propiedades del DTO llegan a `null` aunque la API manda los datos. ¿Qué es lo más probable?" explicacion="Los nombres del DTO no son iguales que los del JSON. Se arregla con `@SerializedName`.">
+    <Opcion>Falta el permiso de internet</Opcion>
+    <Opcion correcta>Los nombres de las propiedades no coinciden con los del JSON</Opcion>
+    <Opcion>Falta `@Singleton`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`Schema export directory was not provided` impide compilar la app." respuesta={false} explicacion="Es un aviso, no un error. Se quita con `exportSchema = false` en `@Database`." />
+  <Pregunta enunciado="Hilt falla con `[Dagger/MissingBinding]` al pedir un `ProductoRepository`. ¿Qué falta?" explicacion="Hilt no sabe qué implementación dar para la interfaz. Falta el `@Binds` en un módulo.">
+    <Opcion>`@HiltAndroidApp`</Opcion>
+    <Opcion correcta>El `@Binds` que ata `ProductoRepository` a `ProductoRepositoryImpl`</Opcion>
+    <Opcion>`exportSchema = false`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En tu móvil sale `INSTALL_FAILED_OLDER_SDK`. ¿Qué cambias?" explicacion="El `minSdk` es mayor que la versión de Android del móvil. En clase se puso 35; bájalo.">
+    <Opcion>El `targetSdk`</Opcion>
+    <Opcion correcta>Bajas el `minSdk`</Opcion>
+    <Opcion>La versión de KSP</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: errores típicos">
+  <Tarjeta frente="CLEARTEXT not permitted">Falta permitir `http` con `network_security_config.xml`.</Tarjeta>
+  <Tarjeta frente="Failed to connect to localhost">En el emulador, `localhost` es el emulador. Usa `10.0.2.2`.</Tarjeta>
+  <Tarjeta frente="NoSuchMethodException en un ViewModel">Falta `@HiltViewModel` o `@Inject constructor`, o se usa `viewModel()` en vez de `hiltViewModel()`.</Tarjeta>
+  <Tarjeta frente="FOREIGN KEY constraint failed (787)">Se guarda un hijo antes que su padre. Primero las categorías, luego los productos.</Tarjeta>
+  <Tarjeta frente="Cannot have empty 'parentColumns'">Room 3 con la sintaxis de Room 2. `parentColumns = ["id"]`, en plural y con corchetes.</Tarjeta>
+  <Tarjeta frente="Expected BEGIN_OBJECT but was BEGIN_ARRAY">El tipo de la función de Retrofit no coincide con el JSON (lista frente a objeto paginado).</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Diagnostica el Logcat" dificultad="media">
+  Al pulsar "Productos", la app se cierra. En el Logcat sale:
+
+<Terminal titulo="Logcat">
+{`FATAL EXCEPTION: main
+java.lang.RuntimeException: Cannot create an instance of class com.ejemplo.tienda.ui.ProductosViewModel
+Caused by: java.lang.NoSuchMethodException: com.ejemplo.tienda.ui.ProductosViewModel.<init> []`}
+</Terminal>
+
+  ¿Qué le pasa y cómo lo arreglas?
+
+  <Pista>`<init> []` es "el constructor sin parámetros". ¿Quién intenta crear el ViewModel así?</Pista>
+
+  <Solucion>
+
+  Algo intenta crear `ProductosViewModel` con un constructor vacío, que no existe porque recibe el repositorio. Pasa cuando falta `@HiltViewModel` en la clase (es lo que pasó en clase el 18/11) o cuando la pantalla usa `viewModel()` en vez de `hiltViewModel()`. Comprueba las dos cosas:
+
+```kotlin
+@HiltViewModel
+class ProductosViewModel @Inject constructor(
+    private val repository: ProductoRepository
+) : ViewModel()
+```
+
+  y en la pantalla, `viewModel: ProductosViewModel = hiltViewModel()`.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

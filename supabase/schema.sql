@@ -192,6 +192,8 @@ end;
 $$;
 
 revoke all on function public.chat_incrementar(uuid, int) from public, anon, authenticated;
+-- Solo el servidor (service role) las llama; sin este grant falla con "permission denied".
+grant execute on function public.chat_incrementar(uuid, int) to service_role;
 
 -- Devuelve un mensaje al cupo de hoy (cuando la llamada a Claude falla antes de responder)
 create or replace function public.chat_devolver(p_usuario uuid)
@@ -205,6 +207,8 @@ as $$
 $$;
 
 revoke all on function public.chat_devolver(uuid) from public, anon, authenticated;
+-- Solo el servidor (service role) las llama; sin este grant falla con "permission denied".
+grant execute on function public.chat_devolver(uuid) to service_role;
 
 -- ---------- Intentos de código de clase (anti fuerza bruta) ----------
 create table if not exists public.unirse_intentos (
@@ -238,6 +242,8 @@ end;
 $$;
 
 revoke all on function public.unirse_intento(uuid, int) from public, anon, authenticated;
+-- Solo el servidor (service role) las llama; sin este grant falla con "permission denied".
+grant execute on function public.unirse_intento(uuid, int) to service_role;
 
 -- ---------- Storage: bucket privado para aportaciones ----------
 -- Mantén esta lista igual que MIMES_PERMITIDOS en lib/aportaciones.ts

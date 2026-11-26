@@ -1,25 +1,77 @@
 ---
 title: Proyecto Intermodular
-description: "Proyecto final del ciclo: idea, planificación, diseño, desarrollo, documentación y defensa de una aplicación multiplataforma."
+description: "Punto de partida para preparar el proyecto: qué te piden, dónde está explicado lo que no se dio en clase y lo que se ha visto en este módulo (gestión de proyectos, Scrum, Git y Vercel)."
 ---
 
-## De qué va el módulo
+El proyecto intermodular es una aplicación de tema libre con tres piezas, y cada una se evalúa en una asignatura distinta con su propia lista de requisitos:
 
-Es el **proyecto final** del ciclo, donde integras lo aprendido en los distintos módulos: desde la idea y el análisis de requisitos hasta la planificación, el diseño, el desarrollo, las pruebas, la documentación y la **defensa** ante el tribunal.
+- **La app Android** (PMDMO y PSPRO), con Kotlin, Compose, Room, Retrofit y Hilt.
+- **El backend y la base de datos** (Acceso a Datos), con Node, Express, Prisma y PostgreSQL.
+- **La web Angular** (también de Acceso a Datos), que consume esa misma API.
 
-Módulo profesional de 2º DAM.
+La app Android también consume la API que diseñáis en el proyecto, así que el backend es la pieza que une las otras dos.
 
-## Temas
+## Por dónde empezar
 
-1. Elección de la idea y estudio de viabilidad
-2. Análisis de requisitos
-3. Planificación del proyecto
-4. Diseño: arquitectura, datos e interfaces
-5. Desarrollo y control de versiones
-6. Pruebas y despliegue
-7. Memoria y documentación
-8. Preparación de la defensa
+<Steps>
+  <Step>
 
-<Callout type="info" title="Apuntes en construcción">
-  Estamos añadiendo los apuntes de este módulo poco a poco. Si tienes resúmenes, capturas de clase, ejercicios resueltos o enlaces útiles, súbelos desde [Aportar](/aportar) y los revisaremos para incluirlos.
-</Callout>
+#### Mira qué te piden y qué se dio
+
+  [Requisitos y dónde se dieron](/docs/2-dam/proyecto-intermodular/requisitos-y-donde-se-dieron) recorre los requisitos de las tres piezas: en qué clase salió cada uno, si se dio entero, a medias o nada, y qué te falta. Tiene una checklist que se guarda en tu navegador para ir marcando lo que ya tienes.
+
+  </Step>
+  <Step>
+
+#### Sitúalo en el calendario
+
+  Acceso a Datos revisa el proyecto cada semana por hitos acumulativos (de H1 a H11). Qué hay que enseñar en cada uno está en [Planificación por hitos](/docs/2-dam/apis/backend-proyecto/hitos). Las entregas de la app Android están en la página de requisitos.
+
+  </Step>
+  <Step>
+
+#### Completa lo que no se dio en clase
+
+  Cada asignatura tiene una carpeta "para el proyecto" con lo que piden los requisitos y no ha salido en clase, explicado con código y con las mismas versiones que se usan en clase. Las tienes justo debajo.
+
+  </Step>
+  <Step>
+
+#### Prepara la defensa
+
+  En la defensa te pueden pedir demostraciones prácticas y que expliques tus decisiones. La lista de demostraciones probables, con un simulacro en tarjetas, está en [Lo que te pueden pedir en la defensa](/docs/2-dam/proyecto-intermodular/requisitos-y-donde-se-dieron#lo-que-te-pueden-pedir-en-la-defensa).
+
+  </Step>
+</Steps>
+
+## Lo que falta en cada asignatura
+
+<Cards>
+  <Card icon="Smartphone" title="Android para el proyecto" href="/docs/2-dam/kotlin/para-el-proyecto" description="Room con relaciones, offline first, DataStore, llamar a tu API con el token, POST, PUT y DELETE con Retrofit, intent implícito, localización y navegación." />
+  <Card icon="ServerCog" title="Backend para el proyecto" href="/docs/2-dam/apis/backend-proyecto" description="Modelo con relaciones y seed, consultas relacionadas, listado con búsqueda y paginación, errores HTTP, transacciones, CORS y rutas protegidas." />
+  <Card icon="Route" title="Angular avanzado" href="/docs/2-dam/acceso-a-datos/angular-avanzado" description="Signals, CRUD con padre e hijo, formularios reactivos, Router con parámetros y guards, RxJS, y el listado con filtros, paginación y token contra tu API." />
+</Cards>
+
+## Temas de este módulo
+
+Lo que se ha dado en las clases del Proyecto Intermodular, más el despliegue y Git, que salieron en las actividades de Angular y en las clases de APIs:
+
+<Cards>
+  <Card icon="ListChecks" title="Requisitos y dónde se dieron" href="/docs/2-dam/proyecto-intermodular/requisitos-y-donde-se-dieron" description="Cada requisito de las tres piezas, en qué clase salió, qué falta y qué te pueden pedir en la defensa." />
+  <Card icon="Target" title="Gestión de proyectos y objetivos SMART" href="/docs/2-dam/proyecto-intermodular/gestion-de-proyectos-y-smart" description="Qué es gestionar un proyecto y cómo escribir objetivos que se puedan comprobar." />
+  <Card icon="KanbanSquare" title="Desarrollo ágil con Scrum y Jira" href="/docs/2-dam/proyecto-intermodular/desarrollo-agil-y-jira" description="Épicas, historias de usuario, tareas, Kanban y burndown, y un proyecto real organizado en Jira y Confluence." />
+  <Card icon="GitBranch" title="Git: ramas, tags y Git Graph" href="/docs/2-dam/proyecto-intermodular/git-ramas-y-tags" description="Commits con prefijo, ramas, un tag por versión y una Pull Request por refactor. Es lo que mira la trazabilidad de cada revisión." />
+  <Card icon="Rocket" title="Despliegue en Vercel" href="/docs/2-dam/proyecto-intermodular/despliegue-en-vercel" description="Publicar la web Angular con vercel.json, Production y Preview por rama, y el error de CORS contra localhost." />
+</Cards>
+
+## Cuando algo falla
+
+Cada parte tiene su página de errores típicos, con el mensaje que sale, por qué pasa y cómo se arregla:
+
+- [Errores típicos en Android](/docs/2-dam/kotlin/para-el-proyecto/errores-tipicos)
+- [Errores típicos en el backend](/docs/2-dam/apis/backend-proyecto/errores-tipicos)
+- [Errores típicos en Angular](/docs/2-dam/acceso-a-datos/angular-avanzado/errores-tipicos-angular)
+
+Si el fallo es al publicar la web, mira la tabla de diagnóstico de [Despliegue en Vercel](/docs/2-dam/proyecto-intermodular/despliegue-en-vercel).
+
+Si tienes material que pueda servir a la clase (resúmenes, capturas o ejercicios resueltos), súbelo desde [Aportar](/aportar).

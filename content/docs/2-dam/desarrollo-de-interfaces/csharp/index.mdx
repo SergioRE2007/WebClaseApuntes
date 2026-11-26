@@ -1,0 +1,84 @@
+---
+title: C#
+description: Todo lo que se ha dado de C# en Desarrollo de Interfaces (clases del 05/11, 09/11, 18/11 y 19/11), explicado para quien ya sabe Java.
+icon: Hash
+---
+
+En Desarrollo de Interfaces se ha empezado por **C# en consola**: primero un repaso del lenguaje y después **delegados**, **lambdas** y **eventos**, que son la base de cómo funcionan las interfaces gráficas (un botón "lanza un evento" y tu código lo escucha). Más adelante la unidad sigue con WPF, que todavía no se ha visto.
+
+Estos apuntes están pensados para que, si te perdiste alguna clase, puedas estudiarla solo con ellos. Se dan por sabidos los bucles, las clases y los métodos de Java: aquí se explica lo que cambia en C#.
+
+<Callout type="idea" title="Cómo se dieron las clases">
+  - **IDE**: Visual Studio Community 2022, en español.
+  - **Proyecto**: uno solo, de consola, llamado **Clase1** (.NET 8). De una clase a otra se le van añadiendo archivos: `Program.cs`, `Class1.cs`, `Validador.cs` y `Reloj.cs`.
+  - **Apuntes**: dos PDF. La **UD2 "Introducción a C#"** (43 páginas) y **"Creación de interfaces en C#"** (versión 6, 85 páginas), que empieza por los delegados.
+  - **Ejercicios**: en Moodle, por hojas.
+</Callout>
+
+## Qué se dio cada día
+
+| Fecha | Qué se vio | Dónde está |
+| --- | --- | --- |
+| 05/11 | Repaso de la UD2: consola, formato de salida, tipos, constantes, arrays, estructuras de control y métodos. Ejercicio 1 de la hoja 1 resuelto en directo. | [Consola, tipos y formato](/docs/2-dam/desarrollo-de-interfaces/csharp/consola-y-formato) y [Arrays, control y métodos](/docs/2-dam/desarrollo-de-interfaces/csharp/arrays-y-control) |
+| 09/11 | Delegados: declarar, asignar, invocar, multicast con `+=` y `GetInvocationList()`. Métodos estáticos y de instancia. | [Delegados](/docs/2-dam/desarrollo-de-interfaces/csharp/delegados) |
+| 18/11 | Validador con un delegado encadenado, métodos anónimos, lambdas y miembros con cuerpo de expresión. | [Validador, métodos anónimos y lambdas](/docs/2-dam/desarrollo-de-interfaces/csharp/validador-y-lambdas) |
+| 18/11 | Delegados genéricos `Func`, `Action` y `Predicate`, y sus límites. | [Func, Action y Predicate](/docs/2-dam/desarrollo-de-interfaces/csharp/func-action-predicate) |
+| 19/11 | Eventos: el reloj que avisa cada segundo, suscribirse y darse de baja, captura de variables y el patrón `sender` / `EventArgs` del PDF. | [Eventos](/docs/2-dam/desarrollo-de-interfaces/csharp/eventos) |
+
+Además hay tres páginas de apoyo que valen para todas las clases: las diferencias con Java, cómo es el proyecto de Visual Studio, y los errores del compilador con un glosario.
+
+## Páginas del bloque
+
+<Cards>
+  <Card icon="ArrowRightLeft" title="De Java a C#" href="/docs/2-dam/desarrollo-de-interfaces/csharp/de-java-a-csharp" description="Lo que cambia respecto a Java, con ejemplos lado a lado." />
+  <Card icon="Monitor" title="Visual Studio y el proyecto Clase1" href="/docs/2-dam/desarrollo-de-interfaces/csharp/visual-studio-y-proyecto" description="El tipo de proyecto, las instrucciones de nivel superior y las herramientas del IDE." />
+  <Card icon="Terminal" title="Consola, tipos y formato" href="/docs/2-dam/desarrollo-de-interfaces/csharp/consola-y-formato" description="Leer y escribir por consola, interpolación y especificadores de formato (05/11)." />
+  <Card icon="Brackets" title="Arrays, control y métodos" href="/docs/2-dam/desarrollo-de-interfaces/csharp/arrays-y-control" description="Arrays, if, switch, bucles, funciones locales y las hojas de ejercicios (05/11)." />
+  <Card icon="Workflow" title="Delegados" href="/docs/2-dam/desarrollo-de-interfaces/csharp/delegados" description="Un tipo que guarda métodos: multicast y GetInvocationList (09/11)." />
+  <Card icon="ListChecks" title="Validador, métodos anónimos y lambdas" href="/docs/2-dam/desarrollo-de-interfaces/csharp/validador-y-lambdas" description="Validaciones encadenadas y las tres formas de escribir un método (18/11)." />
+  <Card icon="Braces" title="Func, Action y Predicate" href="/docs/2-dam/desarrollo-de-interfaces/csharp/func-action-predicate" description="Los delegados que ya trae .NET y cuándo usar cada uno (18/11)." />
+  <Card icon="Bell" title="Eventos" href="/docs/2-dam/desarrollo-de-interfaces/csharp/eventos" description="Emisor y receptores, += y -=, closures y el patrón sender/EventArgs (19/11)." />
+  <Card icon="Bug" title="Errores y glosario" href="/docs/2-dam/desarrollo-de-interfaces/csharp/errores-y-glosario" description="Los errores CS y MSB que salieron en clase y las palabras clave." />
+</Cards>
+
+## Orden recomendado
+
+<Mermaid
+  titulo="Cada tema se apoya en el anterior"
+  chart={`flowchart LR
+    A["De Java a C#"] --> B[Visual Studio y Clase1]
+    B --> C[Consola y formato]
+    C --> D[Arrays y control]
+    D --> E[Delegados]
+    E --> F[Validador y lambdas]
+    F --> G[Func, Action, Predicate]
+    G --> H[Eventos]`}
+/>
+
+## Ejercicios de Moodle
+
+Los enunciados que se enseñaron en clase están en la página de cada tema. En resumen:
+
+| Hoja | De qué va | Dónde |
+| --- | --- | --- |
+| Ejercicio 1, "Básicos secuenciales" | 10 ejercicios de leer datos, operar y mostrar | [Consola y formato](/docs/2-dam/desarrollo-de-interfaces/csharp/consola-y-formato#ejercicios-de-la-hoja-1) |
+| Ejercicio 2, "Estructuras iterativas" | 11 ejercicios de condiciones, bucles, `string`, `Random` y arrays | [Arrays y control](/docs/2-dam/desarrollo-de-interfaces/csharp/arrays-y-control#ejercicios-de-la-hoja-2) |
+| Ejercicio 3, "Métodos y clases" y Ejercicio 4/5, "Refuerzo" | Estaban ocultas en Moodle cuando se dieron las clases | — |
+| Ejercicio 4, "Métodos anónimos" | El enunciado no se ve en clase. El 19/11 la entrega se movió al lunes 23/11/2026 a las 23:59 | [Validador y lambdas](/docs/2-dam/desarrollo-de-interfaces/csharp/validador-y-lambdas) |
+| Ejercicios 6 y 7, "Eventos y delegados I y II" | Clases que lanzan eventos con su propio `EventArgs` | [Eventos](/docs/2-dam/desarrollo-de-interfaces/csharp/eventos#ejercicios-6-y-7-de-moodle) |
+| Ejercicios 8 a 14 y `Ejemplo_Zoos` | WPF | No se ha visto todavía |
+
+<Callout type="warn" title="Las fechas de entrega, en Moodle">
+  En las capturas de clase las fechas de entrega cambian de una a otra (por ejemplo, el Ejercicio 1 aparece con el 09/11 y con el 11/11). Las buenas son las que ponga Moodle.
+</Callout>
+
+## Lo que no está en estos apuntes
+
+<NoSeVio titulo="Material sin capturas">
+  - Nada de las clases anteriores al 05/11, ni de la UD1, ni de las páginas 1-10 y 29-43 del PDF de la UD2.
+  - Las soluciones del profesor de los ejercicios 2 a 10 de la hoja 1 y de toda la hoja 2, y el código de los ejercicios 4, 6 y 7.
+  - Nada de WPF (ejercicios 8 a 14 y `Ejemplo_Zoos`).
+  - Los `EventArgs` propios, `TimeSpan` y `?.Invoke()` solo salen en enunciados o en el PDF, no en código escrito en clase.
+</NoSeVio>
+
+En cada página verás tres marcas: **No dado en clase** para lo que hemos añadido nosotros, **[dudoso]** para lo que no se leía bien en las capturas y **Esto no se llega a ver en clase** para los huecos.

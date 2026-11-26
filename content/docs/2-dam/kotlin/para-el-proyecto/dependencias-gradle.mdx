@@ -1,0 +1,260 @@
+---
+title: Dependencias de Gradle
+description: El catálogo libs.versions.toml de clase, las versiones que se usan y lo que hay que añadir para todo lo de este bloque (OkHttp, Room 3, DataStore e iconos).
+icon: Package
+---
+
+Todo lo de este bloque necesita librerías que en clase no se añadieron (o se añadieron sin que se viera la versión). Aquí tienes cómo se montó Gradle en clase el 13/11 y lo que te falta.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Para qué sirven `libs.versions.toml`, `apply false` y `ksp(...)`.
+  - Las versiones de clase, que **no hay que cambiar**.
+  - Qué dependencias añadir para Retrofit con OkHttp, Room 3, DataStore y los iconos.
+</Callout>
+
+## Lo que se vio en clase
+
+<DeClase fecha="13/11" proyecto="Room" />
+
+Un proyecto de Android tiene **dos** `build.gradle.kts` y un catálogo de versiones:
+
+<Files>
+  <Folder name="Proyecto" defaultOpen>
+    <Folder name="gradle" defaultOpen>
+      <File name="libs.versions.toml (las versiones, en un solo sitio)" />
+    </Folder>
+    <Folder name="app" defaultOpen>
+      <File name="build.gradle.kts (el de la app: plugins aplicados y dependencias)" />
+    </Folder>
+    <File name="build.gradle.kts (el de la raíz: plugins con apply false)" />
+  </Folder>
+</Files>
+
+<Tabs items={['libs.versions.toml', 'build.gradle.kts (raíz)', 'app/build.gradle.kts']}>
+  <Tab value="libs.versions.toml">
+
+```toml title="gradle/libs.versions.toml (13/11)"
+[versions]
+agp = "9.2.1"
+kotlin = "2.2.10"
+composeBom = "2026.02.01"
+ksp = "2.3.12"
+hilt = "2.60.1"
+coreSplashscreen = "1.2.0"
+
+[libraries]
+hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
+hilt-android-compiler = { module = "com.google.dagger:hilt-android-compiler", version.ref = "hilt" }
+androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "coreSplashscreen" }
+
+[plugins]
+hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+```
+
+  </Tab>
+  <Tab value="build.gradle.kts (raíz)">
+
+```kotlin title="build.gradle.kts (13/11)"
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.ksp) apply false
+    alias(libs.plugins.hilt) apply false
+}
+```
+
+  </Tab>
+  <Tab value="app/build.gradle.kts">
+
+```kotlin title="app/build.gradle.kts (13/11)"
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
+}
+android {
+    compileSdk { version = release(37) { minorApiLevel = 1 } }
+    defaultConfig { minSdk = 35; targetSdk = 37 }
+}
+dependencies {
+    implementation(libs.androidx.core.splashscreen)
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.11.0")
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.android.compiler)
+    implementation("androidx.room3:room3-runtime:3.0.3")
+    ksp("androidx.room3:room3-compiler:3.0.3")
+}
+```
+
+  </Tab>
+</Tabs>
+
+- **`[versions]`, `[libraries]` y `[plugins]`**: el catálogo pone cada versión en un solo sitio. En los `build.gradle.kts` se usa como `libs.hilt.android` (los guiones pasan a puntos).
+- **`apply false` en la raíz**: declara el plugin y su versión para todo el proyecto, pero no lo aplica ahí. Se aplica en `app`.
+- **`ksp(...)` frente a `implementation(...)`**: `ksp` es para los **compiladores** (Room y Hilt), que generan código al compilar y no van dentro de la app. `implementation` es para lo que sí usa la app al ejecutarse.
+- **El plugin de Hilt sin la dependencia `hilt-android` hace fallar el sync.** Van siempre juntos.
+- Salieron errores de `compileSdk` (`checkDebugAarMetadata`) y se pasó a `compileSdk release(37)`, con la sintaxis de AGP 9 `release(37) { minorApiLevel = 1 }`, `minSdk 35` y `targetSdk 37`.
+- La versión de Kotlin se lee como <Dudoso nota="También se lee `2.3.10`.">`2.2.10`</Dudoso>. El código de este bloque se ha compilado con **Kotlin 2.4**.
+
+### Las versiones de clase
+
+No las cambies aunque haya otras más nuevas: el código de los apuntes está escrito para ellas.
+
+| Librería | Artefacto | Versión |
+| --- | --- | --- |
+| Navigation Compose | `androidx.navigation:navigation-compose` | 2.10.2 |
+| Serialización (rutas tipadas) | `org.jetbrains.kotlinx:kotlinx-serialization-json` + plugin | 1.11.0 |
+| Hilt | `com.google.dagger:hilt-android` y `hilt-android-compiler` (ksp) | 2.60.1 |
+| Hilt ViewModel Compose | `androidx.hilt:hilt-lifecycle-viewmodel-compose` | 1.4.0 (leída en la documentación) |
+| KSP | `com.google.devtools.ksp` | 2.3.12 |
+| Retrofit y su conversor Gson | `com.squareup.retrofit2:retrofit` y `converter-gson` | 3.0.0 |
+| Room 3 | `androidx.room3:room3-runtime` y `room3-compiler` (ksp) | 3.0.3 |
+| SplashScreen | `androidx.core:core-splashscreen` | 1.2.0 |
+| Lifecycle ViewModel | `androidx.lifecycle:lifecycle-viewmodel-ktx` | 2.11.0 |
+| Activity Compose | `androidx.activity:activity-compose` | 1.13.0 |
+| Compose BOM | `androidx.compose:compose-bom` | 2026.02.01 |
+| AGP | `com.android.application` | 9.2.1 |
+
+- Gson se ve como <Dudoso nota="2.13.1 sale en el log de compilación; 2.15.0 se leyó en la página de GitHub.">2.13.1</Dudoso>. Lo trae `converter-gson`, no hace falta añadirlo.
+- `lifecycle-runtime-ktx` se lee <Dudoso nota="2.11.0 el 09/10 (lectura parcial) y 2.10.0 el 13/11.">2.11.0 o 2.10.0</Dudoso> y `core-ktx`, <Dudoso nota="1.19.1 el 09/10 y 1.19.0 el 13/11.">1.19.1 o 1.19.0</Dudoso>.
+
+<NoSeVio titulo="Versiones que no se leen">
+  En las capturas no se ve la versión de `hilt-navigation-compose`, de `lifecycle-runtime-compose` (la de `collectAsStateWithLifecycle`), de DataStore ni de Coil.
+</NoSeVio>
+
+## Lo que hay que añadir <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Estas dependencias no se añadieron en clase (o no se vio la versión). Son las que necesita el código de este bloque, compilado con las versiones de clase.
+</NoDadoEnClase>
+
+Esto va en `app/build.gradle.kts`, además de lo de clase:
+
+```kotlin title="app/build.gradle.kts"
+implementation("com.squareup.retrofit2:retrofit:3.0.0")
+implementation("com.squareup.retrofit2:converter-gson:3.0.0")
+implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+implementation("androidx.room3:room3-runtime:3.0.3")
+ksp("androidx.room3:room3-compiler:3.0.3")
+implementation("androidx.datastore:datastore-preferences:1.3.0")
+implementation("androidx.compose.material:material-icons-core")
+```
+
+| Dependencia | Para qué | Página |
+| --- | --- | --- |
+| `retrofit` y `converter-gson` | Llamar a tu API y convertir el JSON | [CRUD con Retrofit](/docs/2-dam/kotlin/para-el-proyecto/crud-con-retrofit) |
+| `logging-interceptor` | Ver las peticiones en el Logcat | [Conectar con tu API](/docs/2-dam/kotlin/para-el-proyecto/conectar-con-tu-api) |
+| `room3-runtime` y `room3-compiler` | Room 3 (el compilador, con `ksp`) | [Room con relaciones](/docs/2-dam/kotlin/para-el-proyecto/room-relaciones) |
+| `datastore-preferences` | DataStore | [DataStore](/docs/2-dam/kotlin/para-el-proyecto/datastore) |
+| `material-icons-core` | `Icons.Default.Home`, `Settings`, `ShoppingCart`… | [Navegación del proyecto](/docs/2-dam/kotlin/para-el-proyecto/navegacion-del-proyecto) |
+
+- `logging-interceptor` va en la versión **4.12.0** porque es la de OkHttp que trae Retrofit 3.0.0. Si mezclas versiones de OkHttp, puede fallar al arrancar.
+- `material-icons-core` **no lleva versión** porque la pone el BOM de Compose (el `implementation(platform(libs.androidx.compose.bom))` que ya trae la plantilla). Trae los iconos básicos (`Home`, `Settings`, `ShoppingCart`, `Add`…). Para todos los iconos, `material-icons-extended`, que pesa bastante más.
+- Para usar `BuildConfig.BASE_URL` hace falta además `buildConfig = true` en `buildFeatures`.
+
+### Mejor en el catálogo
+
+Es mejor pasarlo a `libs.versions.toml`, como en clase el 13/11. Así quedaría:
+
+```toml title="gradle/libs.versions.toml"
+[versions]
+retrofit = "3.0.0"
+okhttp = "4.12.0"
+room3 = "3.0.3"
+datastore = "1.3.0"
+
+[libraries]
+retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
+converter-gson = { group = "com.squareup.retrofit2", name = "converter-gson", version.ref = "retrofit" }
+logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
+androidx-room3-runtime = { group = "androidx.room3", name = "room3-runtime", version.ref = "room3" }
+androidx-room3-compiler = { group = "androidx.room3", name = "room3-compiler", version.ref = "room3" }
+androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
+androidx-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
+```
+
+```kotlin title="app/build.gradle.kts"
+dependencies {
+    implementation(libs.retrofit)
+    implementation(libs.converter.gson)
+    implementation(libs.logging.interceptor)
+    implementation(libs.androidx.room3.runtime)
+    ksp(libs.androidx.room3.compiler)
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.material.icons.core)
+}
+```
+
+`group` y `name` es otra forma de escribir el `module = "grupo:nombre"` de clase; las dos valen. Si ya tenías Retrofit o Room puestos con texto (`"androidx.room3:room3-runtime:3.0.3"`), quita esas líneas al pasar al catálogo para no tenerlas dos veces.
+
+<Callout type="warn" title="minSdk 35">
+  En clase se puso `minSdk 35`, que solo instala en Android 15 o más. Si tu móvil es más viejo, sale `INSTALL_FAILED_OLDER_SDK`. Bájalo (por ejemplo, a 26, que ya trae `java.time` para `LocalDate`) y vuelve a compilar: si alguna librería pide un `minSdk` mayor, Gradle te lo dice al compilar.
+</Callout>
+
+## Practica
+
+<CompletarCodigo
+  titulo="implementation o ksp"
+  enunciado="Completa cada línea con implementation o ksp."
+  lenguaje="kotlin"
+  codigo={`[[implementation]]("androidx.room3:room3-runtime:3.0.3")
+[[ksp]]("androidx.room3:room3-compiler:3.0.3")
+[[implementation]](libs.hilt.android)
+[[ksp]](libs.hilt.android.compiler)
+[[implementation]]("androidx.datastore:datastore-preferences:1.3.0")`}
+/>
+
+<Quiz titulo="Test: dependencias de Gradle">
+  <Pregunta enunciado="¿Por qué el compilador de Room va con `ksp(...)` y no con `implementation(...)`?" explicacion="Los compiladores (Room, Hilt) generan código al compilar y no van dentro de la app. KSP es quien los ejecuta.">
+    <Opcion>Porque es más pequeño</Opcion>
+    <Opcion correcta>Porque genera código al compilar y no va dentro de la app</Opcion>
+    <Opcion>Porque Room 3 no admite `implementation`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué hace `apply false` en el `build.gradle.kts` de la raíz?" explicacion="Declara el plugin y su versión para todo el proyecto sin aplicarlo en la raíz. Se aplica en el módulo `app`.">
+    <Opcion>Desactiva el plugin</Opcion>
+    <Opcion correcta>Declara el plugin y su versión sin aplicarlo ahí</Opcion>
+    <Opcion>Lo aplica solo en modo release</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué `logging-interceptor` va en la 4.12.0?" explicacion="Es la versión de OkHttp que trae Retrofit 3.0.0. Mezclar versiones de OkHttp puede fallar al arrancar.">
+    <Opcion>Porque es la más nueva</Opcion>
+    <Opcion correcta>Porque es la versión de OkHttp que usa Retrofit 3.0.0</Opcion>
+    <Opcion>Porque lo pide Room</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`material-icons-core` se pone sin versión porque la pone el BOM de Compose." respuesta={true} explicacion="El BOM (`compose-bom`) fija las versiones de todas las librerías de Compose, también la de los iconos." />
+  <Pregunta enunciado="En clase falló el sync al poner el plugin de Hilt. ¿Por qué?" explicacion="El plugin de Hilt necesita la dependencia `hilt-android`. Sin ella, el sync falla.">
+    <Opcion>Porque faltaba KSP</Opcion>
+    <Opcion correcta>Porque faltaba la dependencia `hilt-android`</Opcion>
+    <Opcion>Porque la versión era la 2.60.1</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Android Studio dice `Unresolved reference: collectAsStateWithLifecycle`. ¿Qué falta?" explicacion="`collectAsStateWithLifecycle` está en `lifecycle-runtime-compose`.">
+    <Opcion>`lifecycle-viewmodel-ktx`</Opcion>
+    <Opcion correcta>`lifecycle-runtime-compose`</Opcion>
+    <Opcion>`hilt-android`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: Gradle">
+  <Tarjeta frente="`libs.versions.toml`">El catálogo de versiones: `[versions]`, `[libraries]` y `[plugins]` en un solo archivo. Se usa como `libs.nombre.con.puntos`.</Tarjeta>
+  <Tarjeta frente="`ksp(...)`">Para los compiladores que generan código (Room, Hilt). No van dentro de la app.</Tarjeta>
+  <Tarjeta frente="`apply false`">En la raíz: declara el plugin y su versión sin aplicarlo. Se aplica en `app`.</Tarjeta>
+  <Tarjeta frente="BOM de Compose">Fija las versiones de las librerías de Compose. Las que van con él se escriben sin versión.</Tarjeta>
+  <Tarjeta frente="Room 3 en Gradle">`androidx.room3:room3-runtime:3.0.3` con `implementation` y `room3-compiler` con `ksp`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Pasa tus dependencias al catálogo" dificultad="facil">
+  Mira tu `app/build.gradle.kts` y pasa al catálogo todas las dependencias que estén escritas como texto (`"grupo:nombre:versión"`). Sincroniza y compila.
+
+  <Pista>Android Studio lo hace solo: pon el cursor sobre la línea, Alt+Intro y "Replace with new library catalog declaration".</Pista>
+
+  <Solucion>
+
+  Por cada línea con texto, una entrada en `[libraries]` (y su versión en `[versions]` si la comparte con otra) y, en `build.gradle.kts`, el acceso con puntos. Por ejemplo, `implementation("androidx.datastore:datastore-preferences:1.3.0")` pasa a `implementation(libs.androidx.datastore.preferences)` con la entrada `androidx-datastore-preferences` del catálogo de esta página. Si compila igual que antes, está bien.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

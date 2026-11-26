@@ -1,0 +1,397 @@
+---
+title: Plantillas y data binding
+description: "Cómo se enlaza la clase de un componente con su plantilla en Angular 19: interpolación, property binding, class binding, event binding, two-way binding con ngModel y referencias de plantilla."
+icon: ArrowLeftRight
+---
+
+import { SimuladorBinding } from '@/components/temas/angular/simulador-binding';
+
+La plantilla de un componente es HTML normal con unas cuantas **sintaxis de Angular** para conectarla con la clase. A eso se le llama **data binding** (enlace de datos). Angular vigila los valores de la clase y, cuando cambian, vuelve a pintar las partes de la plantilla que dependen de ellos. No tienes que tocar el DOM a mano como con `document.getElementById`.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Los cuatro tipos de binding y hacia dónde viaja el dato en cada uno.
+  - `[propiedad]` frente a un atributo normal, y el class binding `[class.x]`.
+  - Escuchar eventos con `(click)` y `(change)`, y qué es `$event`.
+  - Las referencias de plantilla `#ref`.
+  - Qué miembros de la clase puede leer la plantilla (`protected` sí, `private` no).
+</Callout>
+
+## Los cuatro bindings
+
+| Sintaxis | Nombre | Sentido del dato | Ejemplo de clase |
+| --- | --- | --- | --- |
+| `{{ expresion }}` | Interpolación | Clase → vista | `{{ product.title }}` |
+| `[propiedad]="expresion"` | Property binding | Clase → vista | `[src]="product.image"` |
+| `(evento)="sentencia"` | Event binding | Vista → clase | `(click)="onAntPag()"` |
+| `[(ngModel)]="propiedad"` | Two-way binding | Clase ↔ vista | `[(ngModel)]="this.game.title"` |
+
+Una forma de acordarte: **corchetes** `[ ]` = el dato **entra** en el elemento; **paréntesis** `( )` = el evento **sale** del elemento; los dos juntos `[( )]` ("plátano en una caja", *banana in a box*) = en los dos sentidos.
+
+Prueba cada uno en el simulador. El punto que viaja por la pista indica hacia dónde va el dato:
+
+<SimuladorBinding />
+
+Lo que enseña el simulador:
+
+- **Interpolación** y **property binding**: cambias el valor en la clase y la vista se actualiza sola.
+- **Event binding**: pulsas el botón en la vista, `(click)` llama a un método de la clase que cambia `enchufado`, y entonces Angular vuelve a pintar la plantilla (por eso el dato va y vuelve).
+- **Two-way**: escribir en el input cambia la propiedad, y cambiar la propiedad cambia el input.
+
+## Interpolación `{{ }}`
+
+<DeClase fecha="27/10, 28/10" />
+
+Muestra el resultado de una expresión como texto. Angular la evalúa, la convierte a cadena y la mete en el HTML:
+
+```html title="app.component.html (proj-fakestore, 28/10)"
+@for( product of this.products; track product.id) {
+{{ product.title}}, precio {{ product.price}}
+<br/>
+}
+```
+
+- Dentro de `{{ }}` va una **expresión**: una propiedad, una llamada a un método, una operación (`{{ i + 1 }}`), un ternario…
+- El `this.` es **opcional** en la plantilla: `{{ this.pag }}` y `{{ pag }}` son lo mismo. En clase se escriben las dos formas.
+- Si la expresión es un objeto, sale `[object Object]`. Para ver el objeto entero se usa el pipe `json`: `{{ game | json }}` (ver [pipes](/docs/2-dam/acceso-a-datos/angular/pipes-y-directivas)).
+
+## Property binding `[ ]`
+
+<DeClase fecha="28/10" proyecto="proj-fakestore" nota="ampliación de la Act 8" />
+
+Enlaza una **propiedad del elemento del DOM** con una expresión de la clase. En la ampliación de la Act 8 se añadió la imagen de cada producto:
+
+```html title="app.component.html"
+<img [src]="product.image" [alt]="product.title">
+```
+
+```css title="app.component.css"
+img {
+  width: 100px;
+  height: 120px;
+  object-fit: contain;
+}
+```
+
+`object-fit: contain` encaja la imagen en esas medidas sin deformarla. Antes, en Postman, se comprobó que el campo `image` de la Fake Store API es una URL que devuelve una imagen.
+
+<Comparar titulo="Atributo normal frente a property binding" columnas>
+  <Lado titulo="Atributo normal">
+
+```html
+<img src="product.image">
+```
+
+Le llega el **texto** literal `"product.image"`: el navegador busca un archivo con ese nombre.
+
+  </Lado>
+  <Lado titulo="Property binding">
+
+```html
+<img [src]="product.image">
+```
+
+Angular **evalúa** `product.image` y pone la URL de la imagen.
+
+  </Lado>
+</Comparar>
+
+Otros ejemplos que salieron:
+
+```html title="Botones de la paginación (05/11)"
+<button [disabled]="this.pag === 1" (click)="onAntPag()">Anterior</button>
+<button [disabled]="this.pag === this.totalPag" (click)="onSigPag()">Siguiente</button>
+```
+
+`[disabled]` recibe un `boolean`: el botón se desactiva mientras la condición sea `true`. Es la misma idea que `[class.x]` y `[routerLink]`.
+
+### Class binding `[class.nombre]`
+
+<DeClase fecha="05/11" proyecto="proj-game" />
+
+Pone o quita **una clase CSS** según una condición. En clase se usó para marcar en rojo un campo del formulario que no es válido:
+
+```html title="crud.component.html (05/11)"
+<input [class.invalid-control]="invalidStock" id="stockId" type="number" name="stock" ... >
+```
+
+```css title="crud.component.css"
+.invalid-control { border: 2px solid; }
+```
+
+Si `invalidStock` es `true`, el `input` lleva la clase `invalid-control`; si es `false`, no. El autocompletado ofreció también `[class]`, `[classList]`, `[className]` y `[ngClass]`, y se eligió `[class.invalid-control]`. El formulario completo va en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado/crud-padre-hijo).
+
+### Más formas de property binding <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Vienen en la unidad 3 de componentes de las guías, pero no se usaron en las clases grabadas.
+</NoDadoEnClase>
+
+```html title="Ejemplos"
+<!-- Varias clases a la vez, con un objeto { clase: boolean } -->
+<p [class]="{ destacado: esFavorito, agotado: stock === 0 }"></p>
+
+<!-- Un estilo suelto, con unidad -->
+<p [style.color]="'green'" [style.width.px]="ancho"></p>
+
+<!-- Atributos que no son propiedades del DOM (ARIA, data-…) -->
+<button [attr.aria-label]="textoBoton">X</button>
+
+<!-- Un literal: ojo a las comillas simples dentro de las dobles -->
+<h1 [innerText]="'Mi título'"></h1>
+```
+
+## Event binding `( )`
+
+<DeClase fecha="05/11" proyecto="proj-game" nota="repaso del listado de la clase anterior" />
+
+Escucha un evento del elemento y ejecuta una sentencia, normalmente una llamada a un método de la clase:
+
+```html title="app.component.html (05/11)"
+<input type="string" #buscarId />
+<button (click)="onBuscarId(buscarId.value)">Buscar</button>
+
+<select #tamPage (change)="onChangeTamPage(tamPage.value)">
+  <option value="5">5</option>
+  <option value="10">10</option>
+</select>
+```
+
+- `(click)` se lanza al pulsar; `(change)`, cuando cambia el valor del `select`. Sirve cualquier evento del DOM: `(input)`, `(keyup)`, `(submit)`, `(mouseenter)`…
+- También se puede escribir una asignación directa: `(click)="this.editGame = game"` (12/11).
+- `type="string"` es una errata del código de clase: no es un tipo válido de `input`, y el navegador lo trata como `text`.
+
+<NoSeVio titulo="Los métodos del listado">
+  No se ven los cuerpos de `onBuscarId()`, `onChangeTamPage()`, `onAntPag()` ni `onSigPag()`. Son de `proj-game`, que sigue en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado/proj-game).
+</NoSeVio>
+
+### `$event`
+
+Dentro de la sentencia, `$event` es lo que lleva el evento: con los eventos del DOM, el objeto `Event` del navegador; con los eventos de un componente hijo (`output()`), el valor que emite el hijo. Lo verás en [comunicación padre e hijo](/docs/2-dam/acceso-a-datos/angular/comunicacion-componentes).
+
+### Teclas concretas <NoDadoEnClase inline />
+
+Angular deja filtrar eventos de teclado por tecla: `(keyup.enter)="buscar()"` solo se lanza al pulsar Intro.
+
+## Referencias de plantilla `#ref`
+
+<DeClase fecha="05/11" />
+
+`#nombre` en una etiqueta crea una **variable de la plantilla** que apunta a ese elemento. En el ejemplo de arriba, `#buscarId` es el `<input>`, y `buscarId.value` es lo que ha escrito el usuario. Así se le pasa el valor al método sin guardarlo antes en la clase.
+
+- La referencia solo existe **dentro de la plantilla**: en la clase no hay ninguna propiedad `buscarId`.
+- `value` de un `input` o de un `select` es siempre un `string`: si el método espera un número, conviértelo (`Number(valor)`).
+- Con `#nombre="algo"` la referencia apunta a una directiva en vez de al elemento. Es lo que hace `#gameForm="ngForm"` en los formularios.
+
+## Two-way binding `[(ngModel)]`
+
+<DeClase fecha="05/11" proyecto="proj-game" nota="Act 10" />
+
+Enlaza un control de formulario con una propiedad **en los dos sentidos**: si la propiedad cambia, el `input` se actualiza; si el usuario escribe, la propiedad cambia.
+
+```ts title="crud.component.ts"
+import { Component } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { Game } from '../models/game';
+
+@Component({
+  selector: 'app-crud',
+  imports: [FormsModule],
+  templateUrl: './crud.component.html',
+  styleUrl: './crud.component.css'
+})
+export class CrudComponent {
+  game: Game = { title: '', genre: '', platform: '', price: 0, stock: 0 };
+}
+```
+
+```html title="crud.component.html"
+<label for="titleId">Título</label>
+<input id="titleId" type="text" name="title" [(ngModel)]="this.game.title" />
+```
+
+- `ngModel` es una directiva de **`FormsModule`**: hay que importarlo en `imports`.
+- Dentro de un `<form>`, cada control con `ngModel` necesita **`name`**.
+- `label for` igual al `id` del input, por accesibilidad: al pulsar la etiqueta se enfoca el campo.
+
+Dos errores que salieron al montarlo:
+
+| Error | Por qué | Arreglo |
+| --- | --- | --- |
+| `-992011`: *"The directive 'NgModel' appears in 'imports', but is not standalone and cannot be imported directly."* | Se puso `NgModel` suelto en `imports`. | Importar `FormsModule`, que lo trae dentro. |
+| `-995002`: *"Empty expressions are not allowed"* | `[(ngModel)]=""` con la expresión vacía. | Enlazarlo a una propiedad: `[(ngModel)]="this.game.title"`. |
+
+Por dentro, `[(ngModel)]="nombre"` es la suma de un property binding y un event binding: `[ngModel]="nombre" (ngModelChange)="nombre = $event"` <NoDadoEnClase inline />.
+
+Validar el formulario, enviarlo y los formularios reactivos van en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado).
+
+## Qué puede leer la plantilla
+
+<DeClase fecha="27/10" proyecto="angular-http" />
+
+La plantilla solo puede usar los miembros **públicos o `protected`** de la clase. Si usa uno `private`, el compilador da el error **NG1**:
+
+<Comparar titulo="Una propiedad que usa la plantilla">
+  <Lado tipo="evitar" titulo="Da el error NG1">
+
+```ts
+private readonly posts = signal<Post[]>([]);
+```
+
+*"Property 'posts' is private and only accessible within class 'PostsComponent'"*.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Así se dejó en clase">
+
+```ts
+protected readonly posts = signal<Post[]>([]);
+```
+
+`protected` deja que la plantilla la lea y la esconde al resto de clases.
+
+  </Lado>
+</Comparar>
+
+La costumbre de clase: lo que usa la plantilla, `protected readonly`; lo que solo usa la clase (el servicio inyectado, la URL de la API), `private readonly`.
+
+## Errores típicos de binding
+
+- **`Can't bind to 'routerLink' since it isn't a known property of 'a'`** (27/10): la plantilla usa una directiva que no está en `imports`. Aquí faltaba `RouterLink`. Con `ngModel` pasa lo mismo si falta `FormsModule`.
+- **`Parser Error: Unexpected token`** (27/10): comillas o corchetes mal cerrados, por ejemplo `[routerLink]="['/posts']"` escrito con las comillas cambiadas.
+- **Un literal sin comillas simples**: `[innerText]="Hola"` busca una propiedad `Hola` en la clase. El texto va entre comillas simples: `[innerText]="'Hola'"`.
+
+## Practica
+
+<CompletarCodigo
+  titulo="Completa los bindings"
+  enunciado="La imagen tiene que salir de product.image, el título como texto y el botón tiene que llamar a comprar(product) al pulsarlo."
+  lenguaje="typescript"
+  codigo={`<h3>___ product.title ___</h3>
+<img ___="product.image" [alt]="product.title">
+<button ___="comprar(product)">Comprar</button>`}
+  respuestas={["{{", "}}", "[src]", "(click)"]}
+/>
+
+<Quiz titulo="Test: plantillas y data binding">
+  <Pregunta enunciado="¿Qué binding usarías para que un botón se desactive cuando `stock` vale 0?" explicacion="Es un dato que va de la clase al elemento: property binding con `[disabled]`.">
+    <Opcion correcta>`[disabled]="stock === 0"`</Opcion>
+    <Opcion>`(disabled)="stock === 0"`</Opcion>
+    <Opcion>`disabled="stock === 0"`</Opcion>
+    <Opcion>`{{ disabled }}`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado='¿Qué le llega a la imagen con `<img src="product.image">` (sin corchetes)?' explicacion="Sin corchetes es un atributo HTML normal: el valor es el texto literal.">
+    <Opcion>La URL que hay en `product.image`</Opcion>
+    <Opcion correcta>El texto literal `product.image`</Opcion>
+    <Opcion>Un error de compilación</Opcion>
+  </Pregunta>
+  <Pregunta enunciado='¿Hacia dónde va el dato en `(click)="onSigPag()"`?' explicacion="El event binding lleva el evento de la vista a la clase.">
+    <Opcion>De la clase a la vista</Opcion>
+    <Opcion correcta>De la vista a la clase</Opcion>
+    <Opcion>En los dos sentidos</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Con `#buscarId` en un input, la clase del componente tiene una propiedad `buscarId`." respuesta={false} explicacion="La referencia solo existe en la plantilla. Se usa ahí, por ejemplo `onBuscarId(buscarId.value)`." />
+  <Pregunta enunciado="Pones `NgModel` en el array `imports` y sale el error -992011. ¿Qué haces?" explicacion="`NgModel` no es standalone: llega a través de `FormsModule`.">
+    <Opcion>Marcar `NgModel` como `standalone: true`</Opcion>
+    <Opcion correcta>Importar `FormsModule` en su lugar</Opcion>
+    <Opcion>Importarlo en `app.config.ts`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué modificador pones a una propiedad que usa la plantilla y que no quieres que vean otras clases?" explicacion="`private` da el error NG1. `protected` la deja leer en la plantilla.">
+    <Opcion>`private`</Opcion>
+    <Opcion correcta>`protected`</Opcion>
+    <Opcion>`static`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="En la plantilla, `{{ this.pag }}` y `{{ pag }}` muestran lo mismo." respuesta={true} explicacion="El `this.` es opcional en las plantillas." />
+  <Pregunta enunciado='¿Qué hace `[class.invalid-control]="invalidStock"`?' explicacion="Class binding: añade la clase si la expresión es verdadera y la quita si es falsa.">
+    <Opcion>Pone el texto de `invalidStock` como clase</Opcion>
+    <Opcion correcta>Añade la clase `invalid-control` solo si `invalidStock` es verdadero</Opcion>
+    <Opcion>Sustituye todas las clases del elemento</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: data binding">
+  <Tarjeta frente="`{{ x }}`">Interpolación: pinta `x` como texto. Clase → vista.</Tarjeta>
+  <Tarjeta frente='`[prop]="x"`'>Property binding: pone el valor de `x` en una propiedad del elemento. Clase → vista.</Tarjeta>
+  <Tarjeta frente='`(evento)="metodo()"`'>Event binding: llama al método cuando pasa el evento. Vista → clase.</Tarjeta>
+  <Tarjeta frente='`[(ngModel)]="x"`'>Two-way binding: el control y la propiedad se mantienen iguales. Necesita `FormsModule`.</Tarjeta>
+  <Tarjeta frente="`#ref`">Referencia de plantilla: una variable que apunta al elemento (`ref.value`). Solo existe en la plantilla.</Tarjeta>
+  <Tarjeta frente="Error NG1">La plantilla usa un miembro `private`. Se arregla con `protected`.</Tarjeta>
+  <Tarjeta frente='`[class.x]="cond"`'>Class binding: añade la clase `x` mientras `cond` sea verdadero.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Un contador con botones" dificultad="facil">
+  Haz un componente con una propiedad `contador = 0` y dos botones, "+1" y "Reiniciar". Muestra el número con interpolación, desactiva "Reiniciar" cuando el contador valga 0 y ponle la clase `alto` al número cuando pase de 10.
+
+  <Pista>Necesitas los tres bindings de un sentido: `{{ }}`, `[disabled]` / `[class.alto]` y `(click)`.</Pista>
+
+  <Solucion>
+
+```ts title="contador.component.ts"
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-contador',
+  templateUrl: './contador.component.html',
+  styleUrl: './contador.component.css'
+})
+export class ContadorComponent {
+  protected contador = 0;
+
+  protected sumar(): void {
+    this.contador++;
+  }
+}
+```
+
+```html title="contador.component.html"
+<p [class.alto]="contador > 10">{{ contador }}</p>
+<button (click)="sumar()">+1</button>
+<button [disabled]="contador === 0" (click)="contador = 0">Reiniciar</button>
+```
+
+```css title="contador.component.css"
+.alto { font-weight: bold; color: red; }
+```
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Saludo con referencia de plantilla" dificultad="media">
+  Sin `ngModel`: un `input` y un botón "Saludar". Al pulsar el botón, la clase guarda el texto del input en `nombre` y la plantilla muestra "Hola, nombre". Si el input está vacío, que salga "Escribe tu nombre".
+
+  <Pista>Ponle `#caja` al input y pásale `caja.value` al método desde el `(click)`.</Pista>
+  <Pista>Para el mensaje alternativo puedes usar `@if / @else`.</Pista>
+
+  <Solucion>
+
+```ts title="saludo.component.ts"
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-saludo',
+  templateUrl: './saludo.component.html'
+})
+export class SaludoComponent {
+  protected nombre = '';
+
+  protected saludar(valor: string): void {
+    this.nombre = valor.trim();
+  }
+}
+```
+
+```html title="saludo.component.html"
+<input #caja placeholder="Tu nombre" />
+<button (click)="saludar(caja.value)">Saludar</button>
+
+@if (nombre) {
+  <p>Hola, {{ nombre }}</p>
+} @else {
+  <p>Escribe tu nombre</p>
+}
+```
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

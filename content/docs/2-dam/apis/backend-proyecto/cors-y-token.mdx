@@ -1,0 +1,374 @@
+---
+title: CORS y rutas protegidas
+description: Qué es CORS, por qué salió el error en clase al publicar la web, cómo decir qué webs pueden llamar a tu API sin bloquear la app Android, y un middleware requireAuth que comprueba el token JWT.
+icon: ShieldCheck
+---
+
+Para el H9 (integración) Angular y la app Android tienen que hablar con **tu** API. Ahí aparecen dos cosas que no salieron en clase: decirle al navegador qué webs pueden llamar a la API (**CORS**) y exigir el **token** en las rutas que lo necesitan. Es el requisito "Consumo de la API desde Angular", que se dio a medias.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué es CORS y por qué solo afecta a los navegadores.
+  - Qué pasó el 18/11 al publicar la web en Vercel.
+  - Permitir solo tus orígenes sin bloquear la app Android ni Postman.
+  - Un middleware `requireAuth` que comprueba el token y pasa el `userId` al controlador.
+</Callout>
+
+## Lo que se vio en clase
+
+### cors() en app.ts
+
+<DeClase fecha="20/10, 27/10, 03/11" proyecto="node-server-26-27" />
+
+En el `app.ts` del profesor, `cors()` va justo después de `helmet()`, y antes de `express.json()`, las rutas y el `errorHandler`:
+
+```ts title="src/app.ts (fragmento de clase, v1.0.0)"
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+```
+
+`cors()` sin opciones deja que **cualquier web** llame a la API.
+
+### El error del 18/11
+
+<DeClase fecha="18/11" proyecto="proj-game" nota="clase de Angular y despliegue en Vercel" />
+
+Al publicar la web de Angular en Vercel, en la consola de DevTools salió esto (el dominio está cambiado):
+
+```text title="Consola del navegador"
+Access to XMLHttpRequest at 'http://localhost:3000/games?_page=1&_limit=5'
+from origin 'https://tu-web.vercel.app' has been blocked by CORS policy:
+Permission was denied for this request to access the `loopback` address space.
+```
+
+La web publicada seguía llamando a `localhost:3000`, donde estaba JSON Server. Pero `localhost` es **el ordenador de quien visita la web**, no el tuyo: una web pública no puede llamar al `localhost` (la dirección *loopback*) de quien la visita, y el navegador lo bloquea. Por eso, en la Preview, el formulario validaba pero el guardado fallaba.
+
+La solución de ese error no es tocar CORS: es **desplegar la API** y que la web publicada llame a su URL pública. Y en cuanto la web llame a tu API desplegada, entonces sí necesitas que la API le dé permiso con CORS.
+
+<NoSeVio titulo="El despliegue de la API">
+  El despliegue de la API en Vercel no se vio: la rama `vercel-deployment` del repositorio del profesor no se abrió en clase.
+</NoSeVio>
+
+### El token en clase
+
+<DeClase fecha="27/10" proyecto="node-server-26-27" nota="v0.5.0, módulo auth" />
+
+En el login y el registro, el servicio de auth firma un JWT:
+
+```ts title="auth.service.ts (fragmento de clase)"
+const token = jwt.sign({ sub: user.id, email: user.email }, env.JWT_SECRET, { expiresIn: '7d' });
+```
+
+- El token lleva el id del usuario en `sub` y su email, y caduca a los 7 días.
+- El cliente lo manda en cada petición en la cabecera `Authorization: Bearer <token>`.
+
+<NoSeVio titulo="El middleware auth (v0.6.0)">
+  El middleware que comprueba el token, las rutas `/me` y `/me/password` y el servicio de cambiar la contraseña no se llegaron a ver. Solo se conocen por los tests, el README de la v0.7.0 y los mensajes: sin token, `401` con "No autorizado"; con un token malo, `401` con "Token inválido". El id del usuario sale de `req.user.sub`, así que cada usuario solo modifica lo suyo.
+</NoSeVio>
+
+## Qué es CORS <NoDadoEnClase inline />
+
+<Concepto termino="CORS" definicion="Cross-Origin Resource Sharing: la regla de los navegadores que impide que una web lea respuestas de otro origen si el servidor no le da permiso con una cabecera.">CORS</Concepto> es una regla **del navegador**: una página de un origen (`http://localhost:4200`, o tu web en Vercel) no puede leer las respuestas de otro origen (`http://localhost:3000`, o tu API desplegada) si el servidor no le da permiso con la cabecera `Access-Control-Allow-Origin`.
+
+- El **origen** es protocolo + dominio + puerto. `http://localhost:4200` y `http://localhost:3000` son orígenes **distintos**, aunque estén en tu ordenador. `http://localhost:4200` y `http://127.0.0.1:4200` también.
+- **Solo afecta a los navegadores.** La app Android, Postman y `curl` no lo comprueban: por eso en Postman todo funciona y en Angular no.
+- Con `Authorization` o `Content-Type: application/json`, el navegador manda antes una petición `OPTIONS` (*preflight*) para preguntar si puede. El paquete `cors` la responde solo.
+
+<Flujo
+  titulo="Angular llama a tu API desde otro origen"
+  nodos={["Angular", "Navegador", "API", "App Android"]}
+>
+  <Mensaje de="Angular" a="Navegador" titulo="http.get('/api/productos')">
+    La web, en `https://tu-web.vercel.app`, pide los productos a `https://tu-api.example.com`.
+  </Mensaje>
+  <Mensaje de="Navegador" a="API" titulo="OPTIONS + Origin">
+    Como es otro origen y lleva `Authorization`, el navegador pregunta antes con un *preflight*, diciendo de dónde viene en la cabecera `Origin`.
+  </Mensaje>
+  <Mensaje de="API" a="Navegador" tipo="respuesta" titulo="Access-Control-Allow-Origin">
+    El middleware `cors` mira si el origen está en la lista. Si lo está, responde con la cabecera de permiso.
+  </Mensaje>
+  <Mensaje de="Navegador" a="API" titulo="GET /api/productos">
+    Con permiso, el navegador manda la petición de verdad.
+  </Mensaje>
+  <Mensaje de="API" a="Angular" tipo="respuesta" titulo="200 OK + JSON">
+    El navegador deja que Angular lea la respuesta. Sin la cabecera, la bloquea y sale el error de CORS en la consola.
+  </Mensaje>
+  <Mensaje de="App Android" a="API" titulo="GET /api/productos (sin Origin)">
+    Retrofit no es un navegador: no manda `Origin` ni hace *preflight*. CORS no le afecta.
+  </Mensaje>
+</Flujo>
+
+## Permitir solo tus webs <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  En clase solo se usó `cors()` sin opciones. Restringir los orígenes con una lista en el `.env` no se ha dado.
+</NoDadoEnClase>
+
+Para decir qué webs pueden llamar a la API, en `app.ts`, en el mismo sitio que el `cors()` de clase:
+
+```ts title="src/app.ts"
+const origenesPermitidos = (process.env.CORS_ORIGINS ?? 'http://localhost:4200').split(',');
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || origenesPermitidos.includes(origin)) callback(null, true);
+      else callback(new HttpError(403, 'Origen no permitido'));
+    },
+  }),
+);
+```
+
+```bash title=".env"
+CORS_ORIGINS=http://localhost:4200,https://tu-web.vercel.app
+```
+
+- En el `.env`, los orígenes separados por comas y **sin `/` al final**: `https://tu-web.vercel.app/` no coincide con el `Origin` que manda el navegador.
+- **`!origin` deja pasar las peticiones que no llevan la cabecera `Origin`**: la app Android, Postman y `curl`. Sin esa condición, bloquearías tu propia app.
+- Si el origen no está en la lista, el error llega al `errorHandler` y responde `403`. El navegador, además, enseña el error de CORS.
+- `HttpError` es la clase de [Errores con su código HTTP](/docs/2-dam/apis/backend-proyecto/errores-http). Lo de `process.env` directamente es para que el ejemplo sea corto: en el proyecto de clase, lo normal es añadir `CORS_ORIGINS` al objeto `env` de `config/env.ts`.
+
+<Callout type="warn" title="Si la web va por https y la API por http">
+  Una web en Vercel va por `https`. Si llama a una API desplegada por `http`, el navegador la bloquea por *Mixed Content*. La API desplegada también tiene que ir por `https`. (Con `http://localhost` no sale *Mixed Content*, porque el navegador trata `localhost` como seguro; por eso el 18/11 salió el error del *loopback* y no este.)
+</Callout>
+
+## Proteger rutas con el token <NoDadoEnClase inline />
+
+<NoDadoEnClase titulo="Middleware requireAuth">
+  El middleware `auth` del profesor (v0.6.0) no se vio. Este es uno estándar, con Express 5 y `jsonwebtoken`.
+</NoDadoEnClase>
+
+<Recorrido
+  titulo="src/middleware/auth.ts"
+  lenguaje="ts"
+  codigo={`import type { NextFunction, Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.JWT_SECRET ?? '';
+
+export function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const cabecera = req.headers.authorization;
+  if (!cabecera?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'No autorizado' });
+  }
+  try {
+    const payload = jwt.verify(cabecera.slice(7), JWT_SECRET) as { userId: number };
+    res.locals.userId = payload.userId;
+    next();
+  } catch {
+    res.status(401).json({ error: 'Token inválido' });
+  }
+}`}
+>
+  <Paso lineas="4" titulo="El secreto">
+    El mismo `JWT_SECRET` con el que se firmó el token en el login. En el proyecto de clase sale de `env.ts`, que no deja arrancar si falta; aquí se lee de `process.env` para que el ejemplo sea corto.
+  </Paso>
+  <Paso lineas="7-10" titulo="¿Hay token?">
+    La cabecera llega como `Bearer eyJhbGci...`. Si no está o no empieza por `Bearer `, `401` con "No autorizado", el mismo mensaje que esperan los tests de clase.
+  </Paso>
+  <Paso lineas="12" titulo="Comprobar la firma">
+    `slice(7)` quita los 7 caracteres de `"Bearer "` (6 letras y el espacio). `jwt.verify` comprueba la firma y la fecha de caducidad; si el token está mal o caducado, **lanza un error**.
+  </Paso>
+  <Paso lineas="13-14" titulo="Pasar el id al controlador">
+    `res.locals` es un objeto de Express para pasar datos de un middleware al controlador. `next()` deja seguir a la petición.
+  </Paso>
+  <Paso lineas="15-17" titulo="Token malo">
+    Si `verify` ha lanzado, `401` con "Token inválido".
+  </Paso>
+</Recorrido>
+
+- `{ userId: number }` tiene que coincidir con lo que metes al firmar en el login: `jwt.sign({ userId: user.id }, ...)`.
+- Muchos lo guardan en `req.user` (como el profesor, `req.user.sub`), pero entonces hay que decirle a TypeScript que `Request` tiene esa propiedad. `res.locals` no necesita nada.
+- Se usa en las rutas que lo necesiten, como en el `authLimiter` de clase: `router.post('/:id/confirmar', requireAuth, confirmarPedidoCtrl)`.
+
+<Callout type="warn" title="Con el login de clase, el id va en sub">
+  El login de clase firma `{ sub: user.id, email: user.email }`, no `{ userId }`. Si usas ese login sin cambiarlo, lee `sub` en el middleware:
+
+```ts title="src/middleware/auth.ts"
+import jwt, { type JwtPayload } from 'jsonwebtoken';
+
+// dentro del try
+const payload = jwt.verify(cabecera.slice(7), JWT_SECRET) as JwtPayload;
+res.locals.userId = Number(payload.sub);
+```
+
+  Lo importante es que el campo que firmas y el que lees sean el mismo.
+</Callout>
+
+### Nunca te fíes del userId del body
+
+Suponiendo que cada pedido tiene un `userId` (en el modelo de la tienda no lo tiene: lo añades en el ejercicio "Mis pedidos" de abajo):
+
+<Comparar titulo="Mis pedidos">
+  <Lado tipo="evitar" titulo="El id que manda el cliente">
+
+```ts
+export async function misPedidosCtrl(req: Request, res: Response) {
+  const pedidos = await prisma.pedido.findMany({
+    where: { userId: req.body.userId },
+  });
+  res.json(pedidos);
+}
+```
+
+Cualquiera puede mandar el `userId` de otro y ver sus pedidos.
+
+  </Lado>
+  <Lado tipo="bien" titulo="El id del token">
+
+```ts
+export async function misPedidosCtrl(_req: Request, res: Response) {
+  const pedidos = await prisma.pedido.findMany({
+    where: { userId: res.locals.userId },
+  });
+  res.json(pedidos);
+}
+```
+
+El id sale del token, que está firmado con tu secreto: el cliente no lo puede cambiar.
+
+  </Lado>
+</Comparar>
+
+En el lado de Angular, el token se añade a cada petición con un interceptor y se guarda en `localStorage` para que no se pierda al recargar: está en [Listado con filtros, paginación y token](/docs/2-dam/acceso-a-datos/angular-avanzado/listado-filtros-y-token), dentro de Angular avanzado. En la app Android, en [Kotlin para el proyecto](/docs/2-dam/kotlin/para-el-proyecto).
+
+<Flujo
+  titulo="Una petición protegida"
+  nodos={["Angular", "requireAuth", "Controlador", "Prisma"]}
+>
+  <Mensaje de="Angular" a="requireAuth" titulo="Authorization: Bearer eyJ...">
+    El interceptor de Angular añade el token que dio el login.
+  </Mensaje>
+  <Mensaje de="requireAuth" a="requireAuth" titulo="jwt.verify(...)">
+    Comprueba la firma y la caducidad. Si falla, responde `401` y la petición no sigue.
+  </Mensaje>
+  <Mensaje de="requireAuth" a="Controlador" titulo="next()">
+    Guarda el id en `res.locals.userId` y deja pasar.
+  </Mensaje>
+  <Mensaje de="Controlador" a="Prisma" titulo="where: { userId }">
+    El controlador usa el id del token, nunca uno que venga en el `body`.
+  </Mensaje>
+  <Mensaje de="Prisma" a="Controlador" tipo="respuesta" titulo="Los pedidos de ese usuario">
+    Como el `where` lleva el id del token, Prisma solo devuelve las filas de ese usuario.
+  </Mensaje>
+  <Mensaje de="Controlador" a="Angular" tipo="respuesta" titulo="200 OK">
+    Solo los datos de ese usuario.
+  </Mensaje>
+</Flujo>
+
+## Practica
+
+<Quiz titulo="Test: CORS y token" descripcion="7 preguntas">
+  <Pregunta enunciado="En Postman la petición funciona, pero desde Angular sale un error de CORS. ¿Por qué?" explicacion="CORS es una regla del navegador. Postman no la comprueba; el navegador sí, y la API no está dando permiso al origen de tu web.">
+    <Opcion>Porque Postman usa otro puerto</Opcion>
+    <Opcion correcta>Porque CORS solo lo comprueban los navegadores</Opcion>
+    <Opcion>Porque Angular no sabe hacer peticiones GET</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cuáles de estos pares son orígenes distintos?" explicacion="El origen es protocolo + dominio + puerto. Cambiar cualquiera de los tres da otro origen. La ruta no cuenta.">
+    <Opcion correcta>`http://localhost:4200` y `http://localhost:3000`</Opcion>
+    <Opcion correcta>`http://localhost:4200` y `http://127.0.0.1:4200`</Opcion>
+    <Opcion correcta>`http://tu-web.vercel.app` y `https://tu-web.vercel.app`</Opcion>
+    <Opcion>`https://tu-web.vercel.app/productos` y `https://tu-web.vercel.app/pedidos`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="El error de CORS del 18/11 se arreglaba añadiendo la web de Vercel a la lista de CORS del backend." respuesta={false} explicacion="La web publicada llamaba a `localhost:3000`, que es el ordenador de quien la visita. Hacía falta desplegar la API y llamar a su URL pública. CORS se configura después, para esa API." />
+  <Pregunta enunciado="¿Para qué sirve el `!origin` en la función `origin` de `cors`?" explicacion="Las peticiones que no vienen de un navegador (la app Android, Postman, `curl`) no llevan la cabecera `Origin`. Así no se bloquean.">
+    <Opcion>Para bloquear todas las peticiones sin origen</Opcion>
+    <Opcion correcta>Para dejar pasar las peticiones sin cabecera `Origin`, como las de la app Android</Opcion>
+    <Opcion>Para permitir cualquier web</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="La cabecera es `Authorization: Bearer abc.def.ghi`. ¿Qué devuelve `cabecera.slice(7)`?" explicacion="El texto «Bearer » tiene 7 caracteres (6 letras y el espacio): `slice(7)` se los salta y devuelve el token.">
+    <Opcion>`Bearer abc.def.ghi`</Opcion>
+    <Opcion correcta>`abc.def.ghi`</Opcion>
+    <Opcion>Solo `Bearer`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="`jwt.verify` recibe un token caducado. ¿Qué pasa?" explicacion="Lanza un error. Por eso va dentro de un `try/catch` que responde `401` con «Token inválido».">
+    <Opcion>Devuelve `null`</Opcion>
+    <Opcion correcta>Lanza un error, y el middleware responde `401`</Opcion>
+    <Opcion>Devuelve el payload igualmente</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Para la ruta «mis pedidos», ¿de dónde tiene que salir el id del usuario?" explicacion="Del token, que está firmado. Un id del `body` o de la URL lo puede cambiar cualquiera.">
+    <Opcion>Del `body` de la petición</Opcion>
+    <Opcion>De un parámetro `?userId=` en la URL</Opcion>
+    <Opcion correcta>Del token, a través de `res.locals.userId`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: CORS y token">
+  <Tarjeta frente="¿Qué es CORS?">La regla del navegador que impide que una web lea respuestas de otro origen sin permiso del servidor (`Access-Control-Allow-Origin`).</Tarjeta>
+  <Tarjeta frente="Origen">Protocolo + dominio + puerto. `http://localhost:4200` y `http://localhost:3000` son distintos.</Tarjeta>
+  <Tarjeta frente="¿A quién no afecta CORS?">A la app Android, Postman y `curl`: no son navegadores.</Tarjeta>
+  <Tarjeta frente="Preflight">Una petición `OPTIONS` que manda el navegador antes de la de verdad, para preguntar si tiene permiso. `cors` la responde solo.</Tarjeta>
+  <Tarjeta frente="`res.locals`">Objeto de Express para pasar datos de un middleware al controlador de la misma petición.</Tarjeta>
+  <Tarjeta frente="`jwt.verify`">Comprueba la firma y la caducidad del token. Si algo falla, lanza un error.</Tarjeta>
+  <Tarjeta frente="Error del 18/11">La web publicada llamaba a `localhost:3000`, que es el ordenador de quien la visita. Hay que desplegar la API y usar su URL.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Los orígenes de tu proyecto" dificultad="facil">
+  Escribe la línea `CORS_ORIGINS` del `.env` de desarrollo y la del de producción para un proyecto con Angular en `ng serve` (puerto 4200) y la web publicada en `https://mi-tienda.vercel.app`. Un compañero abre la web con `http://127.0.0.1:4200` y le sale el error de CORS: ¿por qué?
+
+  <Pista>Sin barra al final y separados por comas.</Pista>
+
+  <Solucion>
+
+```bash title=".env (desarrollo)"
+CORS_ORIGINS=http://localhost:4200
+```
+
+```bash title=".env (producción)"
+CORS_ORIGINS=https://mi-tienda.vercel.app
+```
+
+`http://127.0.0.1:4200` es otro origen (cambia el dominio, aunque sea la misma máquina) y no está en la lista. O abre la web con `localhost`, o añade también `http://127.0.0.1:4200` en desarrollo.
+
+</Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Mis pedidos" dificultad="media">
+  Haz que cada pedido sea de un usuario y crea `GET /api/pedidos/mios`, protegida, que devuelva los pedidos del usuario del token, los más nuevos primero, con sus líneas.
+
+  <Pista>En el modelo `Pedido` hace falta una clave ajena `userId` y la relación con `User`; en `User`, el lado `pedidos Pedido[]`. Después, una migración.</Pista>
+  <Pista>La ruta `/mios` tiene que ir **antes** que `/:id` en el router; si no, Express cree que `mios` es un id.</Pista>
+
+  <Solucion>
+
+```prisma title="prisma/schema.prisma"
+model Pedido {
+  id        Int           @id @default(autoincrement())
+  estado    EstadoPedido  @default(PENDIENTE)
+  userId    Int
+  user      User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  lineas    LineaPedido[]
+  createdAt DateTime      @default(now())
+
+  @@index([userId])
+}
+```
+
+Y en `model User`, añade `pedidos Pedido[]`. Después, `npx prisma migrate dev --name pedidos-usuario`.
+
+Como `userId` es obligatorio, cambia también el seed: crea antes un usuario (con la contraseña hasheada) y pon su id en el pedido, `prisma.pedido.create({ data: { userId: usuario.id, lineas: { create: [...] } } })`, y borra los usuarios después de los pedidos. Si no, el seed de [Modelo y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) deja de compilar. Y si ya tienes pedidos en la base, la migración no puede añadir una columna obligatoria sin valor: en desarrollo, `npx prisma migrate reset`.
+
+```ts title="pedidos.controller.ts"
+export async function misPedidosCtrl(_req: Request, res: Response) {
+  const pedidos = await prisma.pedido.findMany({
+    where: { userId: res.locals.userId },
+    orderBy: { createdAt: 'desc' },
+    include: { lineas: true },
+  });
+  res.json(pedidos);
+}
+```
+
+```ts title="pedidos.routes.ts"
+router.get('/mios', requireAuth, misPedidosCtrl);
+router.post('/:id/confirmar', requireAuth, confirmarPedidoCtrl);
+```
+
+Para seguir la estructura de clase, la consulta iría en `pedidos.service.ts` y el controlador solo la llamaría. Y en `confirmarPedido` conviene comprobar también que el pedido es del usuario del token (si no, `403`).
+
+</Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

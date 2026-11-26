@@ -1,0 +1,304 @@
+---
+title: Func, Action y Predicate
+description: Los delegados genéricos que trae .NET, sus equivalencias con un delegado propio, sus límites, y la diferencia entre un campo de tipo delegado y un tipo (clase del 18/11).
+icon: Braces
+---
+
+En la segunda mitad de la clase del 18/11 se vio que **no siempre hace falta declarar un delegado propio**: .NET ya trae tres familias de delegados genéricos que cubren casi todos los casos. Se probaron sobre `Validador.cs`, con equivalencias y con errores a propósito para ver sus límites.
+
+<DeClase fecha="18/11" proyecto="Clase1" nota="Validador.cs, del minuto 17 al 40" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué son `Func`, `Action` y `Predicate` y cuándo usar cada uno.
+  - Cómo pasar un delegado propio a su equivalente genérico.
+  - Por qué `Func<int, void>` y `Predicate<int, string>` no compilan.
+  - La diferencia entre un **campo** de tipo delegado y un **tipo** de delegado (error CS0246).
+</Callout>
+
+## Los tres delegados genéricos
+
+| Delegado | Qué representa | Ejemplo |
+| --- | --- | --- |
+| `Func<T1, …, TResult>` | Un método que **devuelve un valor**. El **último** tipo es el de retorno; los anteriores, los parámetros. | `Func<int, bool>`: recibe un `int`, devuelve `bool` |
+| `Action<T1, …>` | Un método que **no devuelve nada** (`void`). Todos los tipos son parámetros. | `Action<int>`: recibe un `int` |
+| `Predicate<T>` | Un método con **un solo** parámetro que devuelve `bool`. Es como `Func<T, bool>`. | `Predicate<int>`: recibe un `int`, devuelve `bool` |
+
+- Al pasar el ratón por `Func<int, bool>`, IntelliSense enseña `Func<in T, out TResult>` y explica que *"T es int, TResult es bool"*.
+- `Func` y `Action` admiten **hasta 16 parámetros**. Con `Action<int, string, string, int>` IntelliSense marca "4 de 16".
+- Están en `System`, así que no hace falta ningún `using`.
+
+<Mermaid
+  titulo="¿Qué delegado genérico uso?"
+  chart={`flowchart TD
+    A{"¿Devuelve algo?"} -- No --> B["Action#lt;T1, ...#gt;"]
+    A -- Sí --> C{"¿Un solo parámetro y devuelve bool?"}
+    C -- Sí --> D["Predicate#lt;T#gt; o Func#lt;T, bool#gt;"]
+    C -- No --> E["Func#lt;T1, ..., TResult#gt;"]`}
+/>
+
+## Equivalencias vistas en clase
+
+Cada delegado propio tiene su equivalente genérico. Estas son las que se escribieron en clase:
+
+| Delegado propio | Equivalente genérico |
+| --- | --- |
+| `delegate bool ValidarNumero(int x)` | `Func<int, bool>` o `Predicate<int>` |
+| `delegate void DelegadoSinResultado(int x)` | `Action<int>` |
+| `delegate bool MiDelegado(int x, string str)` | `Func<int, string, bool>` |
+
+Así quedaron en `Validador.cs`, comentadas para que no molesten:
+
+```csharp title="Validador.cs (18/11, bloque comentado)"
+public delegate bool ValidarNumero(int x);
+
+/*Func<int, bool> ValidarNumero2;
+
+public delegate void DelegadoSinResultado(int x);
+Action<int, string, string, int> DelegadoSinResultado2;
+
+Predicate<int> ValidarNumero3;
+
+public delegate bool MiDelegado(int x, string str);
+Func<int, string, bool> MiDelegado2;*/
+
+public static void ImprimeNumero(int x)
+{
+    Console.WriteLine($"El número ingresado es: {x}");
+}
+```
+
+- `ImprimeNumero` es un ejemplo de método que encaja con `DelegadoSinResultado` y con `Action<int>`: recibe un `int` y no devuelve nada.
+- Ojo: `Action<int, string, string, int>` **no** equivale a `DelegadoSinResultado(int x)`, que solo recibe un `int`. Su equivalente es `Action<int>`. Los cuatro tipos <Dudoso nota="No se explica en las capturas; es la interpretación más probable.">serían para enseñar que `Action` admite varios parámetros</Dudoso>.
+
+<Comparar columnas titulo="El mismo delegado, propio o genérico">
+  <Lado titulo="Propio">
+
+```csharp
+public delegate bool ValidarNumero(int x);
+
+ValidarNumero pred = (int x) => x > 10;
+```
+
+  </Lado>
+  <Lado titulo="Genérico">
+
+```csharp
+Predicate<int> pred = (int x) => x > 10;
+
+Func<int, bool> pred2 = (int x) => x > 10;
+```
+
+  </Lado>
+</Comparar>
+
+Las tres variables aceptan **la misma lambda**. En clase se probaron una detrás de otra.
+
+## Los límites: errores a propósito
+
+<DeClase fecha="18/11" proyecto="Clase1" nota="se escribieron para ver el error y se borraron" />
+
+```csharp title="No compilan"
+Func<int, void> DelegadoSinResultado3;
+Predicate<int, string> ValidarNumero3;
+```
+
+- **`Func<int, void>`**: `Func` **siempre devuelve algo**; `void` no es un tipo que se pueda poner ahí. Para un método sin retorno se usa `Action<int>`.
+- **`Predicate<int, string>`**: `Predicate` solo admite **un** tipo. Para dos parámetros y `bool`, `Func<int, string, bool>`.
+
+## Campo de tipo delegado no es un tipo
+
+<DeClase fecha="18/11" proyecto="Clase1" nota="error CS0246" />
+
+En clase se comentó el delegado propio y se cambió por un **campo**:
+
+```csharp title="Validador.cs"
+public Predicate<int> ValidarNumero;
+```
+
+A partir de ahí, `Ejecutar(ValidarNumero validate, int x)` dejó de compilar con **CS0246** (*no se encuentra el tipo o el espacio de nombres*). La razón:
+
+- `public delegate bool ValidarNumero(int x);` declara un **tipo**: sirve para declarar variables y parámetros (`ValidarNumero v`).
+- `public Predicate<int> ValidarNumero;` declara un **campo** (una variable de la clase) cuyo tipo es `Predicate<int>`. Su nombre no sirve como tipo.
+
+Es como en Java la diferencia entre `class Persona` (un tipo) y `Persona persona;` (un campo de tipo `Persona`): no puedes escribir `persona otra = ...`.
+
+<Comparar titulo="Declarar ValidarNumero">
+  <Lado tipo="evitar" titulo="Campo: da CS0246">
+
+```csharp
+public Predicate<int> ValidarNumero;
+
+ValidarNumero pred = (int x) => x > 10;   // CS0246
+```
+
+  </Lado>
+  <Lado tipo="bien" titulo="Tipo: compila">
+
+```csharp
+public delegate bool ValidarNumero(int x);
+
+ValidarNumero pred = (int x) => x > 10;
+```
+
+O, sin delegado propio, usar el genérico como tipo: `Predicate<int> pred = ...` o `Func<int, bool> pred = ...`.
+
+  </Lado>
+</Comparar>
+
+- Las acciones rápidas (la bombilla) propusieron **"Generar class ValidarNumero"**. No es la solución: crearía una clase vacía con ese nombre.
+- También se probó `ValidarNumero = new Predicate<int>(EsPositivo);` en el cuerpo de la clase, donde no se pueden escribir instrucciones sueltas, y se borró enseguida.
+- Se acabó dejando `Func<int, bool> pred = (int x) => x > 10;` y volviendo al delegado propio.
+
+## Usar Predicate en vez del delegado propio
+
+En el minuto 36 se cambió `Ejecutar` para que recibiera un `Predicate<int>`, y compiló:
+
+```csharp title="Validador.cs (variante con Predicate)"
+public static bool Ejecutar(Predicate<int> validate, int x)
+{
+    bool resultado = true;
+    foreach (Predicate<int> paso in validate.GetInvocationList())
+    {
+        resultado = resultado && paso(x);
+    }
+    return resultado;
+}
+```
+
+En `Program.cs` también funciona `Predicate<int> validar = Validador.EsPositivo;`. Un método estático que recibe `int` y devuelve `bool` encaja con `Predicate<int>`, y todos los `+=` (con nombre, anónimo y lambdas) siguen valiendo. Los `Predicate` también son multicast.
+
+Al final se volvió al delegado propio. En `Program.cs` se escribió `ValidarNumero validar = ...` sin el prefijo y dio un error: como el delegado está declarado **dentro** de `Validador`, desde fuera hay que escribir `Validador.ValidarNumero`.
+
+<NoSeVio titulo="Con qué tipo terminó">
+  No queda claro si `Ejecutar` se quedó recibiendo `ValidarNumero` o `Predicate<int>`, ni el tipo final de `validar` en `Program.cs`: la última captura tiene `ValidaValidarNumero` a medio escribir.
+</NoSeVio>
+
+<NoDadoEnClase titulo="Dos delegados con la misma firma no son el mismo tipo">
+  Un método o una lambda encajan con **cualquier** delegado de su firma. Pero una variable de un tipo de delegado **no se puede asignar** a otro tipo distinto, aunque tengan la misma firma. Si `validar` es un `Validador.ValidarNumero`, no puedes pasárselo a un `Ejecutar(Predicate<int> validate, ...)`: da error de conversión. Por eso, si cambias el parámetro de `Ejecutar`, tienes que cambiar también el tipo de la variable en `Program.cs`.
+</NoDadoEnClase>
+
+## El aviso CS8618 en los campos
+
+Con los campos de prueba (`Func<int, bool> ValidarNumero2;`…) salió el aviso **CS8618**: un campo que **no admite null** queda sin inicializar al salir del constructor. Visual Studio propuso dos arreglos: marcarlo como `required` o declararlo como anulable (`Func<int, bool>? ValidarNumero2;`). Además sugirió **IDE0044**: hacer el campo de solo lectura. En clase no se arregló, porque los campos se acabaron comentando. Lo mismo vuelve a salir con el evento del 19/11.
+
+## Si vienes de Java
+
+| C# | Java |
+| --- | --- |
+| `Func<T, TResult>` | `Function<T, R>` |
+| `Func<T1, T2, TResult>` | `BiFunction<T, U, R>` |
+| `Action<T>` | `Consumer<T>` |
+| `Action<T1, T2>` | `BiConsumer<T, U>` |
+| `Predicate<T>` | `Predicate<T>` |
+
+La diferencia es que en Java cada número de parámetros tiene su interfaz con su propio nombre, y en C# es la misma familia con más tipos genéricos.
+
+## Practica
+
+<CompletarCodigo
+  titulo="Equivalencias"
+  enunciado="Escribe el delegado genérico equivalente a cada delegado propio."
+  lenguaje="csharp"
+  codigo={`// delegate bool ValidarNumero(int x);
+[[Predicate]]<int> v1;
+Func<int, [[bool]]> v2;
+
+// delegate void DelegadoSinResultado(int x);
+[[Action]]<int> v3;
+
+// delegate bool MiDelegado(int x, string str);
+Func<int, string, [[bool]]> v4;`}
+/>
+
+<Quiz titulo="Test: Func, Action y Predicate">
+  <Pregunta enunciado="En `Func<int, string, bool>`, ¿cuál es el tipo de retorno?" explicacion="En `Func` el último tipo genérico es siempre el de retorno.">
+    <Opcion>`int`</Opcion>
+    <Opcion>`string`</Opcion>
+    <Opcion correcta>`bool`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cuál es el equivalente de `delegate void DelegadoSinResultado(int x)`?" explicacion="No devuelve nada y recibe un `int`: `Action<int>`.">
+    <Opcion>`Func<int, void>`</Opcion>
+    <Opcion correcta>`Action<int>`</Opcion>
+    <Opcion>`Predicate<int>`</Opcion>
+    <Opcion>`Action<int, string, string, int>`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cuáles equivalen a `delegate bool ValidarNumero(int x)`?" explicacion="Las dos describen un método que recibe un `int` y devuelve `bool`.">
+    <Opcion correcta>`Func<int, bool>`</Opcion>
+    <Opcion correcta>`Predicate<int>`</Opcion>
+    <Opcion>`Action<int, bool>`</Opcion>
+    <Opcion>`Func<bool, int>`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`Func<int, void>` compila y sirve para métodos que no devuelven nada." respuesta={false} explicacion="`Func` siempre devuelve algo. Para `void` se usa `Action`." />
+  <Pregunta tipo="vf" enunciado="`Predicate<int, string>` es un delegado de dos parámetros que devuelve `bool`." respuesta={false} explicacion="`Predicate` solo admite un parámetro de tipo. Para dos: `Func<int, string, bool>`." />
+  <Pregunta tipo="texto" enunciado="¿Cuántos parámetros como máximo admiten `Func` y `Action`?" respuesta="16" explicacion="IntelliSense lo enseña al escribir los tipos: «4 de 16»." />
+  <Pregunta enunciado="Declaras `public Predicate<int> ValidarNumero;` y luego escribes `ValidarNumero pred = ...;`. ¿Qué pasa?" explicacion="`ValidarNumero` es un campo, no un tipo, así que no sirve para declarar variables.">
+    <Opcion>Compila: `pred` es un `Predicate<int>`</Opcion>
+    <Opcion correcta>Error CS0246: no se encuentra el tipo `ValidarNumero`</Opcion>
+    <Opcion>Aviso CS8618 y compila</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: delegados genéricos">
+  <Tarjeta frente="`Func<T1, …, TResult>`">Devuelve un valor. El **último** tipo es el de retorno. No admite `void`.</Tarjeta>
+  <Tarjeta frente="`Action<T1, …>`">No devuelve nada. Equivale a un `delegate void`.</Tarjeta>
+  <Tarjeta frente="`Predicate<T>`">Un solo parámetro y devuelve `bool`. Como `Func<T, bool>`.</Tarjeta>
+  <Tarjeta frente="Máximo de parámetros de `Func` y `Action`">16.</Tarjeta>
+  <Tarjeta frente="`delegate bool MiDelegado(int x, string str)` en genérico">`Func<int, string, bool>`</Tarjeta>
+  <Tarjeta frente="CS0246 con `ValidarNumero`">Se declaró `ValidarNumero` como **campo** y se usó como **tipo**.</Tarjeta>
+  <Tarjeta frente="CS8618 en un campo delegado">El campo no admite null y queda sin inicializar. Arreglos: `required` o hacerlo anulable con `?`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Traduce a genéricos" dificultad="facil">
+  Escribe el delegado genérico equivalente a cada uno:
+
+  1. `delegate double Conversor(int euros);`
+  2. `delegate void Saludo(string nombre, int veces);`
+  3. `delegate bool EsMayorDeEdad(int edad);`
+  4. `delegate string Unir(string a, string b);`
+
+  <Pista>¿Devuelve algo? Si no, es `Action`. Si sí, el tipo de retorno va el último en `Func`.</Pista>
+
+  <Solucion>
+
+1. `Func<int, double>`
+2. `Action<string, int>`
+3. `Predicate<int>` o `Func<int, bool>`
+4. `Func<string, string, string>`
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="La calculadora sin delegado propio" dificultad="media">
+  Reescribe la calculadora del 09/11 sin declarar `delegate int Operacion(...)`: usa `Func` para guardar `Sumar` y `Restar` en el mismo delegado y escribe cada resultado con `GetInvocationList()`.
+
+  <Pista>`Operacion` recibe dos `int` y devuelve un `int`: ¿cuántos tipos lleva su `Func`?</Pista>
+  <Pista>En el `foreach`, la variable también es de ese tipo `Func`.</Pista>
+
+  <Solucion>
+
+Solución propia:
+
+```csharp title="Program.cs"
+Func<int, int, int> op = Calculadora.Sumar;
+op += Calculadora.Restar;
+
+foreach (Func<int, int, int> operacion in op.GetInvocationList())
+{
+    Console.WriteLine($"Resultado: {operacion(10, 5)}");
+}
+
+class Calculadora
+{
+    public static int Sumar(int a, int b) => a + b;
+    public static int Restar(int a, int b) => a - b;
+}
+```
+
+Escribe `Resultado: 15` y `Resultado: 5`. Ya no hay ningún `delegate` declarado: `Func<int, int, int>` hace su papel.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

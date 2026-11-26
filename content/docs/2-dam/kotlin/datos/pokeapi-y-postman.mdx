@@ -1,0 +1,240 @@
+---
+title: "PokeAPI y Postman: conocer la API antes de programar"
+description: "La API de ejemplo de clase: recursos por id o por nombre, paginación con limit y offset, por qué el listado no trae la imagen, cómo probarla en Postman y los repositorios de Retrofit y Gson."
+icon: Send
+---
+
+import { PaginacionPokeApi } from '@/components/temas/datos/paginacion-pokeapi';
+
+Antes de escribir una sola línea de Retrofit hay que saber **qué devuelve la API**: qué URLs tiene, qué forma tiene el JSON y qué datos trae cada respuesta. El 26/10, antes de programar la capa remota de la PokeApp, el profesor lo miró en la documentación de **PokeAPI** y lo probó en **Postman**.
+
+<DeClase fecha="26/10" proyecto="PokeApp2627" nota="del minuto 07:09 al 14:35 y al final, Git" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Cómo se piden los recursos de una API REST, con PokeAPI de ejemplo.
+  - Qué es la paginación con `limit` y `offset` y qué campos trae el listado.
+  - Por qué la PokeApp hace una petición por cada pokémon.
+  - Probar un endpoint con Postman antes de escribir las `data class`.
+</Callout>
+
+## PokeAPI
+
+[PokeAPI](https://pokeapi.co/docs/v2) es una API REST pública y gratuita con datos de pokémon. No necesita clave ni registro, y responde en JSON. En clase se miraron tres apartados de su documentación (`pokeapi.co/docs/v2`): **Resource Lists/Pagination**, el endpoint **Pokemon** y, de pasada, **Egg Groups**.
+
+La URL base de todo es `https://pokeapi.co/api/v2/`. Detrás va el recurso:
+
+| Petición | Qué devuelve |
+| --- | --- |
+| `GET /api/v2/pokemon/` | El **listado**, paginado: nombres y URLs. |
+| `GET /api/v2/pokemon/{id or name}/` | El **detalle** de un pokémon, pidiéndolo por id o por nombre: `/pokemon/1/` o `/pokemon/bulbasaur/`. |
+
+Un recurso REST se puede pedir **por id o por nombre**. Por eso en la interfaz de Retrofit de clase hay dos funciones, `readPokemonByName` y `readPokemonById`, que apuntan al mismo endpoint.
+
+## El listado y la paginación
+
+Esto es lo que devolvió Postman en clase con `GET https://pokeapi.co/api/v2/pokemon/` (recortado a dos resultados):
+
+```json title="GET https://pokeapi.co/api/v2/pokemon/"
+{
+  "count": 1351,
+  "next": "https://pokeapi.co/api/v2/pokemon/?offset=20&limit=20",
+  "previous": null,
+  "results": [
+    { "name": "bulbasaur", "url": "https://pokeapi.co/api/v2/pokemon/1/" },
+    { "name": "ivysaur",   "url": "https://pokeapi.co/api/v2/pokemon/2/" }
+  ]
+}
+```
+
+La API no devuelve los 1351 pokémon de golpe: los da **por páginas**. Se controla con dos parámetros de la URL:
+
+- `limit`: cuántos elementos trae la página (por defecto, 20).
+- `offset`: cuántos se salta desde el principio. `offset=20&limit=20` es la segunda página.
+
+| Campo | Qué es |
+| --- | --- |
+| `count` | El **total** de elementos que hay, no los de esta página. |
+| `next` | La URL de la página **siguiente**. Es `null` en la última. |
+| `previous` | La URL de la página **anterior**. Es `null` en la primera. |
+| `results` | La lista de esta página. Cada elemento es `{ name, url }`. |
+
+<PaginacionPokeApi />
+
+La demo sigue los enlaces `next` y `previous` como lo haría una app que carga página a página. Fíjate en que `results` solo trae `name` y `url`: ni el id como número, ni la imagen, ni los tipos.
+
+<Callout type="info" title="En clase solo se pidió la primera página">
+  La PokeApp de clase llama a `GET pokemon` sin parámetros, así que siempre recibe los 20 primeros (Bulbasaur… Raticate). Pedir más páginas no se programó.
+</Callout>
+
+## El listado no trae la imagen
+
+La foto de cada pokémon está en el **detalle**, en `sprites.front_default`. Un fragmento muy recortado (la respuesta real tiene muchísimos más campos):
+
+```json title="GET https://pokeapi.co/api/v2/pokemon/bulbasaur/ (fragmento)"
+{
+  "id": 1,
+  "name": "bulbasaur",
+  "sprites": {
+    "front_default": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png"
+  }
+}
+```
+
+Por eso, para pintar la lista con imágenes, la PokeApp hace **una petición del listado y luego una de detalle por cada pokémon**: con 20 resultados, 21 peticiones. Es lo que se llama el problema **N+1**. En clase se hizo así a propósito, para practicar; en [Retrofit](/docs/2-dam/kotlin/datos/retrofit) está el bucle que lo hace.
+
+Fíjate también en el nombre `front_default`: en JSON va con guion bajo, y en Kotlin la propiedad se llama `frontDefault`. Eso obligará a usar `@SerializedName`.
+
+## Probar la API con Postman
+
+[Postman](https://www.postman.com/downloads/) es un programa para mandar peticiones HTTP a mano y ver la respuesta. Sirve para **ver el JSON real antes de escribir las `data class`** y para saber si un fallo es de la API o de tu app.
+
+<Steps>
+  <Step>
+
+#### Crea una petición
+
+  Abre Postman y crea una petición HTTP nueva (botón **New** o la pestaña **+**).
+
+  </Step>
+  <Step>
+
+#### Elige el método y la URL
+
+  Deja el método en **GET** y escribe `https://pokeapi.co/api/v2/pokemon/`. Si añades `?limit=5&offset=10`, Postman te los enseña también en la pestaña **Params**.
+
+  </Step>
+  <Step>
+
+#### Envíala
+
+  Pulsa **Send**. En clase respondió **200 OK** en 71 ms.
+
+  </Step>
+  <Step>
+
+#### Lee la respuesta
+
+  En el panel de abajo sale el cuerpo en JSON (vista **Pretty**), el código de estado, el tiempo y el tamaño. Con ese JSON delante se escriben los DTO de Retrofit campo a campo.
+
+  </Step>
+</Steps>
+
+## Los repositorios de Retrofit y Gson
+
+En la misma clase el profesor enseñó los repositorios de GitHub de las dos librerías que se iban a usar:
+
+- **Retrofit** (`square/retrofit`), «A type-safe HTTP client for Android and the JVM». Versión 3.0.0. En las capturas el nombre del repositorio se lee <Dudoso nota="Seguramente es un error de lectura: el repositorio oficial es square/retrofit.">«lysine-dev/retrofit»</Dudoso>.
+- **Gson** (`google/gson`), la librería que convierte JSON en objetos y al revés. En el log de Gradle del proyecto sale la 2.13.1 <Dudoso nota="En la página de GitHub se leyó 2.15.0 como última versión." />.
+
+En la carpeta `samples` de Retrofit se abrió `ErrorHandlingAdapter.java`, un ejemplo con un *callback* distinto para cada tipo de respuesta: éxito (2xx), 401, otros 4xx, 5xx y errores de red. Sirvió para explicar qué guarda un `Response` de Retrofit: no solo los datos, también **el código HTTP**. Eso se usa en la página siguiente.
+
+| Código | Significa |
+| --- | --- |
+| 2xx (200, 201…) | Ha ido bien. `response.isSuccessful` es `true`. |
+| 401 | Falta la autenticación o no vale. |
+| 4xx (400, 404…) | La petición está mal: culpa de quien pide. |
+| 5xx (500…) | Ha fallado el servidor. |
+| Error de red | No hay respuesta: sin conexión, servidor caído… Retrofit lanza una excepción. |
+
+## Git en la misma clase
+
+Al final del 26/10 se creó el repositorio de la PokeApp:
+
+- Desde Android Studio: panel **Version Control** → **Create Git repository** o **Share on GitHub**.
+- Desde la terminal PowerShell, con `git init`, que crea la rama `main`, y el primer commit.
+
+<Terminal titulo="PowerShell">
+{`PS> git init
+PS> git status
+PS> git commit`}
+</Terminal>
+
+<NoSeVio titulo="Salida de los comandos">
+  De `git status` y `git commit` solo se ve el principio: no se leen los mensajes exactos ni el texto del commit del 26/10.
+</NoSeVio>
+
+En Windows sale el aviso `LF will be replaced by CRLF`. Es por `core.autocrlf`, que cambia los saltos de línea: **no es un error** y se puede ignorar. Desde el 09/11 los commits se hacen desde el IDE con mensajes de tipo Conventional Commits, como `feat: change ds and repo to flow emition`.
+
+## Practica
+
+<Quiz titulo="Test: PokeAPI y Postman">
+  <Pregunta enunciado="En el listado de PokeAPI, ¿qué es `count`?" explicacion="`count` es el total de elementos que existen. La página actual tiene como mucho `limit` elementos.">
+    <Opcion>Los elementos de esta página</Opcion>
+    <Opcion correcta>El total de elementos que hay</Opcion>
+    <Opcion>El número de página actual</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué vale `previous` en la primera página?" explicacion="No hay página anterior, así que es `null`. Del mismo modo, `next` es `null` en la última.">
+    <Opcion correcta>`null`</Opcion>
+    <Opcion>La URL de la última página</Opcion>
+    <Opcion>`0`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="Con `limit=20`, ¿qué `offset` pide la tercera página?" respuesta="40" explicacion="La primera es `offset=0`, la segunda `offset=20` y la tercera `offset=40`." />
+  <Pregunta enunciado="¿Por qué la PokeApp hace una petición por cada pokémon?" explicacion="El listado solo trae `name` y `url`. La imagen está en `sprites.front_default`, dentro del detalle.">
+    <Opcion>Porque PokeAPI no tiene listado</Opcion>
+    <Opcion correcta>Porque el listado no trae la imagen y hay que pedir el detalle</Opcion>
+    <Opcion>Porque Retrofit no sabe leer listas</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Un recurso de PokeAPI se puede pedir por id o por nombre: `/pokemon/1/` y `/pokemon/bulbasaur/` dan el mismo pokémon." respuesta={true} explicacion="El endpoint es `GET /api/v2/pokemon/{id or name}/`." />
+  <Pregunta enunciado="¿Para qué se usó Postman en clase?" explicacion="Para ver el JSON real que devuelve la API antes de escribir las data class de Retrofit.">
+    <Opcion correcta>Para probar el endpoint y ver el JSON antes de programar</Opcion>
+    <Opcion>Para generar el código de Retrofit</Opcion>
+    <Opcion>Para instalar la app en el emulador</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="El aviso `LF will be replaced by CRLF` de Git en Windows es un error que impide hacer el commit." respuesta={false} explicacion="Es solo un aviso sobre los saltos de línea (por `core.autocrlf`). El commit se hace igual." />
+</Quiz>
+
+<Flashcards titulo="Repaso: PokeAPI">
+  <Tarjeta frente="URL base de PokeAPI">`https://pokeapi.co/api/v2/`, con la barra final.</Tarjeta>
+  <Tarjeta frente="`limit` y `offset`">`limit`: cuántos trae la página. `offset`: cuántos se salta desde el principio.</Tarjeta>
+  <Tarjeta frente="Campos del listado">`count` (total), `next` (siguiente o `null`), `previous` (anterior o `null`) y `results` (lista de `{ name, url }`).</Tarjeta>
+  <Tarjeta frente="¿Dónde está la imagen de un pokémon?">En el detalle: `sprites.front_default`. El listado no la trae.</Tarjeta>
+  <Tarjeta frente="Problema N+1">1 petición del listado + 1 por cada elemento para el detalle. Con 20 pokémon, 21 peticiones.</Tarjeta>
+  <Tarjeta frente="¿Para qué sirve Postman?">Para mandar peticiones a mano y ver la respuesta real (código, tiempo y JSON) antes de programar.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Lee una página del listado" dificultad="facil">
+  Pide en Postman (o en el navegador) `https://pokeapi.co/api/v2/pokemon/?offset=3&limit=3` y contesta: ¿qué tres pokémon salen?, ¿qué valen `next` y `previous`?
+
+  <Pista>`offset=3` se salta los tres primeros (Bulbasaur, Ivysaur y Venusaur).</Pista>
+
+  <Solucion>
+
+  Salen **charmander**, **charmeleon** y **charizard** (ids 4, 5 y 6).
+
+  - `next` apunta a la página siguiente, con `offset=6&limit=3`.
+  - `previous` apunta a la anterior, con `offset=0&limit=3`: ya no es `null`, porque hay pokémon antes.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Del JSON a las data class" dificultad="media">
+  Mirando el JSON del listado de esta página, escribe las dos `data class` de Kotlin que necesitas para que Gson lo convierta: una para la respuesta entera y otra para cada elemento de `results`. Usa solo los campos que usa la app de clase.
+
+  <Pista>Cada objeto JSON es una `data class`, y cada array, una `List`.</Pista>
+  <Pista>En clase solo se usó `results`; `count`, `next` y `previous` se pueden dejar fuera. Gson ignora los campos que no están en la clase.</Pista>
+
+  <Solucion>
+
+```kotlin
+data class PokemonListResult(val results: List<PokemonListItemResult>)
+data class PokemonListItemResult(val name: String, val url: String)
+```
+
+  Son las mismas de clase, en `PokemonApiModels.kt`. Los nombres de las propiedades coinciden con los del JSON (`results`, `name`, `url`), así que no hace falta `@SerializedName`.
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Endpoint">Una ruta concreta de la API con su verbo, por ejemplo `GET /api/v2/pokemon/{id or name}/`.</Termino>
+  <Termino nombre="Paginación">Devolver los datos por trozos (`limit` y `offset`) junto con el total (`count`).</Termino>
+  <Termino nombre="N+1">Una petición para la lista más otra por cada elemento.</Termino>
+  <Termino nombre="Postman">Programa para probar una API mandando peticiones a mano.</Termino>
+  <Termino nombre="Código de estado HTTP">2xx va bien, 4xx es culpa de quien pide y 5xx es culpa del servidor.</Termino>
+</Glosario>
+
+<MarcarCompletado />

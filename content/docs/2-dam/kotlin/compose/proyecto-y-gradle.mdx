@@ -1,0 +1,497 @@
+---
+title: El proyecto Android y Gradle
+description: "Cómo es un proyecto de Android Studio con Compose: MainActivity, recursos, los dos build.gradle.kts, el catálogo libs.versions.toml, el BOM de Compose, compileSdk/minSdk/targetSdk, los errores de Gradle de clase y las herramientas del IDE."
+icon: Wrench
+---
+
+Antes de escribir pantallas conviene saber **dónde está cada cosa** en un proyecto de Android Studio y qué hace Gradle. En clase se fue viendo poco a poco: el 13/11 se creó un proyecto desde cero (el proyecto *Room*) y se montó todo el Gradle a mano, con varios errores por el camino que aquí tienes explicados.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué archivos tiene un proyecto con Compose y para qué sirve cada uno.
+  - Qué hace `MainActivity` y cómo empieza a pintarse la interfaz con `setContent`.
+  - Dónde van los recursos (iconos, textos) y cómo se usan desde Compose.
+  - Cómo se organizan las dependencias con el catálogo `libs.versions.toml` y el BOM de Compose.
+  - La diferencia entre `compileSdk`, `minSdk` y `targetSdk`.
+  - Los errores de Gradle que salieron en clase y cómo se arreglan.
+</Callout>
+
+## Crear el proyecto
+
+<DeClase fecha="13/11" proyecto="Room" nota="proyecto nuevo de plantilla Compose" />
+
+En Android Studio, **New Project** y la plantilla de actividad vacía con Compose (*Empty Activity*). Te pide el nombre, el paquete (en clase, <Dudoso nota="Casi todas las capturas leen `com.turingalan.room`; algunas, `com.turinglan.room`.">`com.turingalan.room`</Dudoso>) y el SDK mínimo. Android Studio genera un proyecto que ya compila y pinta un "Hello Android!".
+
+<Files>
+  <Folder name="app" defaultOpen>
+    <Folder name="src/main" defaultOpen>
+      <Folder name="java/com/turingalan/room" defaultOpen>
+        <Folder name="ui/theme">
+          <File name="Color.kt" />
+          <File name="Theme.kt" />
+          <File name="Type.kt" />
+        </Folder>
+        <File name="MainActivity.kt" />
+      </Folder>
+      <Folder name="res" defaultOpen>
+        <Folder name="drawable" />
+        <Folder name="values">
+          <File name="strings.xml" />
+          <File name="themes.xml" />
+        </Folder>
+      </Folder>
+      <File name="AndroidManifest.xml" />
+    </Folder>
+    <File name="build.gradle.kts" />
+  </Folder>
+  <Folder name="gradle" defaultOpen>
+    <File name="libs.versions.toml" />
+  </Folder>
+  <File name="build.gradle.kts" />
+  <File name="settings.gradle.kts" />
+</Files>
+
+| Archivo | Para qué sirve |
+| --- | --- |
+| `MainActivity.kt` | El punto de entrada: la *Activity* que abre Android. Con Compose suele haber una sola. |
+| `ui/theme/` | El tema de Material 3: colores (`Color.kt`), tipografía (`Type.kt`) y la función del tema (`Theme.kt`). Lo verás en [Material 3](/docs/2-dam/kotlin/compose/material-3). |
+| `res/drawable` | Imágenes e iconos (`R.drawable.nombre`). |
+| `res/values/strings.xml` | Los textos de la app (`R.string.nombre`). |
+| `AndroidManifest.xml` | Datos de la app para Android: permisos (como `INTERNET`), la clase `Application`, las Activity. |
+| `app/build.gradle.kts` | Cómo se compila el módulo `app`: plugins, SDK y dependencias. |
+| `build.gradle.kts` (raíz) | Los plugins que usa el proyecto, declarados sin aplicar. |
+| `gradle/libs.versions.toml` | El **catálogo de versiones**: todas las versiones y librerías en un solo sitio. |
+
+Según crecía el proyecto, en clase se organizó **por *features***: `core/ui`, `core/di`, `features/<x>/data`, `features/<x>/ui`... Esa organización se explica en el [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura/capas).
+
+## `MainActivity` y `setContent`
+
+<Recorrido
+  titulo="MainActivity.kt (plantilla, 13/11)"
+  lenguaje="kotlin"
+  codigo={`class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            RoomTheme {
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    Greeting(
+                        name = "Android",
+                        modifier = Modifier.padding(innerPadding)
+                    )
+                }
+            }
+        }
+    }
+}`}
+>
+  <Paso lineas="1" titulo="Una Activity de Compose">
+    `MainActivity` hereda de `ComponentActivity`. Android la crea cuando abres la app. Fíjate en el `()` de `ComponentActivity()`: es una clase, así que se llama a su constructor.
+  </Paso>
+  <Paso lineas="2-3" titulo="onCreate">
+    `onCreate` se ejecuta al crear la Activity. Lo primero es llamar a `super.onCreate`. Ojo: si giras el móvil, Android **destruye y vuelve a crear** la Activity, y `onCreate` se ejecuta otra vez. Eso importa para el estado (lo verás en [Estado y recomposición](/docs/2-dam/kotlin/compose/estado-y-recomposicion)).
+  </Paso>
+  <Paso lineas="4" titulo="enableEdgeToEdge()">
+    La app ocupa toda la pantalla, también por detrás de la barra de estado y de la de navegación del sistema. Por eso luego hay que respetar el `innerPadding`.
+  </Paso>
+  <Paso lineas="5" titulo="setContent: aquí empieza Compose">
+    Todo lo que va dentro de `setContent { }` es interfaz de Compose. Desde aquí ya solo hay funciones `@Composable`.
+  </Paso>
+  <Paso lineas="6" titulo="El tema">
+    `RoomTheme` es la función de `ui/theme/Theme.kt` (se llama como el proyecto: en la ToDoApp era `ToDoAppTheme`). Envuelve todo para que los componentes de Material 3 tomen los colores y la tipografía de la app.
+  </Paso>
+  <Paso lineas="7-11" titulo="Scaffold y el primer composable">
+    Un `Scaffold` con el `Greeting` de la plantilla, que recibe el `innerPadding` para no quedar debajo de la barra de estado. Lo explicamos en [Material 3](/docs/2-dam/kotlin/compose/material-3#scaffold).
+  </Paso>
+</Recorrido>
+
+En la ToDoApp, el contenido de `setContent` era `ToDoAppTheme { ToDoNavHost() }`: el tema y, dentro, la navegación, que decide qué pantalla se ve. Más adelante, la Activity llevó `@AndroidEntryPoint` (Hilt) y la pantalla de inicio (*splash*); eso es del [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura/hilt).
+
+<Callout type="info" title="El Greeting de la plantilla">
+  En las capturas no sale el código de `Greeting`, solo el resultado en pantalla ("Hello Android!"). En la plantilla de Android Studio es un `Text(text = "Hello $name!", modifier = modifier)`.
+</Callout>
+
+## Recursos: iconos y textos
+
+<DeClase fecha="07/10" proyecto="TipCalculator" />
+
+Los recursos van en `res/` y Android genera una clase **`R`** con un identificador para cada uno. Desde Compose se cargan con funciones que empiezan por `...Resource`:
+
+```kotlin title="TipCalculatorScreen.kt"
+Icon(
+    painterResource(id = R.drawable.icon_calculate_24),
+    contentDescription = "Calculate"
+)
+Text(stringResource(id = R.string.tipLabel))
+Text(stringResource(id = R.string.splitLabel, splitResult))
+```
+
+- **`painterResource(R.drawable.x)`** carga una imagen o un icono vectorial de `res/drawable`. En la TipCalculator, `icon_calculate_24.xml`; en la ToDoApp, el icono de añadir, <Dudoso nota="Otra captura lee `add_24dp`.">`R.drawable.add_24px`</Dudoso>.
+- **`stringResource(R.string.x)`** carga un texto de `strings.xml`. Si el texto tiene un hueco de formato, los argumentos van detrás: `stringResource(R.string.splitLabel, splitResult)`.
+- `stringResource` recibe siempre un **id** (`R.string.algo`), no un texto. El 18/11 se leyó `stringResource("Create task")` <Dudoso nota="Así no compila: stringResource recibe un id R.string.x. Seguramente era otra cosa o un texto de ayuda del IDE." />.
+- El proyecto de la TipCalculator ya tenía `values/strings.xml` y `values-es/strings.xml` desde el principio.
+
+### Localización en inglés y español <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  En clase solo se nombró `stringResource` el 07/10. Cómo se monta la traducción completa no se vio: está explicado, con las dos carpetas `values` y `values-es`, los huecos de formato y el Translations Editor, en [Intent implícito y localización](/docs/2-dam/kotlin/para-el-proyecto/intent-y-localizacion).
+</NoDadoEnClase>
+
+## Gradle: los tres archivos
+
+<DeClase fecha="13/11" proyecto="Room" />
+
+**Gradle** es la herramienta que descarga las librerías y compila la app. Se configura con tres archivos que trabajan juntos:
+
+<Steps>
+  <Step>
+
+#### `gradle/libs.versions.toml`: el catálogo
+
+  Un solo sitio con todas las versiones (`[versions]`), las librerías (`[libraries]`) y los plugins (`[plugins]`). Cada librería y plugin apunta a su versión con `version.ref`.
+
+  </Step>
+  <Step>
+
+#### `build.gradle.kts` de la raíz: declarar los plugins
+
+  Se nombran todos los plugins del proyecto con **`apply false`**: se declaran (y se descargan) pero no se aplican aquí.
+
+  </Step>
+  <Step>
+
+#### `app/build.gradle.kts`: aplicarlos y añadir dependencias
+
+  Se aplican los plugins (sin `apply false`), se configura el SDK y se añaden las dependencias con `implementation(...)` o `ksp(...)`.
+
+  </Step>
+</Steps>
+
+<Tabs items={['libs.versions.toml', 'build.gradle.kts (raíz)', 'app/build.gradle.kts']}>
+  <Tab value="libs.versions.toml">
+
+```toml title="gradle/libs.versions.toml"
+[versions]
+agp = "9.2.1"
+kotlin = "2.2.10"
+composeBom = "2026.02.01"
+ksp = "2.3.12"
+hilt = "2.60.1"
+coreSplashscreen = "1.2.0"
+
+[libraries]
+hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
+hilt-android-compiler = { module = "com.google.dagger:hilt-android-compiler", version.ref = "hilt" }
+androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "coreSplashscreen" }
+
+[plugins]
+hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+```
+
+- La versión de Kotlin se lee <Dudoso nota="Una captura lee 2.2.10 y otra 2.3.10. Puede que el profesor la cambiara por el aviso «Kotlin 2.3.10 is available».">`2.2.10`</Dudoso> en una captura y `2.3.10` en otra.
+- Esto es lo que **se añadió** en clase. Las líneas de la plantilla (`core-ktx`, `activity-compose`, `compose-bom`, `material3`...) también están en el archivo, pero no se enseñaron una a una.
+
+</Tab>
+  <Tab value="build.gradle.kts (raíz)">
+
+```kotlin title="build.gradle.kts"
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.ksp) apply false
+    alias(libs.plugins.hilt) apply false
+}
+```
+
+`libs.plugins.ksp` es el plugin `ksp` del catálogo. Los guiones del `.toml` se convierten en puntos: `android-application` se usa como `libs.plugins.android.application`.
+
+  </Tab>
+  <Tab value="app/build.gradle.kts">
+
+```kotlin title="app/build.gradle.kts"
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
+}
+
+android {
+    namespace = "com.turingalan.room"
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 1
+        }
+    }
+    defaultConfig {
+        applicationId = "com.turingalan.room"
+        minSdk = 35
+        targetSdk = 37
+        versionCode = 1
+        versionName = "1.0"
+    }
+    buildFeatures { compose = true }
+}
+
+dependencies {
+    implementation(libs.androidx.core.splashscreen)
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.11.0")
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.android.compiler)
+    implementation("androidx.room3:room3-runtime:3.0.3")
+    ksp("androidx.room3:room3-compiler:3.0.3")
+
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.compose.material3)
+}
+```
+
+Es un resumen del archivo de clase: quedan fuera `buildTypes`, `compileOptions` y el resto de dependencias de la plantilla. El paquete (`namespace` y `applicationId`) se lee <Dudoso nota="Algunas capturas leen `com.turinglan.room`.">`com.turingalan.room`</Dudoso>.
+
+  </Tab>
+</Tabs>
+
+### `implementation` frente a `ksp`
+
+- **`implementation(...)`**: la librería se mete en la app y la usa tu código al ejecutarse (Hilt, Room, Compose...).
+- **`ksp(...)`**: es un **compilador** que lee tus anotaciones (`@HiltViewModel`, `@Dao`...) y **genera código** mientras compila. No va dentro de la app. <Concepto termino="KSP" definicion="Kotlin Symbol Processing: el procesador que lee las anotaciones y genera código al compilar. Lo usan Room y Hilt.">KSP</Concepto> tiene su propio plugin (`com.google.devtools.ksp`), en clase la versión 2.3.12.
+- Se pueden escribir las coordenadas a mano (`"androidx.room3:room3-runtime:3.0.3"`) o con el catálogo (`libs.hilt.android`). El catálogo es mejor: el IDE incluso te sugiere moverlas allí.
+
+### El BOM de Compose
+
+Compose son muchas librerías (`ui`, `material3`, `ui-tooling-preview`, `foundation`...) que tienen que ir en versiones compatibles entre sí. El <Concepto termino="BOM" definicion="Bill of Materials: una dependencia que fija la versión de todas las librerías de Compose a la vez. Por eso esas librerías se escriben sin versión.">BOM</Concepto> lo resuelve: añades **una** dependencia con versión, envuelta en `platform(...)`, y el resto de librerías de Compose van **sin versión**.
+
+```kotlin title="app/build.gradle.kts"
+implementation(platform(libs.androidx.compose.bom))   // fija las versiones (en clase, 2026.02.01)
+implementation(libs.androidx.compose.material3)       // sin versión: la pone el BOM
+```
+
+<NoDadoEnClase titulo="Cómo vienen las líneas de Compose en el catálogo">
+  En clase no se abrieron estas líneas de la plantilla. Así suelen venir en `libs.versions.toml`: fíjate en que las de Compose no tienen `version.ref`.
+</NoDadoEnClase>
+
+```toml title="gradle/libs.versions.toml (plantilla)"
+[libraries]
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+```
+
+<NoDadoEnClase inline /> Lo mismo pasa con los iconos de Material: `implementation("androidx.compose.material:material-icons-core")` va **sin versión** porque también la pone el BOM. Lo necesitas para usar `Icons.Default.Home` y compañía (no salió en clase; ver [Material 3](/docs/2-dam/kotlin/compose/material-3#iconos)).
+
+### Sync Now
+
+Cada vez que tocas un archivo de Gradle, Android Studio enseña la barra **Sync Now**: hasta que sincronizas, el IDE no conoce las librerías nuevas y marca el código en rojo. Después de cambiar el catálogo, Gradle tampoco puede reutilizar la *configuration cache* y la siguiente compilación tarda más.
+
+## `compileSdk`, `minSdk` y `targetSdk`
+
+<DeClase fecha="13/11" proyecto="Room" />
+
+| Propiedad | Qué decide | En clase |
+| --- | --- | --- |
+| `compileSdk` | Con qué versión de la API de Android **se compila**: qué clases y métodos puedes usar. | 37 (37.1) |
+| `targetSdk` | Para qué versión **está pensada** la app: Android activa los comportamientos de esa versión. | 37 |
+| `minSdk` | La versión **más antigua** en la que se puede **instalar**. | 35 |
+
+- El 13/11 el proyecto compilaba contra `android-36.1` y una librería pedía `compileSdk 37`. Se arregló subiendo a `release(37)`, `minSdk 35` y `targetSdk 37`, y el sync descargó la **Android SDK Platform 37.1**.
+- `compileSdk { version = release(37) { minorApiLevel = 1 } }` es la **sintaxis nueva de AGP 9** (el plugin de Android, en clase 9.2.1). En proyectos más viejos verás `compileSdk = 36` a secas.
+- Ojo con `minSdk = 35`: solo instala en **Android 15 o superior**. Si tu móvil es más antiguo, bájalo (con 26 funciona todo lo de clase).
+
+## Versiones de clase
+
+| Librería o herramienta | Versión | Clase |
+| --- | --- | --- |
+| Compose BOM | 2026.02.01 | 13/11 |
+| AGP (`com.android.application`) | 9.2.1 | 13/11 |
+| Kotlin (plugin compose) | <Dudoso nota="Se lee 2.2.10 y también 2.3.10.">2.2.10 o 2.3.10</Dudoso> | 13/11 |
+| KSP | 2.3.12 | 13/11 |
+| `activity-compose` | 1.13.0 | 09/10, 13/11 |
+| `core-ktx` | <Dudoso nota="1.19.1 el 09/10 y 1.19.0 el 13/11.">1.19.1 / 1.19.0</Dudoso> | 09/10, 13/11 |
+| `lifecycle-runtime-ktx` | <Dudoso nota="2.11.0 el 09/10 (lectura parcial) y 2.10.0 el 13/11.">2.11.0 / 2.10.0</Dudoso> | 09/10, 13/11 |
+| `lifecycle-viewmodel-ktx` | 2.11.0 | 13/11 |
+| `lifecycle-runtime-compose` (`collectAsStateWithLifecycle`) | no se ve | 16/10 |
+| Coil (`AsyncImage`) | no se ve | 09/11 |
+| SDK: compile / min / target | 37 (37.1) / 35 / 37 | 13/11 |
+
+Los emuladores de clase fueron un Pixel 8a con API 37.2, un Pixel 7a con API 37.1 y un Pixel 10. Las versiones de Hilt, Room, Retrofit, Navigation y DataStore están en sus bloques.
+
+<Callout type="info" title="El código que no es de clase">
+  El código de estos apuntes marcado como "no dado en clase" está pensado para estas mismas versiones de librerías (y Kotlin 2.4). No cambies las versiones del proyecto para copiarlo.
+</Callout>
+
+## Errores de Gradle
+
+Los que llevan "Salió en clase" pasaron en directo.
+
+<Accordions type="multiple">
+  <Accordion title="checkDebugAarMetadata: una librería pide un compileSdk más nuevo (Salió en clase)">
+    Falla la tarea `checkDebugAarMetadata` porque alguna dependencia necesita compilar contra una API más nueva que la tuya. Sube `compileSdk` (y, si hace falta, `targetSdk`) a lo que pide el mensaje y sincroniza. El 13/11 se pasó de 36.1 a `release(37)`.
+  </Accordion>
+  <Accordion title="The Hilt Android Gradle plugin is applied but no com.google.dagger:hilt-android dependency was found (Salió en clase)">
+    El **plugin** y la **dependencia** van por separado. Si aplicas el plugin de Hilt sin añadir `implementation(libs.hilt.android)` y `ksp(libs.hilt.android.compiler)`, el sync falla. El 13/11 se arregló añadiendo las dos líneas.
+  </Accordion>
+  <Accordion title="Syntax error: Expecting qualified name (Salió en clase)">
+    El 13/11 salió en `PokemonDAO.kt:5:7` por un `import` a medio escribir. Truco del profesor para encontrar errores: leer el **primer** error del panel **Build Output** (dice archivo, línea y mensaje) y, si no está claro, comentar líneas con `//` hasta que compile.
+  </Accordion>
+  <Accordion title="KSP falla al sincronizar el proyecto">
+    Usa la versión de KSP de clase (2.3.12). Las versiones antiguas, del tipo `2.0.21-1.0.28`, solo funcionan con una versión concreta de Kotlin.
+  </Accordion>
+  <Accordion title="INSTALL_FAILED_OLDER_SDK en tu móvil (Salió en clase el minSdk 35)">
+    En clase se puso `minSdk 35`, que solo instala en Android 15 o superior. Bájalo (26 vale para todo lo de clase).
+  </Accordion>
+  <Accordion title="Unresolved reference: collectAsStateWithLifecycle">
+    Falta la dependencia `lifecycle-runtime-compose`.
+  </Accordion>
+  <Accordion title="Unresolved reference: Icons (o Home, Settings...)">
+    Falta `androidx.compose.material:material-icons-core`, sin versión, porque la pone el BOM de Compose.
+  </Accordion>
+  <Accordion title="Unresolved reference: BuildConfig">
+    Falta `buildConfig = true` en `buildFeatures`, o no has compilado después de añadir el `buildConfigField`. (`buildConfigField` no se dio en clase).
+  </Accordion>
+</Accordions>
+
+## El IDE: atajos, compilación y depuración
+
+<DeClase fecha="09/10, 16/10, 23/10, 18/11" />
+
+**Atajos que salieron en clase:**
+
+| Atajo o menú | Para qué |
+| --- | --- |
+| **Alt+Intro** | Arreglo rápido: sobre todo, importar lo que está en rojo. |
+| **Ctrl+P** | Ver los parámetros de la función en la que estás. |
+| **Mayús+F10** | Ejecutar (*Run 'app'*). |
+| **Refactor → Rename** | Renombrar una clase o función en todo el proyecto, con vista previa. |
+| **New → Kotlin Class/File** | Crear una clase, una interfaz o un archivo suelto (opción *File*, para funciones sueltas como un `NavHost`). |
+
+**Compilar.** Al ejecutar, en el panel **Build Output** salen las tareas de Gradle. Con KSP y Hilt verás tareas como estas:
+
+<Terminal titulo="Build Output">
+{`> Task :app:kspDebugKotlin
+> Task :app:hiltAggregateDepsDebug
+> Task :app:hiltJavaCompileDebug
+BUILD SUCCESSFUL in 6s`}
+</Terminal>
+
+**Depurar.** El 16/10 y el 23/10 se depuró con el depurador de Android Studio:
+
+- **Breakpoints**: clic en el margen de la línea. Al llegar ahí, la app se para.
+- **Threads & Variables**: el valor de cada variable en ese momento (por ejemplo, `newTask = Task(id=3, ...)`).
+- **Evaluate expression**: calcular cualquier expresión con los valores actuales.
+- **Frames**: la pila de llamadas. Con corrutinas también se ve la pila de la corrutina.
+- **Step Into (F7)** para entrar en una función y **Resume** para seguir hasta el siguiente breakpoint.
+- **Recomposition State**: en un composable, enseña por qué se ha vuelto a ejecutar y si sus argumentos han cambiado (algunos salen como *Uncertain*).
+
+**Logcat** es la ventana con los mensajes y errores de la app que se está ejecutando. El 18/11 se filtró con **`package:mine`** para ver solo los de nuestra app. Cuando la app se cae, la excepción completa sale aquí.
+
+## Practica
+
+<CompletarCodigo
+  titulo="El catálogo y el build del módulo"
+  enunciado="Completa la librería del catálogo y su uso en app/build.gradle.kts."
+  lenguaje="kotlin"
+  codigo={`// libs.versions.toml
+// [libraries]
+// hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
+// hilt-android-compiler = { module = "com.google.dagger:hilt-android-compiler", version.ref = "hilt" }
+
+dependencies {
+    [[implementation]](libs.hilt.android)
+    [[ksp]](libs.hilt.android.compiler)
+    implementation([[platform]](libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.material3)
+}`}
+/>
+
+<Quiz titulo="Test: el proyecto y Gradle" descripcion="7 preguntas">
+  <Pregunta enunciado="¿Dónde empieza la interfaz de Compose en una app?" explicacion="Todo lo que va dentro de `setContent { }` en la Activity es Compose.">
+    <Opcion>En `AndroidManifest.xml`</Opcion>
+    <Opcion correcta>Dentro de `setContent { }` en `onCreate` de la Activity</Opcion>
+    <Opcion>En `res/layout/activity_main.xml`</Opcion>
+    <Opcion>En `Theme.kt`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Para qué sirve `apply false` en el `build.gradle.kts` de la raíz?" explicacion="En la raíz los plugins se declaran (y se descarga su versión) sin aplicarse; cada módulo los aplica después en su propio archivo.">
+    <Opcion>Para desactivar el plugin en todo el proyecto.</Opcion>
+    <Opcion correcta>Para declarar el plugin sin aplicarlo ahí; se aplica en el módulo que lo usa.</Opcion>
+    <Opcion>Para que el plugin solo se use en modo release.</Opcion>
+    <Opcion>Para que Gradle no lo descargue.</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Con el BOM de Compose, las librerías de Compose como `material3` se escriben sin versión." respuesta={true} explicacion="El BOM fija las versiones de todas a la vez, para que sean compatibles." />
+  <Pregunta enunciado="¿Qué propiedad decide en qué móviles se puede instalar la app?" explicacion="`minSdk` es la versión más antigua de Android en la que se instala. `compileSdk` es contra qué API compilas y `targetSdk`, para cuál está pensada.">
+    <Opcion>`compileSdk`</Opcion>
+    <Opcion>`targetSdk`</Opcion>
+    <Opcion correcta>`minSdk`</Opcion>
+    <Opcion>`versionCode`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué el compilador de Hilt se añade con `ksp(...)` y no con `implementation(...)`?" explicacion="Es un procesador que genera código al compilar a partir de las anotaciones. No hace falta dentro de la app.">
+    <Opcion correcta>Porque genera código al compilar a partir de las anotaciones y no va dentro de la app.</Opcion>
+    <Opcion>Porque `implementation` solo vale para librerías de Google.</Opcion>
+    <Opcion>Porque así la app pesa más pero arranca antes.</Opcion>
+    <Opcion>Es indiferente: las dos hacen lo mismo.</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Aplicas el plugin de Hilt en `app/build.gradle.kts` pero no añades `hilt-android`. ¿Qué pasa?" explicacion="Salió el 13/11: el sync falla con «The Hilt Android Gradle plugin is applied but no com.google.dagger:hilt-android dependency was found».">
+    <Opcion>Nada, el plugin añade la librería solo.</Opcion>
+    <Opcion correcta>Falla el sync: el plugin necesita la dependencia.</Opcion>
+    <Opcion>Compila, pero la app se cae al abrirla.</Opcion>
+    <Opcion>Android Studio la añade automáticamente al catálogo.</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿Qué filtro de Logcat se usó en clase para ver solo los mensajes de nuestra app?" respuesta={["package:mine", "package: mine"]} explicacion="`package:mine` deja solo los mensajes de la app que estás ejecutando." />
+</Quiz>
+
+<Flashcards titulo="Repaso: proyecto y Gradle">
+  <Tarjeta frente="¿Qué hace `setContent { }`?">Pone la interfaz de Compose en la Activity. Todo lo de dentro son funciones `@Composable`.</Tarjeta>
+  <Tarjeta frente="`painterResource` y `stringResource`">Cargan un recurso por su id: `painterResource(R.drawable.x)` una imagen o icono, `stringResource(R.string.x)` un texto.</Tarjeta>
+  <Tarjeta frente="Las tres secciones de `libs.versions.toml`">`[versions]`, `[libraries]` y `[plugins]`. Librerías y plugins apuntan a su versión con `version.ref`.</Tarjeta>
+  <Tarjeta frente="`implementation` frente a `ksp`">`implementation` mete la librería en la app; `ksp` añade un procesador que genera código al compilar.</Tarjeta>
+  <Tarjeta frente="¿Qué es el BOM de Compose?">Una dependencia (`platform(...)`) que fija la versión de todas las librerías de Compose. Por eso van sin versión.</Tarjeta>
+  <Tarjeta frente="`compileSdk`, `targetSdk`, `minSdk`">Con qué API compilas; para cuál está pensada la app; la más antigua en la que se instala.</Tarjeta>
+  <Tarjeta frente="Cómo buscar un error de compilación">Leer el primer error de Build Output (archivo, línea, mensaje) y comentar líneas hasta que compile.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Pasa una dependencia al catálogo" dificultad="facil">
+  En tu `app/build.gradle.kts` tienes esta línea escrita a mano:
+
+```kotlin
+implementation("androidx.core:core-splashscreen:1.2.0")
+```
+
+  Pásala al catálogo `libs.versions.toml` y escribe cómo queda la línea en `app/build.gradle.kts`.
+
+  <Pista>Necesitas una entrada en `[versions]` y otra en `[libraries]` que la use con `version.ref`.</Pista>
+  <Pista>Los guiones del nombre de la librería se convierten en puntos al usarla desde Gradle.</Pista>
+
+  <Solucion>
+
+```toml
+[versions]
+coreSplashscreen = "1.2.0"
+
+[libraries]
+androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "coreSplashscreen" }
+```
+
+```kotlin
+implementation(libs.androidx.core.splashscreen)
+```
+
+  Es exactamente lo que se hizo en clase el 13/11. Después, **Sync Now**.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Que la app se instale en tu móvil" dificultad="facil">
+  Has copiado el `defaultConfig` de clase (`minSdk = 35`) y al instalar en tu móvil, que tiene Android 12 (API 31), sale `INSTALL_FAILED_OLDER_SDK`. ¿Qué cambias y por qué? ¿Tienes que tocar `compileSdk`?
+
+  <Pista>Piensa en qué decide cada uno de los tres SDK.</Pista>
+
+  <Solucion>
+    Bajas `minSdk` a 31 o menos (por ejemplo, `minSdk = 26`), porque es lo que decide en qué versiones se puede instalar. `compileSdk` no hace falta tocarlo: puedes compilar contra la API 37 y seguir instalando en móviles más antiguos. Lo que no puedes es usar sin comprobarlo funciones que solo existen en versiones nuevas (por eso el tema comprueba `Build.VERSION.SDK_INT` antes de usar el color dinámico).
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

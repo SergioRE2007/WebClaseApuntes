@@ -1,0 +1,424 @@
+---
+title: RxJS y gestión de errores
+description: Observable y subscribe tal como se usaron en clase, y lo que está en las guías de Patrones reactivos y Gestión de errores pero no se dio. pipe, map, switchMap, takeUntilDestroyed, async, catchError, retry, HttpErrorResponse y ErrorHandler.
+icon: TriangleExclamationPoint
+---
+
+En clase, todas las peticiones HTTP se consumieron igual: `servicio.metodo().subscribe(datos => ...)`. Funciona, pero si la API falla no pasa nada visible: el `subscribe` no tiene qué hacer con el error. Esta página repasa lo que se vio de `Observable` y resume lo que está en las guías para tratar los datos asíncronos y los errores como en un proyecto de verdad.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué es un `Observable` y qué hace `subscribe` (dado en clase).
+  - Transformar los datos con `pipe`, `map`, `filter` y `switchMap` (no dado).
+  - Limpiar suscripciones con `takeUntilDestroyed` o el pipe `async` (no dado).
+  - Capturar errores HTTP con `subscribe({ next, error })`, `catchError` y `retry`, y centralizarlos con `ErrorHandler` (no dado).
+</Callout>
+
+## Qué se dio y qué no
+
+| Pieza | Estado | Dónde |
+| --- | --- | --- |
+| `Observable`, `subscribe` con una función | Dado | 27/10 y 28/10, y en todos los servicios de `proj-game` |
+| Error de CORS en la consola | Salió en clase | 18/11, al desplegar `proj-game` |
+| `HttpErrorResponse` | A medias | 27/10: se importa en un intento que no se entiende |
+| `pipe`, `map`, `filter`, `tap`, `switchMap`, `of`, `from` | <NoDadoEnClase inline /> | Guía `6_Patrones_Reactivos.md` |
+| `takeUntilDestroyed`, pipe `async` | <NoDadoEnClase inline /> | Guía `6_Patrones_Reactivos.md` |
+| `catchError`, `throwError`, `retry`, `HttpStatusCode`, `ErrorHandler` | <NoDadoEnClase inline /> | Guía `11_Gestion_Errores.md` |
+
+## Observable y subscribe
+
+<DeClase fecha="28/10" proyecto="proj-fakestore" nota="Act 8, Catálogo de productos con un Service" />
+
+`getProducts()` **no devuelve un array**: devuelve un `Observable<Product[]>`, porque la petición HTTP tarda en llegar. En clase se explicó así: *"cuando lleguen los productos, avísame y entrégame el array"*. El componente se apunta con `subscribe` y le pasa la función que se ejecutará cuando lleguen.
+
+```ts title="app.component.ts (proj-fakestore, 28/10)"
+ngOnInit(): void {
+  this.productService.getProducts().subscribe(products => {
+    console.log(products);
+    this.products = products;
+  });
+}
+```
+
+El recorrido completo, como lo dibujaba el documento:
+
+<Flujo
+  titulo="De ngOnInit a this.products"
+  nodos={["AppComponent", "ProductService", "HttpClient", "Fake Store API"]}
+>
+  <Mensaje de="AppComponent" a="ProductService" titulo="getProducts()">
+    En `ngOnInit`, el componente pide los productos. Recibe al momento un `Observable<Product[]>`, todavía sin datos.
+  </Mensaje>
+  <Mensaje de="AppComponent" a="AppComponent" titulo="subscribe(...)">
+    Al suscribirse, la petición sale de verdad. El componente sigue a lo suyo: la plantilla ya se ha pintado sin productos.
+  </Mensaje>
+  <Mensaje de="ProductService" a="HttpClient" titulo="http.get<Product[]>(apiUrl)">
+    El servicio ya había preparado la petición con `HttpClient`. <Dudoso nota="El cuerpo de ProductService (inject(HttpClient) y apiUrl = 'https://fakestoreapi.com/products') sale del documento de la actividad, no de la pantalla.">No se ve el cuerpo del servicio</Dudoso>.
+  </Mensaje>
+  <Mensaje de="HttpClient" a="Fake Store API" titulo="GET /products">
+    La petición viaja a `fakestoreapi.com`.
+  </Mensaje>
+  <Mensaje de="Fake Store API" a="HttpClient" tipo="respuesta" titulo="200 OK + JSON">
+    Llega la respuesta y `HttpClient` convierte el JSON.
+  </Mensaje>
+  <Mensaje de="HttpClient" a="AppComponent" tipo="respuesta" titulo="products => ...">
+    Se ejecuta la función del `subscribe` con el array. Se guarda en `this.products` y Angular repinta.
+  </Mensaje>
+</Flujo>
+
+- El tooltip de `subscribe` enseñaba que acepta una función o un objeto `Partial<Observer<Product[]>>`, y que devuelve una `Subscription`.
+- Un `Observable` de `HttpClient` emite **una vez** y se completa. Por eso en clase no hacía falta desuscribirse.
+- **Sin `subscribe`, no hay petición**: los observables son *perezosos* y no hacen nada hasta que alguien se suscribe. Es el "Caso C" de diagnóstico de la guía 6 (un `pipe(tap(...))` cuyo `tap` nunca se ejecuta porque falta el `subscribe`). Lo mismo pasa con un `this.service.delete(id)` sin `.subscribe()`: no borra nada.
+
+<NoSeVio titulo="El intento con HttpErrorResponse (27/10)">
+  En `angular-http` hay un intento con `as` y con `Observable<Post[] | HttpErrorResponse>` del que no se entiende qué quería enseñar. Tampoco se ve cómo se actualizan las signals `loading` y `error` de `CommentsComponent`, que generó la IA de Cursor.
+</NoSeVio>
+
+## Transformar con pipe <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Lo que sigue está en la guía [6_Patrones_Reactivos](https://github.com/hokahey007/guides-angular) (con su proyecto en [codebase-angular/06_promesas_y_observables](https://github.com/hokahey007/codebase-angular/tree/main/06_promesas_y_observables)) y no se trabajó en clase. Es un resumen con nuestras palabras.
+</NoDadoEnClase>
+
+**RxJS** es la librería de los `Observable`. Sus *operadores* se encadenan con `pipe()`, como los métodos de un `Stream` de Java: cada uno recibe lo que emite el anterior y devuelve otro observable.
+
+| Operador | Hace | Parecido en Java |
+| --- | --- | --- |
+| `map(fn)` | Transforma cada valor | `stream.map(...)` |
+| `filter(fn)` | Deja pasar solo los valores que cumplen la condición | `stream.filter(...)` |
+| `tap(fn)` | Hace algo (un `console.log`) sin cambiar el valor | `stream.peek(...)` |
+| `switchMap(fn)` | Con cada valor, lanza **otro observable** y cancela el anterior | |
+| `of(a, b)` / `from([a, b])` | Crean un observable a partir de valores o de un array (o una promesa) | `Stream.of(...)` |
+
+```ts title="game.service.ts (con pipe)"
+import { map, tap } from 'rxjs';
+
+getJuegosConStock(): Observable<Game[]> {
+  return this.http.get<Game[]>(this.apiUrl).pipe(
+    tap(games => console.log('Llegan', games.length)),
+    map(games => games.filter(g => g.stock > 0)),
+  );
+}
+```
+
+Ojo: aquí `map` es el de RxJS (transforma la emisión, que es un array entero) y el `filter` de dentro es el de los arrays de JavaScript.
+
+`switchMap` es el que se usa con el router: cada vez que cambia el `:id`, pide el juego y, si ya había una petición en marcha, la cancela.
+
+```ts title="detalle-juego.component.ts"
+this.route.paramMap.pipe(
+  switchMap(params => this.gameService.getGameById(Number(params.get('id'))))
+).subscribe(game => this.game.set(game));
+```
+
+## Cerrar suscripciones <NoDadoEnClase inline />
+
+Las peticiones de `HttpClient` se completan solas, pero otros observables **no terminan nunca**: un `interval`, los eventos del teclado (`fromEvent`) o los cambios de un formulario (`valueChanges`). Si no cancelas la suscripción, sigue viva después de destruir el componente.
+
+<Tabs items={['takeUntilDestroyed', 'Pipe async']}>
+  <Tab value="takeUntilDestroyed">
+
+```ts title="buscador.component.ts"
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { debounceTime } from 'rxjs';
+
+export class BuscadorComponent {
+  protected buscador = new FormControl('', { nonNullable: true });
+
+  constructor() {
+    this.buscador.valueChanges
+      .pipe(debounceTime(300), takeUntilDestroyed())
+      .subscribe(texto => this.buscar(texto));
+  }
+}
+```
+
+  `takeUntilDestroyed()` corta la suscripción cuando se destruye el componente. Se llama en el constructor (contexto de inyección). `debounceTime(300)` espera a que se dejen de pulsar teclas 300 ms antes de buscar.
+
+  </Tab>
+  <Tab value="Pipe async">
+
+```ts
+games$ = inject(GameService).getGames();   // el $ final: convención para los Observable
+```
+
+```html
+@if (games$ | async; as games) {
+  @for (game of games; track game.id) {
+    <p>{{ game.title }}</p>
+  }
+}
+```
+
+  El pipe `async` se suscribe, pinta el último valor y se desuscribe al destruir el componente. Hay que importar `AsyncPipe`. La alternativa moderna es `toSignal()`, que tienes en [Signals](/docs/2-dam/acceso-a-datos/angular-avanzado/signals).
+
+  </Tab>
+</Tabs>
+
+## Errores HTTP en el componente <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  La gestión de errores está en la guía [11_Gestion_Errores](https://github.com/hokahey007/guides-angular) (con su proyecto en [codebase-angular/11_errores](https://github.com/hokahey007/codebase-angular/tree/main/11_errores)). En clase no se dio.
+</NoDadoEnClase>
+
+Lo mínimo es darle a `subscribe` un **objeto** con dos funciones en vez de una: `next` para los datos y `error` para el fallo.
+
+<Comparar titulo="Consumir una petición que puede fallar">
+  <Lado titulo="Como en clase (28/10): solo los datos">
+
+```ts
+this.productService.getProducts().subscribe(products => {
+  console.log(products);
+  this.products = products;
+});
+```
+
+Si la API falla o no hay conexión, la función no se ejecuta y la pantalla se queda vacía. El error solo sale en la consola.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Con next y error">
+
+```ts
+this.productService.getProducts().subscribe({
+  next: products => this.products = products,
+  error: (err: HttpErrorResponse) => {
+    this.error.set(err.status === 0
+      ? 'No se ha podido conectar con la API'
+      : `Error ${err.status} al cargar los productos`);
+  },
+});
+```
+
+El usuario ve qué ha pasado (con un signal `error` que pinta la plantilla).
+
+  </Lado>
+</Comparar>
+
+`HttpErrorResponse` (de `@angular/common/http`) trae `status`, `statusText`, `message`, `url`, `error` (el cuerpo que mandó el servidor) y `headers`. El `status` es lo que más se usa:
+
+| `status` | Qué ha pasado |
+| --- | --- |
+| `0` | La petición no llegó a la API: sin red, servidor apagado o **bloqueada por CORS** (lo que pasó el 18/11) |
+| `400` | Datos mal: falla la validación de la API |
+| `401` / `403` | Sin token o token malo / sin permiso |
+| `404` | No existe |
+| `409` | Choca con lo que hay (duplicado, tiene datos relacionados) |
+| `500` | Fallo del servidor |
+
+## catchError y retry en el servicio <NoDadoEnClase inline />
+
+Para tratar el error **en el servicio**, antes de que llegue al componente, se usa el operador `catchError` dentro de `pipe`. Tiene que devolver **otro observable**: o uno que emite un error (`throwError`) para que lo siga viendo el componente, o uno con un valor de reserva (`of([])`) para seguir como si nada.
+
+```ts title="game.service.ts (con gestión de errores)"
+import { HttpClient, HttpErrorResponse, HttpStatusCode } from '@angular/common/http';
+import { Observable, catchError, retry, throwError } from 'rxjs';
+
+getGames(): Observable<Game[]> {
+  return this.http.get<Game[]>(this.apiUrl).pipe(
+    retry(2),
+    catchError(this.handleError),
+  );
+}
+
+private handleError(error: HttpErrorResponse) {
+  let mensaje: string;
+  switch (error.status) {
+    case 0: mensaje = 'Error de red o del cliente'; break;
+    case HttpStatusCode.BadRequest: mensaje = 'Petición incorrecta'; break;
+    case HttpStatusCode.NotFound: mensaje = 'No encontrado'; break;
+    case HttpStatusCode.InternalServerError: mensaje = 'Error del servidor'; break;
+    default: mensaje = 'Error desconocido';
+  }
+  console.error(mensaje, error.error);
+  return throwError(() => error);
+}
+```
+
+- `HttpStatusCode` es un `enum` con los códigos: `HttpStatusCode.NotFound` se lee mejor que `404`.
+- `retry(2)` vuelve a intentar la petición **dos veces más** (tres intentos en total) antes de dejar pasar el error. Va **antes** de `catchError`, así `catchError` solo actúa cuando ya se han agotado los reintentos. Si lo pones después y `catchError` devuelve un valor de reserva (`of([])`), el error ya se ha tragado y `retry` no tiene nada que reintentar: es el "Caso B" de diagnóstico de la guía 11.
+- `throwError(() => error)` devuelve un observable que emite ese error, así el componente lo recibe en su `error:`.
+- `catchError(this.handleError)` pasa el método sin su `this`. Aquí da igual porque no lo usa; si lo usara, escribe `catchError(err => this.handleError(err))`.
+
+<Comparar titulo="Lo que tiene que devolver catchError">
+  <Lado tipo="evitar" titulo="No compila">
+
+```ts
+catchError(error => {
+  console.error(error);
+})
+```
+
+No devuelve nada (`void`), y `catchError` necesita un observable. Es el "Caso A" de diagnóstico de la guía.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Bien">
+
+```ts
+catchError(error => {
+  console.error(error);
+  return throwError(() => error);   // o: return of([]);
+})
+```
+
+  </Lado>
+</Comparar>
+
+## Un manejador global con ErrorHandler <NoDadoEnClase inline />
+
+Escribir un `handleError` en cada servicio no escala. Angular tiene la clase `ErrorHandler`, que recibe **todos** los errores que nadie ha capturado (HTTP y de la aplicación). Por defecto los escribe en la consola; se puede sustituir por uno propio:
+
+```ts title="src/app/app-error-handler.ts"
+import { HttpErrorResponse } from '@angular/common/http';
+import { ErrorHandler, Injectable } from '@angular/core';
+
+@Injectable()
+export class AppErrorHandler implements ErrorHandler {
+  handleError(error: any): void {
+    const err = error.rejection || error;   // las promesas rechazadas llegan envueltas
+    if (err instanceof HttpErrorResponse) {
+      console.error(`Error HTTP ${err.status}`, err);
+    } else {
+      console.error('Error de la aplicación', err);
+    }
+  }
+}
+```
+
+```ts title="app.config.ts"
+import { ErrorHandler } from '@angular/core';
+
+providers: [
+  provideZoneChangeDetection({ eventCoalescing: true }),
+  provideRouter(routes),
+  provideHttpClient(),
+  { provide: ErrorHandler, useClass: AppErrorHandler },
+]
+```
+
+La guía 11 también trata el `401` en un interceptor (si el token ha caducado, cerrar sesión y volver al login). El interceptor que añade el token está en [Listado con filtros, paginación y token](/docs/2-dam/acceso-a-datos/angular-avanzado/listado-filtros-y-token).
+
+Una estrategia razonable para tu proyecto:
+
+1. **En el servicio**: `retry` para errores pasajeros y `catchError` para traducir o registrar.
+2. **En el componente**: `error:` en el `subscribe` para enseñar el mensaje y quitar el "Cargando…".
+3. **En `ErrorHandler`**: lo que se escape, para que al menos quede registrado.
+
+## Practica
+
+<CompletarCodigo
+  titulo="Reintentar y capturar"
+  enunciado="Completa el servicio para que reintente dos veces y devuelva una lista vacía si sigue fallando."
+  lenguaje="typescript"
+  codigo={`getGames(): Observable<Game[]> {
+  return this.http.get<Game[]>(this.apiUrl).[[pipe]](
+    [[retry]](2),
+    [[catchError]](error => {
+      console.error(error);
+      return [[of]]([]);
+    }),
+  );
+}`}
+/>
+
+<Quiz titulo="Test: RxJS y errores">
+  <Pregunta enunciado="¿Qué devuelve `this.http.get<Product[]>(url)`?" explicacion="Un `Observable<Product[]>`: la respuesta llega más tarde y hay que suscribirse para recibirla.">
+    <Opcion>Un `Product[]`</Opcion>
+    <Opcion correcta>Un `Observable<Product[]>`</Opcion>
+    <Opcion>Una `Promise<Product[]>`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`this.gameService.create(game);` sin `.subscribe()` crea el juego igualmente." respuesta={false} explicacion="Los observables de `HttpClient` son perezosos: sin suscripción, la petición no sale." />
+  <Pregunta enunciado="¿Qué `status` tiene un `HttpErrorResponse` cuando el navegador bloquea la petición por CORS?" explicacion="La petición no llega a dar una respuesta legible, así que `status` es 0, como con un error de red.">
+    <Opcion correcta>`0`</Opcion>
+    <Opcion>`403`</Opcion>
+    <Opcion>`500`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cuántas veces se hace la petición con `retry(2)` si falla siempre?" explicacion="El intento original y dos reintentos: tres en total.">
+    <Opcion>2</Opcion>
+    <Opcion correcta>3</Opcion>
+    <Opcion>Infinitas</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué tiene que devolver la función de `catchError`?" explicacion="Otro observable: `throwError(() => error)` para propagar el error, u `of(valor)` para recuperarse.">
+    <Opcion>`true` o `false`</Opcion>
+    <Opcion correcta>Otro observable, por ejemplo `throwError(() => error)` u `of([])`</Opcion>
+    <Opcion>Nada</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Una suscripción a `formControl.valueChanges` en un componente, ¿cómo se cierra sola al destruirlo?" explicacion="`valueChanges` no termina nunca. `takeUntilDestroyed()` en el `pipe` la corta al destruir el componente.">
+    <Opcion>No hace falta: termina sola al primer valor</Opcion>
+    <Opcion correcta>Con `pipe(takeUntilDestroyed())` en el constructor</Opcion>
+    <Opcion>Con `retry(0)`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Para qué sirve `switchMap` con `route.paramMap`?" explicacion="Con cada id nuevo lanza la petición del juego y cancela la anterior si aún no había terminado.">
+    <Opcion>Para cambiar de ruta</Opcion>
+    <Opcion correcta>Para lanzar una petición con cada id y cancelar la anterior</Opcion>
+    <Opcion>Para convertir el id en número</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: RxJS y errores">
+  <Tarjeta frente="`Observable`">Un valor (o varios) que llega más tarde. No hace nada hasta que alguien se suscribe.</Tarjeta>
+  <Tarjeta frente="`subscribe({ next, error })`">Se suscribe con una función para los datos y otra para el error. Con una sola función, el error se pierde.</Tarjeta>
+  <Tarjeta frente="`pipe(map(...), filter(...))`">Encadena operadores de RxJS, como los métodos de un `Stream` de Java.</Tarjeta>
+  <Tarjeta frente="`switchMap`">Con cada valor lanza otro observable y cancela el anterior. Típico: `paramMap` → petición del detalle.</Tarjeta>
+  <Tarjeta frente="`takeUntilDestroyed()`">Cierra la suscripción al destruir el componente. Para observables que no terminan (`valueChanges`, `interval`).</Tarjeta>
+  <Tarjeta frente="`catchError` + `throwError`">Captura el error en el servicio y lo vuelve a lanzar como observable, o devuelve un valor de reserva con `of(...)`.</Tarjeta>
+  <Tarjeta frente="`status: 0`">La petición no llegó a la API: sin red, servidor apagado o bloqueada por CORS.</Tarjeta>
+  <Tarjeta frente="`ErrorHandler`">Clase de Angular que recibe los errores que nadie ha capturado. Se sustituye con `{ provide: ErrorHandler, useClass: ... }`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="El buscador por id, con error" dificultad="facil">
+  En `proj-game`, el botón Buscar llama a `getGameById`. Haz que, si el id no existe, salga el mensaje "No hay ningún juego con ese id" en vez de no pasar nada, y que se borre al buscar otra vez.
+
+  <Pista>Necesitas un signal (o una propiedad) `error` y el objeto `{ next, error }` en el `subscribe`.</Pista>
+  <Pista>JSON Server responde 404 cuando el id no existe.</Pista>
+
+  <Solucion>
+
+```ts
+protected error = signal('');
+
+onBuscarId(valor: string): void {
+  this.error.set('');
+  this.gameService.getGameById(Number(valor)).subscribe({
+    next: game => this.games = [game],
+    error: (err: HttpErrorResponse) => this.error.set(
+      err.status === 404 ? 'No hay ningún juego con ese id' : 'No se ha podido conectar con la API'
+    ),
+  });
+}
+```
+
+```html
+@if (error()) {
+  <p class="error">{{ error() }}</p>
+}
+```
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Que el listado aguante sin API" dificultad="media">
+  Haz que `getGames()` del servicio reintente una vez y, si sigue fallando, registre el error en la consola y devuelva una lista vacía. Explica qué verá el usuario si JSON Server está apagado.
+
+  <Pista>`retry(1)` y después `catchError` devolviendo `of([])`.</Pista>
+
+  <Solucion>
+
+```ts
+getGames(): Observable<Game[]> {
+  return this.http.get<Game[]>(this.apiUrl).pipe(
+    retry(1),
+    catchError((error: HttpErrorResponse) => {
+      console.error('No se han podido cargar los juegos', error);
+      return of([]);
+    }),
+  );
+}
+```
+
+  Con JSON Server apagado, la petición falla dos veces (intento y reintento) con `status 0`, se escribe el error en la consola y el componente recibe `[]` en su `next`: la lista sale vacía y la app no se queda colgada. El inconveniente es que el usuario no distingue "no hay juegos" de "no hay conexión"; para eso es mejor propagar el error y enseñarlo en el componente.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

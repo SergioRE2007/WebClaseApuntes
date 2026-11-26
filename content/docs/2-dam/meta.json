@@ -4,12 +4,12 @@
   "root": true,
   "pages": [
     "index",
-    "acceso-a-datos",
-    "desarrollo-de-interfaces",
     "kotlin",
+    "acceso-a-datos",
     "apis",
+    "desarrollo-de-interfaces",
+    "proyecto-intermodular",
     "sge",
-    "ipe-2",
-    "proyecto-intermodular"
+    "ipe-2"
   ]
 }

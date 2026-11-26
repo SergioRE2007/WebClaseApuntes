@@ -1,0 +1,179 @@
+---
+title: Errores y glosario de C#
+description: Los errores y avisos de compilación (CS, MSB, ENC, IDE) que salieron en las clases de C#, qué significan y cómo se arreglan, y un glosario con las palabras clave del bloque.
+icon: Bug
+---
+
+En las clases de C# salieron bastantes errores y avisos de Visual Studio, muchos a propósito para enseñar algo. Aquí los tienes todos juntos, con qué significan y cómo se arreglan, y al final un glosario con las palabras del bloque.
+
+<Callout type="idea" title="Error, aviso o sugerencia">
+  En la **Lista de errores** de Visual Studio hay tres niveles: los **errores** (no compila), los **avisos** (compila, pero algo huele mal) y las **sugerencias** de estilo. Los avisos de null (CS8600, CS8618) salen porque la plantilla de .NET 8 tiene activados los tipos que admiten null.
+</Callout>
+
+## Errores y avisos de compilación
+
+| Código | Tipo | Qué significa | Cuándo salió | Cómo se arregla |
+| --- | --- | --- | --- | --- |
+| CS8600 | Aviso | Se guarda un valor que puede ser null en una variable que no lo admite | 05/11: `string num3String = Console.ReadLine();` | Declarar la variable como `string?`. En clase se dejó el aviso. |
+| CS1547 | Error | `void` en un sitio donde no puede ir | 05/11, mientras se escribía la función local | Terminar bien la declaración del método. |
+| CS1001 | Error | Falta un identificador (un nombre) | 05/11, sintaxis a medio escribir | Terminar de escribir la línea. |
+| CS1002 | Error | Falta un `;` | 05/11 y 19/11 (después de `OnSegundo.Invoke()`) | Poner el `;`. |
+| CS8321 | Aviso | Una función local está declarada pero no se llama | 05/11 | Llamarla (`Ejercicio1();`) o borrarla. |
+| CS8803 | Error | Hay instrucciones de nivel superior después de una declaración de tipo | 09/11, al subir el `delegate` arriba | Primero el código que se ejecuta y después los delegados y clases. |
+| CS0103 | Error | El nombre no existe en este contexto | 18/11 (se escribió `repaso` en vez de `paso`) y 19/11 | Corregir el nombre o declarar la variable. |
+| CS0246 | Error | No se encuentra el tipo | 18/11: `ValidarNumero` era un campo y se usó como tipo | Declarar el tipo con `delegate` o usar el genérico (`Predicate<int>`). |
+| CS8618 | Aviso | Un campo o evento que no admite null queda sin inicializar | 18/11 (campos `Func`) y 19/11 (evento `OnSegundo`) | En clase no se arregló. Lo habitual: declararlo con `?` o marcarlo `required`. |
+| CS0029 | Error | No se puede convertir un tipo en otro (aquí, `void` en el delegado) | 19/11, al escribir el manejador | Pasar el método sin paréntesis, o una lambda bien cerrada. |
+| CS0136 | Error | Una variable se llama igual que otra de un ámbito que la envuelve | 19/11: la `x` del contador chocaba con la del validador | Cambiarle el nombre (`segundo`). |
+| CS8421 | Error | Una función local `static` no puede usar variables de fuera | 19/11: `static void ImprimeHaPasadoUnSegundo()` usando `segundo` | Quitar `static`. |
+| CS0219 | Aviso | Una variable se asigna pero nunca se usa | 19/11 | Usarla o borrarla. |
+| IDE0044 | Sugerencia | El campo podría ser de solo lectura | 18/11 | Añadir `readonly` si nunca cambia. Es opcional. |
+
+- `Func<int, void>` y `Predicate<int, string>` también dan error (18/11): `Func` no admite `void` y `Predicate` solo admite un tipo. El material no recoge el código de esos errores.
+- En una captura del 19/11 el CS8421 aparece como <Dudoso nota="El correcto es CS8421, que es el que sale en las demás capturas.">CS0421</Dudoso>.
+
+## Avisos de Visual Studio al compilar y depurar
+
+| Código | Qué significa | Cuándo salió | Cómo se arregla |
+| --- | --- | --- | --- |
+| MSB3026 | Aviso: no se puede copiar `Clase1.exe` y lo vuelve a intentar | 05/11 y 19/11 | **Cerrar la consola** de la ejecución anterior. |
+| MSB3027 | Error: ha agotado los intentos de copiar el `.exe` | 05/11 | Igual: cerrar la consola y volver a compilar. |
+| MSB3021 | Error: no se puede copiar el archivo porque lo usa otro proceso | 05/11 | Igual. |
+| ENC0118 | Editar y continuar: el cambio en el código de nivel superior no se aplica hasta reiniciar | 05/11 y 19/11 | Parar y volver a ejecutar. |
+
+## Excepciones al ejecutar
+
+| Excepción | Cuándo | Visto en clase |
+| --- | --- | --- |
+| `NullReferenceException` | `OnSegundo.Invoke()` cuando nadie se ha suscrito al evento | Se explicó con el aviso CS8618 (19/11), sin llegar a provocarla |
+| `FormatException` | `Convert.ToInt32("hola")`, o un especificador `D` o `X` con un `double` | <NoDadoEnClase inline /> |
+| `DivideByZeroException` | Dividir un `int` entre 0 | <NoDadoEnClase inline /> |
+
+## Arregla este código
+
+<Ejercicio titulo="Cuatro errores" dificultad="media">
+  Este `Program.cs` no compila. Encuentra los errores (di su código) y arréglalo. Después, di qué escribe.
+
+```csharp
+delegate void Aviso();
+
+int contador = 0;
+Aviso a = Saluda;
+a += () => { contador++ };
+a();
+Console.WriteLine(contador);
+
+static void Saluda()
+{
+    contador = contador + 1;
+    Console.WriteLine("Hola")
+}
+```
+
+  <Pista>Mira el orden de `Program.cs`, los `;` y qué puede hacer una función local `static`.</Pista>
+  <Pista>Dentro de las llaves de una lambda de bloque las instrucciones también acaban en `;`.</Pista>
+
+  <Solucion>
+
+- **CS8803**: el `delegate` está antes de las instrucciones de nivel superior. Va al final.
+- **CS1002** en la lambda: falta el `;` de `contador++`.
+- **CS8421**: `Saluda` es `static` y usa `contador`. Hay que quitar `static`.
+- **CS1002** en `Saluda`: falta el `;` después de `Console.WriteLine("Hola")`.
+
+Solución propia:
+
+```csharp title="Program.cs"
+int contador = 0;
+Aviso a = Saluda;
+a += () => { contador++; };
+a();
+Console.WriteLine(contador);
+
+void Saluda()
+{
+    contador = contador + 1;
+    Console.WriteLine("Hola");
+}
+
+delegate void Aviso();
+```
+
+Escribe `Hola` y después `2`: `a()` ejecuta `Saluda` (contador = 1) y la lambda (contador = 2).
+
+  </Solucion>
+</Ejercicio>
+
+<Quiz titulo="Test: errores de clase">
+  <Pregunta enunciado="Sale MSB3027: no se puede copiar `Clase1.exe`. ¿Qué es lo más probable?" explicacion="La consola de la ejecución anterior sigue abierta y bloquea el `.exe`.">
+    <Opcion>Falta un `;`</Opcion>
+    <Opcion correcta>La consola de la ejecución anterior sigue abierta</Opcion>
+    <Opcion>El proyecto no es de .NET 8</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué error sale si una función local `static` usa una variable de fuera?" explicacion="CS8421: una función local estática no puede contener referencias a variables locales de fuera.">
+    <Opcion>CS0136</Opcion>
+    <Opcion correcta>CS8421</Opcion>
+    <Opcion>CS8803</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cuáles son avisos y no impiden compilar?" explicacion="CS8600 y CS8321 son avisos. CS8803 y CS0246 son errores.">
+    <Opcion correcta>CS8600</Opcion>
+    <Opcion correcta>CS8321</Opcion>
+    <Opcion>CS8803</Opcion>
+    <Opcion>CS0246</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿Qué código sale si usas el nombre de un campo como si fuera un tipo? (por ejemplo, CS0000)" respuesta="CS0246" />
+  <Pregunta enunciado="Declaras `int x = 0;` arriba de `Program.cs` y más abajo, dentro de un bucle, otra `int x`. ¿Qué error sale?" explicacion="CS0136: no puede haber dos variables con el mismo nombre en ámbitos anidados.">
+    <Opcion correcta>CS0136</Opcion>
+    <Opcion>CS0103</Opcion>
+    <Opcion>CS0219</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: códigos de error">
+  <Tarjeta frente="CS8600">Valor que puede ser null guardado en una variable que no lo admite (por ejemplo, `Console.ReadLine()` en un `string`).</Tarjeta>
+  <Tarjeta frente="CS8803">Las instrucciones de nivel superior tienen que ir antes que los tipos.</Tarjeta>
+  <Tarjeta frente="CS0246">No se encuentra el tipo. En clase: un campo usado como tipo.</Tarjeta>
+  <Tarjeta frente="CS8618">Campo o evento que no admite null sin inicializar.</Tarjeta>
+  <Tarjeta frente="CS8421">Una función local `static` no puede usar variables de fuera.</Tarjeta>
+  <Tarjeta frente="CS0136">Nombre de variable repetido en un ámbito que lo envuelve.</Tarjeta>
+  <Tarjeta frente="MSB3026 / MSB3027 / MSB3021">El `.exe` está bloqueado: cierra la consola anterior.</Tarjeta>
+</Flashcards>
+
+## Glosario
+
+<Glosario titulo="Palabras clave del bloque de C#">
+  <Termino nombre=".NET 8">La plataforma que compila y ejecuta C#. La versión de clase, con C# 12.</Termino>
+  <Termino nombre="Instrucciones de nivel superior">Código escrito directamente en `Program.cs`, sin `class Program` ni `Main`. Lo que trae la plantilla de consola.</Termino>
+  <Termino nombre="Función local">Un método declarado dentro de otro bloque de código, como `void Ejercicio1() { ... }` en `Program.cs`.</Termino>
+  <Termino nombre="Usings implícitos">Los `using` que .NET añade solo (`System`, `System.Linq`, `System.Threading`…). Por eso `Thread.Sleep` funciona sin escribirlo.</Termino>
+  <Termino nombre="Tipos que admiten null">Con ellos activados, `string` no puede ser null y `string?` sí. El compilador avisa si los mezclas.</Termino>
+  <Termino nombre="Formato compuesto">Texto con marcadores `{índice,alineación:especificador}` que se rellenan con los argumentos de `WriteLine`.</Termino>
+  <Termino nombre="Especificador de formato">La letra que dice cómo se escribe un valor: `C`, `D`, `E`, `F`, `G`, `N`, `P`, `R`, `X`…</Termino>
+  <Termino nombre="Interpolación">Texto con `$` delante en el que las llaves se sustituyen por valores: `$"Hola {nombre}"`.</Termino>
+  <Termino nombre="CultureInfo">La configuración regional (decimales, miles, moneda) con la que se formatea un valor, como `es-ES` o `en-US`.</Termino>
+  <Termino nombre="Expresión de colección">La forma de C# 12 de crear un array con corchetes: `[1, 2, 3]`.</Termino>
+  <Termino nombre="LINQ">Los métodos de `System.Linq` sobre colecciones, como `Max()`, `Min()` y `Sum()`.</Termino>
+  <Termino nombre="Delegado">Un tipo que representa la firma de un método. Cualquier método con esa firma se puede guardar en él.</Termino>
+  <Termino nombre="Multicast">Un delegado con varios métodos (`+=`). Al invocarlo se ejecutan todos en orden y devuelve lo del último.</Termino>
+  <Termino nombre="GetInvocationList()">Devuelve la lista de métodos de un delegado para llamar a cada uno por separado.</Termino>
+  <Termino nombre="Method group">Un método pasado por su nombre, sin paréntesis: `Validador.EsPar`.</Termino>
+  <Termino nombre="Método anónimo">Un método sin nombre escrito en el sitio con `delegate`: `delegate (int n) { ... }`.</Termino>
+  <Termino nombre="Lambda">Un método sin nombre con `=>`. De bloque, `(n) => { ... }`, o de expresión, `(n) => n > 20`.</Termino>
+  <Termino nombre="Miembro con cuerpo de expresión">Un método normal escrito con `=>` y una sola expresión: `EsImpar(int x) => !EsPar(x);`.</Termino>
+  <Termino nombre="Cortocircuito">`&&` no evalúa la parte derecha si la izquierda ya es `false`.</Termino>
+  <Termino nombre="Func, Action y Predicate">Delegados genéricos de .NET: con retorno (el último tipo), sin retorno, y de un parámetro que devuelve `bool`.</Termino>
+  <Termino nombre="Evento">Un miembro `event` de una clase que avisa a sus suscriptores. Desde fuera solo admite `+=` y `-=`.</Termino>
+  <Termino nombre="Emisor y receptor">Quien lanza el evento y quien se suscribe para escucharlo. El emisor no sabe quién escucha.</Termino>
+  <Termino nombre="Manejador">El método que se ejecuta cuando salta un evento (en inglés, *handler*).</Termino>
+  <Termino nombre="Captura de variables (closure)">Una lambda o función local no estática que usa variables locales de fuera, como `segundo`.</Termino>
+  <Termino nombre="EventHandler y EventArgs">El delegado estándar de .NET para eventos, con la firma `(object sender, EventArgs e)`, y la clase base de los datos del evento.</Termino>
+</Glosario>
+
+## Lo que todavía no se ha visto
+
+<NoSeVio titulo="Pendiente de la unidad">
+  - **WPF**: los ejercicios 8 a 14 de Moodle (básicos, TextBlock y Label, TextBox, Button y CheckBox, RadioButton y PasswordBox, DataBinding y ListBox, ComboBox, ToolTip y MessageBox, WPF con base de datos) y el `Ejemplo_Zoos`.
+  - El resto del ejemplo `Archivo` (`EventosyDelegados_v2`) del PDF.
+  - Las páginas 1-10 y 29-43 del PDF de la UD2, y la UD1.
+</NoSeVio>
+
+<MarcarCompletado />

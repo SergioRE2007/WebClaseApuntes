@@ -54,6 +54,9 @@ export function Indice({ cursos }: { cursos: CursoIndice[] }) {
   return (
     <section aria-label="Cursos y módulos" className="mt-12">
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b">
+        {cursos.length === 1 ? (
+          <h2 className="pb-2.5 text-[15px] font-semibold tracking-tight">Módulos de {cursos[0]!.nombre}</h2>
+        ) : (
         <div role="tablist" aria-label="Curso" className="-mb-px flex gap-5">
           {cursos.map((c, i) => (
             <button
@@ -79,15 +82,16 @@ export function Indice({ cursos }: { cursos: CursoIndice[] }) {
             </button>
           ))}
         </div>
+        )}
         <ResumenCurso curso={cursos[activo]!} />
       </div>
 
       {cursos.map((c, i) => (
         <div
           key={c.id}
-          role="tabpanel"
+          role={cursos.length > 1 ? 'tabpanel' : undefined}
           id={`${base}-panel-${i}`}
-          aria-labelledby={`${base}-tab-${i}`}
+          aria-labelledby={cursos.length > 1 ? `${base}-tab-${i}` : undefined}
           hidden={i !== activo}
           className="pt-5"
         >

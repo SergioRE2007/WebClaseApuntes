@@ -1,0 +1,482 @@
+---
+title: Capas de la app
+description: Cómo se reparte el trabajo en una app de Android de clase. La UI, el ViewModel, el repositorio y el DataSource, por qué cada capa solo conoce la interfaz de la de abajo y cómo se organizan los paquetes por feature.
+icon: Layers
+---
+
+Una app que mete todo en la `MainActivity` funciona para un ejercicio de diez líneas, pero en cuanto crece se vuelve imposible de tocar. En clase se trabajó desde el principio con **capas**: cada una tiene un trabajo y solo habla con la de debajo. Es la idea de la arquitectura en **N capas** del manual de arquitecturas de clase (presentación, negocio y datos), llevada a Android.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué hace cada capa: <Concepto termino="UI" definicion="Las funciones `@Composable` que pintan la pantalla. No tienen lógica: leen el estado y avisan de los eventos.">UI</Concepto>, <Concepto termino="ViewModel" definicion="Clase que guarda el estado de una pantalla, sobrevive al giro del móvil y recibe los eventos de la UI.">ViewModel</Concepto>, <Concepto termino="Repositorio" definicion="Clase que decide de dónde salen los datos (memoria, API o Room). La UI y el ViewModel solo conocen su interfaz.">repositorio</Concepto> y <Concepto termino="DataSource" definicion="Clase que habla con una sola fuente de datos: la API, Room o DataStore. El repositorio usa uno o varios.">DataSource</Concepto>.
+  - Por qué el repositorio es una **interfaz** con una **implementación** aparte.
+  - Cómo se organizan los paquetes por pantalla y por feature, como en los proyectos de clase.
+</Callout>
+
+## Las capas, de arriba abajo
+
+<Mermaid
+  titulo="Capas de la ToDoApp"
+  chart={`flowchart TD
+    UI["UI (Compose)<br/>TaskListScreen"] -->|"lee state y llama a funciones"| VM["ViewModel<br/>TaskListViewModel"]
+    VM -->|"solo conoce la interfaz"| REPO["TaskRepository<br/>(interfaz)"]
+    IMPL["TaskRepositoryInMemory"] -.->|"implementa"| REPO
+    IMPL --> MEM[("Lista en memoria")]`}
+/>
+
+| Capa | Qué hace | Qué no hace |
+| --- | --- | --- |
+| **UI** (pantallas `@Composable`) | Pinta el estado que le da el ViewModel y le avisa de lo que hace el usuario (pulsar, escribir). | No guarda datos ni decide nada. No sabe de dónde salen las tareas. |
+| **ViewModel** | Guarda el estado de **una** pantalla, lo expone para que la UI lo lea y tiene una función por cada evento (`onCreate()`, `load()`…). | No pinta nada. No sabe si los datos vienen de memoria, de una API o de Room. |
+| **Repositorio** | Es la puerta a los datos: `readAll()`, `create(...)`, `update(...)`. Decide de qué fuente leer. | No sabe qué pantalla lo usa. |
+| **DataSource** | Habla con una sola fuente: la API con Retrofit, la base de datos de Room o DataStore. | No mezcla fuentes. Eso lo hace el repositorio. |
+
+Cada capa **solo conoce a la de debajo**, y además solo su interfaz. El ViewModel recibe un `TaskRepository`, no un `TaskRepositoryInMemory`. Así se puede cambiar una capa entera sin tocar las de arriba.
+
+<Callout title="¿Y cómo llega el repositorio al ViewModel?">
+  Ninguna capa crea a la de debajo con su constructor (lo que en Java sería un `new`). Las recibe en su constructor y las crea **Hilt**. Lo verás en [Inyección con Hilt](/docs/2-dam/kotlin/arquitectura/hilt). Por ahora quédate con que cada clase "pide" lo que necesita.
+</Callout>
+
+## La misma idea en los tres proyectos de clase
+
+<Tabs items={['ToDoApp', 'PokeApp2627', 'ToDoOfflineFirst']}>
+  <Tab value="ToDoApp">
+
+<DeClase fecha="09/10, 16/10, 23/10" proyecto="ToDoApp" rama="dev" />
+
+La versión más sencilla: no hay DataSource, porque el repositorio guarda las tareas en una lista en memoria.
+
+| Capa | Clase |
+| --- | --- |
+| UI | `TaskListScreen`, `TaskCreateScreen`, `TaskDetailScreen` |
+| ViewModel | `TaskListViewModel`, `TaskCreateViewModel`, `TaskDetailViewModel` |
+| Repositorio | `TaskRepository` (interfaz) y `TaskRepositoryInMemory` |
+| Datos | una `mutableListOf<Task>()` dentro del repositorio |
+
+  </Tab>
+  <Tab value="PokeApp2627">
+
+<DeClase fecha="26/10, 09/11" proyecto="PokeApp2627" />
+
+Aquí aparece el **DataSource**, porque los datos vienen de una API (la PokeAPI). La cadena que se escribió el 26/10 es `PokeApi` → `RemoteDataSource` → `Repository` → `ViewModel`. El 09/11 se añadió un segundo DataSource, el local, y el repositorio pasó a recibir los dos.
+
+| Capa | Clase |
+| --- | --- |
+| UI | `PokemonListScreen` y la pantalla de detalle |
+| ViewModel | `PokemonListViewModel`, `PokemonDetailViewModel` |
+| Repositorio | `PokemonRepository` y `PokemonRepositoryImpl` |
+| DataSource | `PokemonRemoteDataSource` y `PokemonRemoteDataSourceImpl`; `PokemonLocalDataSource` y `PokemonInMemoryDataSource` |
+| Datos | `PokeApi`, la interfaz de Retrofit |
+
+  </Tab>
+  <Tab value="ToDoOfflineFirst">
+
+<DeClase fecha="18/11" proyecto="ToDoOfflineFirst" rama="datastore" />
+
+La pantalla de ajustes del 18/11 tiene las cuatro capas completas, cada una con su interfaz:
+
+| Capa | Clase |
+| --- | --- |
+| UI | `SettingsScreen` |
+| ViewModel | `SettingsViewModel` |
+| Repositorio | `SettingsRepository` y `SettingsRepositoryImpl` |
+| DataSource | <Dudoso nota="Las capturas lo escriben como `SettingsDatasource` y como `SettingsDataSource`.">`SettingsDatasource`</Dudoso> y `SettingsDataStore` |
+| Datos | `DataStore<Preferences>` |
+
+  </Tab>
+</Tabs>
+
+## El repositorio es una interfaz
+
+<DeClase fecha="23/10" proyecto="ToDoApp" />
+
+La interfaz dice **qué** se puede hacer con las tareas, sin decir **cómo**. Esta es la versión del 23/10, ya con funciones `suspend` (pueden esperar sin bloquear la pantalla) y con un `Flow` para observar los cambios:
+
+```kotlin title="data/repository/TaskRepository.kt"
+interface TaskRepository {
+    val tasks: Flow<List<Task>>
+    suspend fun readAll(): List<Task>
+    suspend fun readOne(id: Int): Task
+    suspend fun create(title: String, description: String, limitDate: String): Task
+    suspend fun complete(id: Int)
+    suspend fun uncomplete(id: Int)
+    suspend fun update(id: Int, title: String? = null, description: String? = null)
+}
+```
+
+Fíjate en dos cosas de Kotlin que en Java no existen:
+
+- **Una interfaz puede declarar propiedades** (`val tasks`). La implementación la escribe con `override val`.
+- **Parámetros con valor por defecto** (`title: String? = null`). En Java tendrías que escribir varias sobrecargas de `update`.
+
+Las pantallas y los ViewModels solo conocen `TaskRepository`. Hoy los datos viven en memoria; mañana puedes escribir un `TaskRepositoryRoom` y, cambiando **una línea** del módulo de Hilt, toda la app pasa a usarlo sin tocar la UI.
+
+<Callout type="error" title="Una interfaz no se instancia">
+  El 09/10, para salir del paso, el profesor intentó darle a la pantalla un valor por defecto con `TaskRepository()` y no compiló: igual que en Java, **no se puede crear un objeto de una interfaz**. Tuvo que usar `TaskRepositoryInMemory()`. Después ese apaño desapareció al llegar el ViewModel y Hilt.
+</Callout>
+
+### La implementación en memoria
+
+<DeClase fecha="23/10" proyecto="ToDoApp" nota="fragmento" />
+
+Recórrela paso a paso con los botones (o con las flechas del teclado):
+
+<Recorrido
+  titulo="data/repository/TaskRepositoryInMemory.kt"
+  lenguaje="kotlin"
+  codigo={`private const val delay = 5_000L
+
+class TaskRepositoryInMemory @Inject constructor() : TaskRepository {
+    private val _taskList = mutableListOf<Task>()
+    private val _taskFlow = MutableStateFlow(_taskList)
+    override val tasks: Flow<List<Task>>
+        get() = _taskFlow.asStateFlow()
+
+    override suspend fun readAll(): List<Task> {
+        delay(timeMillis = delay)
+        return _taskList.toList()
+    }
+
+    override suspend fun create(title: String, description: String, limitDate: String): Task {
+        delay(timeMillis = delay)
+        val newTask = Task(id = nextId, title = title, description = description,
+            createdAt = "", limitDate = limitDate)
+        if (_taskList.add(newTask)) {
+            nextId++
+            _taskFlow.value = _taskList
+        }
+        return newTask
+    }
+}`}
+>
+  <Paso lineas="3" titulo="`: TaskRepository` es el `implements`">
+    `: TaskRepository` es el `implements` de Java. Las funciones que vienen de la interfaz llevan `override` obligatorio (en Java, `@Override` es opcional). `@Inject constructor()` le dice a Hilt que sabe crear esta clase con ese constructor. Se explica en [Inyección con Hilt](/docs/2-dam/kotlin/arquitectura/hilt).
+  </Paso>
+  <Paso lineas="4-7" titulo="Lista privada, propiedad de la interfaz">
+    `_taskList` es **privada y mutable**: solo el repositorio la toca. La propiedad `tasks` que pedía la interfaz se escribe con `override val`.
+  </Paso>
+  <Paso lineas="9-12" titulo="readAll() devuelve una copia">
+    Hacia fuera, `readAll()` devuelve `_taskList.toList()`, que es **una copia**: así nadie de fuera puede modificar la lista interna.
+  </Paso>
+  <Paso lineas="1, 10, 15" titulo="Una red lenta de mentira">
+    `delay(5_000L)` simula que los datos tardan 5 segundos en llegar, como si vinieran de la red. Así se ve en pantalla el estado de carga.
+  </Paso>
+  <Paso lineas="18-21" titulo="Crear y avisar">
+    Si la tarea se añade, sube `nextId` y se asigna la lista al `StateFlow`. Esa asignación tiene trampa: lo ves justo debajo.
+  </Paso>
+</Recorrido>
+
+Lo que no se ve o no está claro:
+
+- Es un fragmento: no se ven `readOne`, `complete`, `uncomplete` ni `update`.
+- <Dudoso nota="En las capturas no aparece la línea donde se declara.">`nextId`</Dudoso>: se usa, pero no se ve dónde se declara.
+- <Dudoso nota="Asigna la misma lista mutable, así que el StateFlow no avisa de los cambios. Se explica en la página de ViewModel y StateFlow.">`_taskFlow.value = _taskList`</Dudoso>: asigna la misma lista. Tiene un problema que se explica (con una demo) en [ViewModel y StateFlow](/docs/2-dam/kotlin/arquitectura/viewmodel-y-stateflow#la-lista-que-no-se-actualiza).
+- `createdAt` y `limitDate` son `String`. El propio profesor dejó un `TODO Buscar un tipo correcto para fecha`.
+
+## El modelo de la app y el de la API
+
+<DeClase fecha="26/10" proyecto="PokeApp2627" />
+
+Cuando los datos vienen de una API, el JSON casi nunca tiene la forma que quiere la app. En la PokeApp2627 se separaron dos tipos de clases:
+
+- Los **DTO**, en `PokemonApiModels.kt`: `data class` con la forma exacta del JSON (`PokemonResult`, `PokemonSprites`…). Solo los usa el DataSource remoto.
+- El **modelo** de la app: `Pokemon(id, name, pokemonImageUrl)`. Es lo que viaja por el repositorio, el ViewModel y la UI.
+
+Se pasa de uno a otro con una **función de extensión**, que en Java no existe: es como añadirle un método a una clase sin tocarla.
+
+```kotlin title="PokemonApiModels.kt (versión del 09/11)"
+fun PokemonResult.toModel(): Pokemon = Pokemon(
+    id = this.id,
+    name = this.name,
+    pokemonImageUrl = this.sprites?.frontDefault,
+)
+```
+
+Dentro de la función, `this` es el `PokemonResult` sobre el que la llamas: `body.toModel()`. Retrofit, Gson y los DTO se explican en [Retrofit 3 con Gson](/docs/2-dam/kotlin/datos/retrofit); aquí lo que importa es la idea: **la UI nunca ve un DTO**.
+
+## Organización por paquetes
+
+En la ToDoApp, al principio todo iba en `ui`. Después se reorganizó con **un paquete por pantalla**, cada uno con su Screen y su ViewModel. En la PokeApp2627 y en ToDoOfflineFirst se fue un paso más allá: **un paquete por feature** (por funcionalidad), con sus capas dentro, y un paquete `core` para lo común.
+
+<Tabs items={['ToDoApp', 'PokeApp2627', 'ToDoOfflineFirst']}>
+  <Tab value="ToDoApp">
+
+<Files>
+  <Folder name="com.alanturing.todoapp" defaultOpen>
+    <Folder name="data" defaultOpen>
+      <Folder name="repository" defaultOpen>
+        <File name="TaskRepository.kt" />
+        <File name="TaskRepositoryInMemory.kt" />
+      </Folder>
+      <File name="Task.kt" />
+    </Folder>
+    <Folder name="di" defaultOpen>
+      <File name="ApplicationModule.kt" />
+      <File name="ToDoApplication.kt" />
+    </Folder>
+    <Folder name="ui" defaultOpen>
+      <Folder name="navigation">
+        <File name="Routes.kt" />
+        <File name="ToDoNavHost.kt" />
+      </Folder>
+      <Folder name="taskcreate">
+        <File name="TaskCreateScreen.kt" />
+        <File name="TaskCreateViewModel.kt" />
+      </Folder>
+      <Folder name="taskdetail">
+        <File name="TaskDetailScreen.kt" />
+        <File name="TaskDetailViewModel.kt" />
+      </Folder>
+      <Folder name="tasklist">
+        <File name="TaskListScreen.kt" />
+        <File name="TaskListViewModel.kt" />
+      </Folder>
+      <Folder name="theme">
+        <File name="Color.kt" />
+        <File name="Theme.kt" />
+        <File name="Type.kt" />
+      </Folder>
+    </Folder>
+    <File name="MainActivity.kt" />
+  </Folder>
+</Files>
+
+  </Tab>
+  <Tab value="PokeApp2627">
+
+<Files>
+  <Folder name="com.alanturing.pokeapp2627" defaultOpen>
+    <Folder name="core" defaultOpen>
+      <Folder name="di" defaultOpen>
+        <File name="AppModule.kt" />
+      </Folder>
+      <File name="PokeApplication.kt" />
+    </Folder>
+    <Folder name="features" defaultOpen>
+      <Folder name="pokemon" defaultOpen>
+        <Folder name="data" defaultOpen>
+          <Folder name="local">
+            <File name="PokemonLocalDataSource.kt" />
+            <File name="PokemonInMemoryDataSource.kt" />
+          </Folder>
+          <Folder name="model">
+            <File name="Pokemon.kt" />
+          </Folder>
+          <Folder name="remote">
+            <File name="PokeApi.kt" />
+            <File name="PokemonApiModels.kt" />
+            <File name="PokemonRemoteDataSourceImpl.kt" />
+          </Folder>
+          <Folder name="repository">
+            <File name="PokemonRepositoryImpl.kt" />
+          </Folder>
+        </Folder>
+        <Folder name="di">
+          <File name="NetworkModule.kt" />
+        </Folder>
+        <Folder name="ui">
+          <File name="PokemonListScreen.kt" />
+          <File name="PokemonListViewModel.kt" />
+          <File name="PokemonDetailViewModel.kt" />
+        </Folder>
+      </Folder>
+    </Folder>
+    <File name="MainActivity.kt" />
+  </Folder>
+</Files>
+
+Son las carpetas que se ven el 26/10 y el 09/11 (además hay un paquete `ui.theme` con el tema). No se ven todos los archivos: el de la interfaz `PokemonRepository`, por ejemplo, no se llega a abrir, y el nombre `Pokemon.kt` se deduce del de la clase.
+
+  </Tab>
+  <Tab value="ToDoOfflineFirst">
+
+<Files>
+  <Folder name="com.turingalan.todoofflinefirst" defaultOpen>
+    <Folder name="core" defaultOpen>
+      <Folder name="di" defaultOpen>
+        <File name="AppModule.kt" />
+        <File name="DataStoreModule.kt" />
+      </Folder>
+      <Folder name="ui" defaultOpen>
+        <Folder name="icon">
+          <File name="settings.kt" />
+        </Folder>
+        <Folder name="navigation">
+          <File name="Routes.kt" />
+          <File name="MainNavigation.kt" />
+        </Folder>
+        <Folder name="theme">
+          <File name="Theme.kt" />
+        </Folder>
+        <File name="CommonComponents.kt" />
+      </Folder>
+    </Folder>
+    <Folder name="features" defaultOpen>
+      <Folder name="task" defaultOpen>
+        <Folder name="settings" defaultOpen>
+          <Folder name="data/local">
+            <File name="SettingsDatasource.kt" />
+            <File name="SettingsDataStore.kt" />
+          </Folder>
+          <Folder name="repository">
+            <File name="SettingsRepository.kt" />
+            <File name="SettingsRepositoryImpl.kt" />
+          </Folder>
+          <Folder name="ui">
+            <File name="SettingsScreen.kt" />
+            <File name="SettingsViewModel.kt" />
+          </Folder>
+        </Folder>
+      </Folder>
+    </Folder>
+    <File name="MainActivity.kt" />
+  </Folder>
+</Files>
+
+Las rutas de los archivos de ajustes son las de las capturas del 18/11. El nombre del paquete raíz varía entre capturas: <Dudoso nota="Se lee `todofflinefirst` y `todofofflinefirst`; lo más probable es `todoofflinefirst`.">`com.turingalan.todoofflinefirst`</Dudoso>.
+
+  </Tab>
+</Tabs>
+
+<Callout type="success" title="Regla práctica">
+  Una feature es una carpeta con su `data`, su `ui` y, si hace falta, su `di`. Lo que comparten todas las features (la `Application`, el módulo principal de Hilt, la navegación, el tema) va en `core`.
+</Callout>
+
+## Practica
+
+<CompletarCodigo
+  titulo="Interfaz e implementación"
+  enunciado="Completa la implementación en memoria para que cumpla la interfaz y no deje modificar la lista desde fuera."
+  lenguaje="kotlin"
+  codigo={`interface NoteRepository {
+    suspend fun readAll(): List<Note>
+}
+
+class NoteRepositoryInMemory @Inject constructor() : [[NoteRepository]] {
+    private val _notes = mutableListOf<Note>()
+
+    [[override]] suspend fun readAll(): List<Note> {
+        return _notes.[[toList]]()
+    }
+}`}
+/>
+
+<Quiz titulo="Test: capas de la app" descripcion="7 preguntas">
+  <Pregunta enunciado="¿Con qué capa habla directamente la pantalla de la lista de tareas?" explicacion="La UI solo conoce a su ViewModel: le lee el estado y le avisa de los eventos. El repositorio queda por debajo del ViewModel.">
+    <Opcion correcta>Con `TaskListViewModel`</Opcion>
+    <Opcion>Con `TaskRepository`</Opcion>
+    <Opcion>Con `TaskRepositoryInMemory`</Opcion>
+    <Opcion>Con la lista `_taskList`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué `TaskRepository` es una interfaz y no directamente una clase?" explicacion="Las capas de arriba dependen de la interfaz. Para pasar de memoria a Room o a una API basta con escribir otra implementación y cambiar el módulo de Hilt.">
+    <Opcion>Porque Kotlin no deja inyectar clases</Opcion>
+    <Opcion correcta>Para poder cambiar la implementación (memoria, Room, API) sin tocar la UI ni el ViewModel</Opcion>
+    <Opcion>Porque las interfaces son más rápidas</Opcion>
+    <Opcion>Porque así no hace falta escribir `override`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Si `TaskRepository` es una interfaz, `val repository: TaskRepository = TaskRepository()` compila." respuesta={false} explicacion="Una interfaz no se puede instanciar, ni en Java ni en Kotlin. El 09/10 salió este error y se usó `TaskRepositoryInMemory()`." />
+  <Pregunta enunciado="¿Qué devuelve `readAll()` en `TaskRepositoryInMemory` y por qué?" explicacion="`toList()` crea una lista nueva. Quien la recibe no puede añadir ni quitar tareas de la lista interna del repositorio.">
+    <Opcion>La propia `_taskList`, para ahorrar memoria</Opcion>
+    <Opcion correcta>Una copia con `toList()`, para que nadie de fuera modifique la lista interna</Opcion>
+    <Opcion>Un `Flow`, porque es `suspend`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En la PokeApp2627, ¿qué hace `PokemonResult.toModel()`?" explicacion="Es una función de extensión que convierte el DTO (la forma del JSON) en el modelo `Pokemon` que usa la app. La UI nunca ve el DTO.">
+    <Opcion correcta>Convierte el DTO de la API en el modelo `Pokemon` de la app</Opcion>
+    <Opcion>Hace la petición HTTP a la PokeAPI</Opcion>
+    <Opcion>Guarda el pokémon en la base de datos</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En la PokeApp2627, ¿en qué paquete estaba `AppModule`, el módulo de Hilt común?" explicacion="Lo común a todas las features (la `Application` y el módulo principal de Hilt) va en `core`. El `NetworkModule` sí estaba dentro de la feature, en `features/pokemon/di`.">
+    <Opcion correcta>`core/di`</Opcion>
+    <Opcion>`features/pokemon/data`</Opcion>
+    <Opcion>`ui.theme`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿Cómo se llama la implementación del repositorio de la ToDoApp?" respuesta={["TaskRepositoryInMemory", "`TaskRepositoryInMemory`"]} explicacion="`TaskRepositoryInMemory`, que guarda las tareas en una `mutableListOf<Task>()`." />
+</Quiz>
+
+<Flashcards titulo="Repaso: capas">
+  <Tarjeta frente="Las cuatro capas, de arriba abajo">UI (Compose) → ViewModel → Repositorio → DataSource (API, Room, DataStore).</Tarjeta>
+  <Tarjeta frente="¿Qué conoce cada capa de la de abajo?">Solo su **interfaz**. El ViewModel recibe un `TaskRepository`, no un `TaskRepositoryInMemory`.</Tarjeta>
+  <Tarjeta frente="Diferencia entre repositorio y DataSource">El DataSource habla con **una** fuente (API, Room…). El repositorio decide de qué fuente leer y puede usar varios DataSource.</Tarjeta>
+  <Tarjeta frente="DTO frente a modelo">El DTO tiene la forma del JSON y solo lo usa el DataSource remoto. El modelo es lo que usa la app. Se pasa de uno a otro con `toModel()`.</Tarjeta>
+  <Tarjeta frente="`class A : B` en Kotlin">Es `implements B` (si `B` es interfaz) o `extends B()` (si es clase). Las funciones heredadas llevan `override` obligatorio.</Tarjeta>
+  <Tarjeta frente="Organización por feature">`features/<x>/data/{local, model, remote, repository}`, `di` y `ui`, más `core` con lo común (`Application`, módulo de Hilt, navegación).</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Repositorio de notas" dificultad="facil">
+  Vas a hacer una app de notas con la misma arquitectura que la ToDoApp. Escribe la `data class Note` (con `id` y `text`), la interfaz `NoteRepository` con `readAll()` y `create(text)`, ambas `suspend`, y una implementación en memoria `NoteRepositoryInMemory` que dé ids consecutivos empezando en 1 y que no deje modificar su lista desde fuera.
+
+  <Pista>Copia la forma de `TaskRepositoryInMemory`: una `mutableListOf` privada y un contador `nextId`.</Pista>
+  <Pista>Para no exponer la lista interna, devuelve una copia con `toList()`.</Pista>
+
+  <Solucion>
+
+```kotlin title="data/repository/NoteRepository.kt"
+data class Note(val id: Int, val text: String)
+
+interface NoteRepository {
+    suspend fun readAll(): List<Note>
+    suspend fun create(text: String): Note
+}
+
+class NoteRepositoryInMemory @Inject constructor() : NoteRepository {
+    private val _notes = mutableListOf<Note>()
+    private var nextId = 1
+
+    override suspend fun readAll(): List<Note> = _notes.toList()
+
+    override suspend fun create(text: String): Note {
+        val newNote = Note(id = nextId, text = text)
+        _notes.add(newNote)
+        nextId++
+        return newNote
+    }
+}
+```
+
+`nextId` se declara antes de usarlo. En Kotlin las propiedades se inicializan en el orden en que están escritas, así que si hubiera un bloque `init` que creara notas de prueba usando `nextId`, tendría que ir **después** de `nextId`. (Desde el `init` no se puede llamar a `create(...)` directamente, porque es `suspend`.)
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="¿Dónde va cada archivo?" dificultad="media">
+  Tu app tiene una feature `notes` que lee las notas de una API y las guarda en local. Coloca estos archivos en un árbol de paquetes por feature, como el de la PokeApp2627: `NotesApplication`, `AppModule` (el módulo de Hilt común), `NoteDto` (la forma del JSON), `Note` (el modelo), `NotesApi` (la interfaz de Retrofit), `NoteRemoteDataSource`, `NoteLocalDataSource`, `NoteRepository`, `NoteListScreen` y `NoteListViewModel`.
+
+  <Pista>Lo común a toda la app va en `core`. Lo de la feature, en `features/notes`, separado en `data` y `ui`.</Pista>
+  <Pista>Dentro de `data`: `remote` para la API, `local` para lo guardado en el móvil, `model` para el modelo y `repository` para el repositorio.</Pista>
+
+  <Solucion>
+
+```text
+core/
+  NotesApplication.kt
+  di/AppModule.kt
+features/notes/
+  data/
+    model/Note.kt
+    remote/NotesApi.kt
+    remote/NoteDto.kt
+    remote/NoteRemoteDataSource.kt
+    local/NoteLocalDataSource.kt
+    repository/NoteRepository.kt
+  ui/
+    NoteListScreen.kt
+    NoteListViewModel.kt
+```
+
+`NoteDto` va en `remote` porque solo lo usa el DataSource remoto (en la PokeApp2627, los DTO estaban en `PokemonApiModels.kt`, junto a la API). Si la feature tuviera su propio módulo de Hilt, como el `NetworkModule` de clase, iría en `features/notes/di`.
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Capa">Parte de la app con un solo trabajo. Solo conoce la interfaz de la capa de debajo.</Termino>
+  <Termino nombre="Repositorio">Puerta a los datos. Decide de qué fuente leer. La UI y el ViewModel solo ven su interfaz.</Termino>
+  <Termino nombre="DataSource">Habla con una sola fuente: API, Room o DataStore.</Termino>
+  <Termino nombre="DTO">`data class` con la forma del JSON de la API. Se convierte al modelo con `toModel()`.</Termino>
+  <Termino nombre="Feature">Paquete con todo lo de una funcionalidad (`data`, `ui`, `di`). Lo común va en `core`.</Termino>
+</Glosario>
+
+<MarcarCompletado />

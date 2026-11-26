@@ -1,0 +1,471 @@
+---
+title: "Prisma 6: schema, cliente y migraciones"
+description: "El ORM de clase: los tres bloques de schema.prisma, un único PrismaClient, las migraciones y la tabla _prisma_migrations, y el experimento del drift con migrate status, migrate dev, migrate reset y db pull."
+icon: Layers
+---
+
+import { SimuladorMigraciones } from '@/components/temas/backend/simulador-migraciones';
+
+**Prisma** es el ORM del proyecto: describes las tablas en un fichero, `schema.prisma`, y Prisma genera dos cosas a partir de él: el **SQL** de las migraciones y un **cliente con tipos** para hacer las consultas desde TypeScript. Se usa **Prisma 6** (`@prisma/client ^6.18.0`; el cliente generado es la 6.19.0).
+
+<DeClase fecha="20/10, 27/10, 03/11" proyecto="node-server-26-27" nota="v0.3.0 de la referencia; migraciones y drift el 03/11" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Los tres bloques de `schema.prisma` y los atributos que salen en clase.
+  - Por qué hay un único `PrismaClient` en `config/db.ts`.
+  - Qué es una migración, dónde se guarda y qué apunta la tabla `_prisma_migrations`.
+  - La diferencia entre `migrate status`, `migrate dev`, `migrate reset`, `db pull` y `db push`.
+  - Qué es el *drift* y cómo se provocó y se arregló en clase.
+</Callout>
+
+## Qué es un ORM
+
+Un <Concepto termino="ORM" definicion="Object-Relational Mapping: una librería que deja trabajar con la base de datos usando objetos y funciones en vez de escribir SQL a mano.">ORM</Concepto> traduce entre objetos y tablas. Si has usado JPA o Hibernate en Java, la idea es la misma con otras piezas:
+
+| JPA / Hibernate | Prisma |
+| --- | --- |
+| Clases con `@Entity`, `@Id`, `@Column` | Bloques `model` en `schema.prisma` |
+| `EntityManager` o un `JpaRepository` | El `PrismaClient`: `prisma.user.findMany()` |
+| Flyway o Liquibase para las migraciones | `prisma migrate` |
+
+La diferencia práctica: en Prisma **el modelo no son clases tuyas**. Escribes el `schema.prisma` y `npx prisma generate` crea el cliente con sus tipos en `node_modules`. Si cambias el schema, hay que volver a generar.
+
+## `schema.prisma`
+
+Está en `prisma/schema.prisma`. Esta es la versión con la tabla `Media` (la de la v1.1, la que había el 03/11):
+
+<Recorrido
+  titulo="prisma/schema.prisma"
+  lenguaje="prisma"
+  codigo={`generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  media        Media[]
+}
+
+model Media {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  publicId     String   @unique
+  secureUrl    String
+  format       String
+  resourceType String
+  bytes        Int
+  width        Int?
+  height       Int?
+  originalName String?
+  folder       String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}`}
+>
+  <Paso lineas="1-3" titulo="generator">
+    Qué se genera a partir del schema: el cliente de JavaScript/TypeScript (`prisma-client-js`), que acaba en `node_modules/@prisma/client`.
+  </Paso>
+  <Paso lineas="5-8" titulo="datasource">
+    A qué base se conecta: PostgreSQL, con la cadena de la variable de entorno `DATABASE_URL`. Con Prisma 6, la `url` va aquí.
+  </Paso>
+  <Paso lineas="11" titulo="Clave primaria autoincremental">
+    `@id` marca la clave primaria y `@default(autoincrement())` hace que la ponga la base (en SQL sale `SERIAL`).
+  </Paso>
+  <Paso lineas="12" titulo="@unique">
+    No puede haber dos usuarios con el mismo email. Si se intenta, Prisma lanza el error **P2002**, que la API traduce a 409.
+  </Paso>
+  <Paso lineas="14" titulo="passwordHash, nunca la contraseña">
+    En la base nunca se guarda la contraseña en claro, solo su hash de bcrypt. Por eso en las consultas se usa `select` para no devolver nunca este campo.
+  </Paso>
+  <Paso lineas="15" titulo="@default(now())">
+    La fecha de creación la pone la base al insertar.
+  </Paso>
+  <Paso lineas="16" titulo="El lado 'muchos' de la relación">
+    `media Media[]`: un usuario tiene muchos `Media`. Este campo no es una columna; solo existe en el cliente de Prisma.
+  </Paso>
+  <Paso lineas="21-22" titulo="La clave ajena">
+    `userId` es la columna de verdad. `user` describe la relación: `fields` es la columna de esta tabla y `references` la de `User`. `onDelete: Cascade` borra los `Media` de un usuario cuando se borra el usuario.
+  </Paso>
+  <Paso lineas="28-31" titulo="Campos opcionales">
+    `?` detrás del tipo: la columna admite `NULL`.
+  </Paso>
+  <Paso lineas="34-35" titulo="Índices">
+    `@@index` (con dos arrobas, porque es del modelo entero) crea índices para buscar rápido por `userId` y por `createdAt`.
+  </Paso>
+</Recorrido>
+
+- Los campos de `Media` (`publicId`, `secureUrl`, `format`, `resourceType`, `bytes`, `width`, `height`, `folder`) son los datos que devuelve Cloudinary al subir un archivo.
+- El modelo `Media` está reconstruido a partir del diff que salió al hacer `db pull` <Dudoso nota="Dudoso en los detalles: no se vio el fichero completo en ninguna captura." />.
+- Hasta la v1.1 el schema solo tenía `User`, sin la línea `media Media[]`.
+
+<TypeTable
+  type={{
+    '@id': { type: 'atributo de campo', description: 'Clave primaria.' },
+    '@default(autoincrement())': { type: 'atributo de campo', description: 'Valor que pone la base: un entero que sube solo.' },
+    '@default(now())': { type: 'atributo de campo', description: 'La fecha y hora al insertar.' },
+    '@unique': { type: 'atributo de campo', description: 'Valor único en toda la tabla. Si se repite: error P2002.' },
+    '@relation(fields, references, onDelete)': { type: 'atributo de campo', description: 'Describe la clave ajena: qué columna de aquí apunta a cuál de la otra tabla y qué pasa al borrar.' },
+    '@@index([campo])': { type: 'atributo de modelo', description: 'Índice sobre una o varias columnas.' },
+    'Tipo?': { type: 'modificador', description: 'Campo opcional: admite NULL.' },
+    'Tipo[]': { type: 'modificador', description: 'Lista: el lado "muchos" de una relación.' },
+  }}
+/>
+
+<Callout type="warn" title="El aviso de Prisma 7 en el editor">
+  El 20/10 y el 27/10 la extensión de Prisma del editor marcaba como error `url = env("DATABASE_URL")`: en **Prisma 7** esa propiedad ya no se admite en el `datasource`, y el editor ofrecía "Pin this workspace to Prisma 6". **El proyecto usa Prisma 6**, donde está bien así. El aviso viene de que la extensión ya es de la versión 7.
+</Callout>
+
+<NoSeVio titulo="Cómo lo resolvió el profesor">
+  No se ve si el profesor fijó la extensión a Prisma 6 o cambió la configuración. El proyecto sigue con `@prisma/client ^6.18.0`.
+</NoSeVio>
+
+## Un solo `PrismaClient`
+
+El cliente se crea **una sola vez** para toda la app, en `src/config/db.ts`, y el resto de ficheros lo importan:
+
+```ts title="src/config/db.ts"
+import { PrismaClient } from '@prisma/client';
+
+export const prisma = new PrismaClient();
+```
+
+Cada `PrismaClient` abre su propio grupo de conexiones con la base, así que crear uno en cada fichero (o en cada petición) gastaría conexiones de más. Con uno exportado, todos los servicios comparten las mismas.
+
+Al pasar el ratón por `prisma.user`, el editor lista las operaciones que tiene cada modelo. Las que salen en clase:
+
+| Operación | Qué hace | Ejemplo de clase |
+| --- | --- | --- |
+| `findMany` | Varias filas, con `select`, `orderBy`… | Listar usuarios |
+| `findUnique` | Una fila por un campo `@id` o `@unique` | Buscar por `id` o por `email` |
+| `create` | Insertar | Registrar un usuario |
+| `update` | Modificar por `where` | `PATCH /api/users/:id` |
+| `delete` | Borrar por `where` | `DELETE /api/users/:id` |
+
+Cómo se usan en el servicio lo tienes en [CRUD de usuarios](/docs/2-dam/apis/backend/crud-usuarios).
+
+## Migraciones
+
+Una **migración** es un fichero SQL con un cambio de la base de datos. Cuando cambias `schema.prisma`, `npx prisma migrate dev --name nombre` compara el schema con la base, escribe el SQL necesario, lo aplica y vuelve a generar el cliente.
+
+Las migraciones **se guardan en el repositorio**, en orden, una carpeta por migración:
+
+<Files>
+  <Folder name="prisma" defaultOpen>
+    <Folder name="migrations" defaultOpen>
+      <Folder name="20251104112830_init" defaultOpen>
+        <File name="migration.sql" />
+      </Folder>
+      <Folder name="20251120090028_add_media_table">
+        <File name="migration.sql" />
+      </Folder>
+      <File name="migration_lock.toml" />
+    </Folder>
+    <File name="schema.prisma" />
+  </Folder>
+</Files>
+
+El nombre de la carpeta es la fecha y hora (`20251104112830` = 04/11/2025 a las 11:28:30) más el nombre que le diste. `migration_lock.toml` apunta el proveedor (PostgreSQL). Este es el SQL que generó la primera:
+
+```sql title="prisma/migrations/20251104112830_init/migration.sql"
+-- CreateTable
+CREATE TABLE "User" (
+    "id" SERIAL NOT NULL,
+    "email" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "passwordHash" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
+-- CreateIndex
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+```
+
+Fíjate en cómo se traduce el modelo: `Int @id @default(autoincrement())` pasa a `SERIAL` con `PRIMARY KEY`, `String` a `TEXT`, `DateTime @default(now())` a `TIMESTAMP(3) ... DEFAULT CURRENT_TIMESTAMP` y `@unique` a un `UNIQUE INDEX`. Y todos los nombres van **entre comillas dobles**, por eso en el SQL Editor hay que escribir `"User"` ([PostgreSQL con Docker y Supabase](/docs/2-dam/apis/backend/postgres-docker-supabase)).
+
+La segunda migración, `add_media_table`, crea la tabla `"Media"` con sus columnas.
+
+<NoSeVio titulo="El resto de add_media_table">No se ven los índices ni la clave ajena de esa migración: solo el `CREATE TABLE`.</NoSeVio>
+
+### La tabla `_prisma_migrations`
+
+La base de datos apunta qué migraciones tiene aplicadas en una tabla que crea Prisma, `_prisma_migrations`. El 03/11, en Supabase:
+
+```sql title="SQL Editor"
+select * from _prisma_migrations;
+```
+
+Devolvía 2 filas, con `migration_name`, `checksum`, `started_at`, `finished_at` y `applied_steps_count = 1`. Así Prisma sabe qué carpetas de `prisma/migrations` faltan por aplicar en cada base.
+
+## Los comandos
+
+| Comando | Qué hace |
+| --- | --- |
+| `npx prisma generate` | Genera el cliente a partir de `schema.prisma`. Después de `npm install` y de cada cambio del schema. |
+| `npx prisma migrate dev --name x` | Desarrollo: crea la migración del cambio, la aplica y genera el cliente. **Detecta el drift.** |
+| `npx prisma migrate status` | Compara la carpeta de migraciones con `_prisma_migrations`. **No ve el drift.** |
+| `npx prisma migrate reset` | Borra la base y la vuelve a crear con todas las migraciones. **Se pierden los datos**; pide confirmación. |
+| `npx prisma migrate deploy` | Producción: aplica las migraciones pendientes sin crear ninguna nueva. |
+| `npx prisma db pull` | Introspección: reescribe `schema.prisma` a partir de la base. Después, `generate`. |
+| `npx prisma db push` | Lleva el schema a la base **sin crear migración** (para prototipos). |
+| `npx prisma studio` | Abre una web para ver y editar los datos. |
+| `npx prisma db seed`, `db execute` | Solo se vieron en la ayuda de la CLI. |
+
+## El experimento del drift (03/11)
+
+El <Concepto termino="Drift" definicion="Cuando la base de datos ya no coincide con lo que dicen las migraciones, porque alguien la cambió a mano fuera de Prisma.">drift</Concepto> es cuando la base ya no coincide con lo que dejarían las migraciones, porque alguien la ha cambiado a mano. El 03/11 el profesor lo provocó a propósito:
+
+<Steps>
+  <Step>
+
+#### Cambiar la base a mano
+
+En el Table Editor de Supabase renombró la tabla `Media` a `MediaElements`. `select * from "MediaElements"` funcionaba.
+
+  </Step>
+  <Step>
+
+#### `migrate status` no se entera
+
+Respondió `2 migrations found… Database schema is up to date!`. Solo mira si las carpetas de migraciones están apuntadas en `_prisma_migrations`, y lo estaban.
+
+  </Step>
+  <Step>
+
+#### `migrate dev` sí lo detecta
+
+Comparó la base real con la esperada, enseñó las diferencias (tabla `MediaElements` añadida, `Media` quitada, sus índices y la FK) y dijo *"We need to reset the public schema… All data will be lost"*.
+
+  </Step>
+  <Step>
+
+#### `migrate reset` lo arregla
+
+Se respondió `yes`: la base se borró y se recreó desde las migraciones. La tabla volvió a llamarse `Media`, sin datos.
+
+  </Step>
+  <Step>
+
+#### Segunda prueba: `db pull`
+
+Renombró otra vez la tabla, ahora a `MediaElement`, y ejecutó `npx prisma db pull`. Esta vez **manda la base**: Prisma reescribió `schema.prisma` con el modelo `MediaElement`. Luego otro `migrate reset` dejó la base otra vez con `Media`.
+
+  </Step>
+</Steps>
+
+Repítelo tú en el simulador. Prueba el orden de clase (renombrar, `migrate status`, `migrate dev`, `migrate reset`) y después la segunda prueba con `db pull` y `generate`. Para simplificar, el simulador renombra siempre a `MediaElement`, el nombre de la segunda prueba (en la primera era `MediaElements`):
+
+<SimuladorMigraciones />
+
+Lo que enseña: **`migrate status` solo compara las migraciones con la tabla `_prisma_migrations`**, así que un cambio hecho a mano no lo ve. **`migrate dev` compara con la base real** y detecta el drift. **`migrate reset`** recrea la base desde las migraciones (y se pierden los datos). **`db pull`** hace lo contrario: cambia el schema para que se parezca a la base, y después hace falta `generate` para que el cliente cambie (con el modelo `MediaElement`, el cliente tendría `prisma.mediaElement` y no `prisma.media`).
+
+### Lo que escribe `db pull`
+
+En el diff de Git de `schema.prisma` se vio esto (resumido):
+
+```prisma title="prisma/schema.prisma después de db pull"
+model User {
+  // ...
+  MediaElement MediaElement[]
+}
+
+model MediaElement {
+  id           Int      @id(map: "Media_pkey") @default(autoincrement())
+  userId       Int
+  publicId     String   @unique(map: "Media_publicId_key")
+  // ...
+  createdAt    DateTime @default(now())
+  User         User     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "Media_us...")
+
+  @@index([createdAt], map: "Media_createdAt_idx")
+  @@index([userId], map: "Media_userId_idx")
+}
+```
+
+- La tabla se llama `MediaElement`, pero las restricciones (la clave primaria, el `UNIQUE`, los índices) se siguen llamando como antes (`Media_pkey`…). Como no coinciden con los nombres que Prisma pondría por defecto, `db pull` los apunta con **`map:`**.
+- El campo de la relación pasa a llamarse `User` y, en `User`, `MediaElement`: `db pull` usa el nombre de la tabla.
+- El `map:` de la clave ajena sale cortado: <Dudoso nota="Seguramente Media_userId_fkey.">`"Media_us…"`</Dudoso>.
+- Antes del `db pull` se tecleó <Dudoso nota="No es un comando real de Prisma; después se escribió npx prisma db pull.">`npx prisma update`</Dudoso>.
+
+<Callout type="error" title="No toques las tablas a mano">
+  La moraleja del experimento: los cambios de la base se hacen **siempre** cambiando `schema.prisma` y creando una migración. Si alguien cambia la base desde el panel, las migraciones dejan de cuadrar y en desarrollo acabas con `migrate reset`, que borra los datos.
+</Callout>
+
+## Después de un `git pull`
+
+El 03/11 se enseñó un resumen de Google con el orden que hay que seguir cuando bajas cambios de un compañero:
+
+<Steps>
+  <Step>
+
+#### `npm install`
+
+Por si hay dependencias nuevas.
+
+  </Step>
+  <Step>
+
+#### `npx prisma generate`
+
+Para que el cliente tenga los modelos del `schema.prisma` que te has bajado.
+
+  </Step>
+  <Step>
+
+#### `npx prisma migrate dev`
+
+En desarrollo, aplica las migraciones nuevas a tu base. En producción, `npx prisma migrate deploy`.
+
+  </Step>
+</Steps>
+
+<Callout type="warn" title="Ojo con lo que dice Google">
+  El resumen ponía `npx prisma db migrate deploy`. Ese comando no existe: es **`npx prisma migrate deploy`**.
+</Callout>
+
+También se abrió la documentación de la CLI en prisma.io, que anunciaba <Dudoso nota="Se enseñó solo como novedad; no se puede confirmar qué versión era.">"Prisma ORM 8"</Dudoso> con comandos nuevos (`prisma contract infer`, `migration plan`, `db sign`, `db verify`…). **Esos comandos no existen en Prisma 6.19**, que es lo que usa el proyecto: no los uses.
+
+## Errores típicos <NoDadoEnClase inline />
+
+- **`@prisma/client did not initialize yet. Please run "prisma generate"`**: después de `npm install` o `npm ci` hay que ejecutar `npx prisma generate`. También cada vez que cambias el schema.
+- **`migrate dev` dice que hay drift y quiere borrar la base**: alguien cambió la base fuera de las migraciones. En desarrollo, `npx prisma migrate reset`.
+
+## Practica
+
+<Quiz titulo="Test: Prisma" descripcion="8 preguntas">
+  <Pregunta enunciado="¿Cuáles son los tres tipos de bloque de `schema.prisma` que salen en clase?" explicacion="`generator` (qué se genera), `datasource` (a qué base se conecta) y los `model` (las tablas).">
+    <Opcion correcta>`generator`, `datasource` y `model`</Opcion>
+    <Opcion>`client`, `server` y `table`</Opcion>
+    <Opcion>`import`, `config` y `entity`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué significa `width Int?`?" explicacion="El `?` hace opcional el campo: en la base, la columna admite `NULL`.">
+    <Opcion>Que es un entero autoincremental</Opcion>
+    <Opcion correcta>Que es un entero opcional (admite `NULL`)</Opcion>
+    <Opcion>Que es una lista de enteros</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En `user User @relation(fields: [userId], references: [id], onDelete: Cascade)`, ¿qué pasa al borrar un usuario?" explicacion="`onDelete: Cascade` borra también los `Media` que apuntan a ese usuario.">
+    <Opcion>Da error si tiene archivos</Opcion>
+    <Opcion correcta>Se borran también sus `Media`</Opcion>
+    <Opcion>Sus `Media` quedan con `userId` a `NULL`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`npx prisma migrate status` detecta que alguien ha renombrado una tabla desde el panel de Supabase." respuesta={false} explicacion="Solo compara la carpeta de migraciones con `_prisma_migrations`. Quien detecta el drift es `migrate dev`." />
+  <Pregunta enunciado="¿Qué comando reescribe `schema.prisma` a partir de lo que hay en la base?" explicacion="`db pull` es la introspección: aquí manda la base. Después hay que hacer `prisma generate`.">
+    <Opcion>`npx prisma db push`</Opcion>
+    <Opcion correcta>`npx prisma db pull`</Opcion>
+    <Opcion>`npx prisma migrate reset`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué pierdes con `npx prisma migrate reset`?" explicacion="Borra la base y la recrea aplicando todas las migraciones: la estructura vuelve, los datos no.">
+    <Opcion>Las carpetas de `prisma/migrations`</Opcion>
+    <Opcion correcta>Todos los datos de la base</Opcion>
+    <Opcion>Nada: solo comprueba el estado</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué comando aplica las migraciones en producción, sin crear ninguna nueva?" explicacion="`migrate deploy`. El `npx prisma db migrate deploy` que salió en Google no existe.">
+    <Opcion>`npx prisma db migrate deploy`</Opcion>
+    <Opcion>`npx prisma migrate dev`</Opcion>
+    <Opcion correcta>`npx prisma migrate deploy`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Las migraciones se guardan en el repositorio, en `prisma/migrations`." respuesta={true} explicacion="Una carpeta `timestamp_nombre/migration.sql` por migración, más `migration_lock.toml`. Así cada base del equipo puede aplicarlas en orden." />
+</Quiz>
+
+<Flashcards titulo="Repaso: Prisma">
+  <Tarjeta frente="¿Para qué sirve `npx prisma generate`?">Genera el cliente (`@prisma/client`) con los tipos de los modelos de `schema.prisma`. Hay que repetirlo al cambiar el schema y después de `npm install`.</Tarjeta>
+  <Tarjeta frente="¿Por qué un solo `PrismaClient`?">Cada cliente abre sus conexiones. Se crea uno en `config/db.ts` y lo comparten todos los servicios.</Tarjeta>
+  <Tarjeta frente="`@unique` y el error P2002">Si se inserta o actualiza un valor repetido en un campo `@unique`, Prisma lanza P2002 (la API responde 409).</Tarjeta>
+  <Tarjeta frente="¿Qué guarda `_prisma_migrations`?">Las migraciones aplicadas en esa base: `migration_name`, `checksum`, `finished_at`, `applied_steps_count`…</Tarjeta>
+  <Tarjeta frente="Drift">La base no coincide con las migraciones porque se cambió a mano. `migrate status` no lo ve; `migrate dev` sí.</Tarjeta>
+  <Tarjeta frente="`db pull` frente a `db push`">`pull`: la base manda y se reescribe el schema. `push`: el schema manda y se lleva a la base sin crear migración.</Tarjeta>
+  <Tarjeta frente="¿Qué es `map:` en un schema?">El nombre real de una restricción o índice en la base cuando no coincide con el que pondría Prisma. Lo añade `db pull`.</Tarjeta>
+  <Tarjeta frente="Después de un `git pull`">`npm install` → `npx prisma generate` → `npx prisma migrate dev` (en producción, `migrate deploy`).</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Añadir un campo" dificultad="facil">
+  Quieres guardar el teléfono de cada usuario, que es opcional. ¿Qué cambias en `schema.prisma`, qué comando ejecutas y qué SQL esperas que genere la migración?
+
+  <Pista>Un campo opcional lleva `?` detrás del tipo.</Pista>
+  <Pista>El comando de desarrollo crea la migración y le pone el nombre que le digas con `--name`.</Pista>
+
+  <Solucion>
+
+```prisma title="prisma/schema.prisma"
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  name         String
+  phone        String?
+  passwordHash String
+  createdAt    DateTime @default(now())
+  media        Media[]
+}
+```
+
+```bash
+npx prisma migrate dev --name add_user_phone
+```
+
+Se crea `prisma/migrations/<fecha>_add_user_phone/migration.sql` con un `ALTER TABLE "User" ADD COLUMN "phone" TEXT;` (sin `NOT NULL`, porque es opcional), se aplica a la base y se vuelve a generar el cliente, que ya tiene `phone` en los tipos.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Una relación como la de Media" dificultad="media">
+  Escribe un modelo `Note` (notas de un usuario) con `id`, `title`, `content` opcional, `createdAt` y su usuario. Si se borra el usuario, se borran sus notas. Añade un índice por `userId` y lo que haga falta en `User`.
+
+  <Pista>Copia la estructura de `Media`: una columna `userId` y un campo `user` con `@relation`.</Pista>
+  <Pista>En `User` hace falta el lado "muchos": un campo con `Note[]`.</Pista>
+
+  <Solucion>
+
+```prisma title="prisma/schema.prisma"
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  media        Media[]
+  notes        Note[]
+}
+
+model Note {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String?
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+```
+
+Después, `npx prisma migrate dev --name add_note`.
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="schema.prisma">El modelo de la base: `generator`, `datasource` y los `model`.</Termino>
+  <Termino nombre="PrismaClient">El cliente generado para hacer consultas. Uno solo, en `config/db.ts`.</Termino>
+  <Termino nombre="Migración">Carpeta con un `migration.sql`, en orden, dentro de `prisma/migrations`. Se sube al repositorio.</Termino>
+  <Termino nombre="_prisma_migrations">La tabla donde la base apunta qué migraciones tiene aplicadas.</Termino>
+  <Termino nombre="Drift">La base no coincide con las migraciones porque alguien la cambió a mano.</Termino>
+  <Termino nombre="db pull">Introspección: el schema se reescribe a partir de la base.</Termino>
+  <Termino nombre="migrate reset">Borra la base y la recrea con las migraciones. Se pierden los datos.</Termino>
+</Glosario>
+
+<MarcarCompletado />

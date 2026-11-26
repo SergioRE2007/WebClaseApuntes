@@ -1,0 +1,390 @@
+---
+title: Room como fuente de verdad (offline first)
+description: El repositorio lee siempre de Room con Flow y refresh() trae los datos de la API y los guarda en Room; sin red, la app enseña lo último que guardó.
+icon: RefreshCw
+---
+
+import { SimuladorOfflineFirst } from '@/components/temas/para-el-proyecto-android/simulador-offline-first';
+
+Es la idea que se empezó el 09/11 y el 16/11 y no se llegó a ver entera: **la pantalla solo lee de Room** y la red solo sirve para **rellenar Room**. Si no hay internet, la app enseña lo último que guardó en vez de quedarse vacía o cerrarse. A esto se le llama *offline first*.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué se hizo en clase y qué piezas no se llegaron a ver.
+  - Un repositorio que expone un `Flow` de Room y un `refresh()` que copia de la API a Room.
+  - Un ViewModel que junta los datos y el error con `combine` y rellena el estado `Error`.
+  - Por qué se captura `IOException` y no `Exception`.
+</Callout>
+
+## Lo que se vio en clase
+
+<DeClase fecha="09/11" proyecto="PokeApp2627" nota="y el 16/11, un fragmento de 3 minutos ya con Room" />
+
+El 09/11, en la PokeApp, el repositorio pasó a recibir **dos DataSource**: el remoto (Retrofit) y uno local, primero en memoria (`PokemonInMemoryDataSource`). El local es la **fuente de verdad** y `refresh()` copia del remoto al local. El ViewModel ya no usa `MutableStateFlow` + `init`: construye su estado con `map` + `stateIn` sobre el `Flow` del repositorio.
+
+El código de clase, paso a paso (la fuente local, el `AppModule`, el repositorio con `refresh()` y el detalle con `observePokemon`), está en [Offline-first: el repositorio con fuente remota y local](/docs/2-dam/kotlin/datos/offline-first). Aquí solo se resume lo que importa para tu proyecto.
+
+Cómo se intentó hacer la carga inicial en el `init` del repositorio:
+
+- `withContext` no sirve: `init` no es `suspend`, y una función `suspend` solo se llama desde una corrutina o desde otra `suspend`.
+- `CoroutineScope(Dispatchers.IO).launch` dejaba **la pantalla en blanco**.
+- `runBlocking` funcionaba, pero **bloquea el hilo** hasta que responde la red. Se usó como solución provisional.
+- Se explicó por qué no usar `GlobalScope`: no está ligado a ningún ciclo de vida.
+
+El 16/11 se vio la misma app ya con Room (`PokemonLocalDBDatasource`, `PokemonDao`, `PokemonEntity`) y el **Database Inspector** (View → Tool Windows → App Inspection) con la tabla `pokemon` llena. El `init { runBlocking { refresh() } }` aparece **comentado**. El `runBlocking` del repositorio es una de las [prácticas raras](/docs/2-dam/kotlin/para-el-proyecto/practicas-raras) que no conviene copiar.
+
+Notas sobre el código de clase:
+
+- <Dudoso nota="Se usa en el repositorio, pero en las capturas no sale declarado ni en el LocalDataSource ni en la interfaz del repositorio.">`observePokemon(id)`</Dudoso> no se ve implementado ni en el LocalDataSource ni en la interfaz del repositorio: tal como está, el fragmento no compila.
+- No se ve la explicación del profesor de por qué `CoroutineScope(Dispatchers.IO).launch` dejaba la pantalla en blanco. <Dudoso nota="Es una deducción de quien hizo los apuntes, no una explicación de clase.">Probablemente es porque `flow { emit(_pokemons) }` emite una sola vez</Dudoso>: si la pantalla lo lee antes de que llegue la red, recibe la lista vacía y no se entera de los cambios.
+
+<NoSeVio titulo="Lo que falta para cerrar el patrón">
+  - Desde dónde se llama a `refresh()` cuando el `runBlocking` queda comentado (16/11).
+  - `observePokemon(id)` en el LocalDataSource y en la interfaz del repositorio (09/11).
+  - Cómo se rellena el estado `Error` de las pantallas.
+  - `readAllPokemon()` y `readPokemonById()` leyendo de Room: el 16/11 siguen leyendo de la API.
+</NoSeVio>
+
+## El patrón completo <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Esto no se llegó a ver en clase. Es la forma estándar de cerrar lo que se empezó el 09/11 y el 16/11, con la tienda de ejemplo (categorías y productos) y Room 3.
+</NoDadoEnClase>
+
+Primero, el viaje de los datos. Dale a Reproducir:
+
+<Flujo
+  titulo="Abrir la pantalla con Room como fuente de verdad"
+  nodos={["Pantalla", "ViewModel", "Repositorio", "Room", "API"]}
+>
+  <Mensaje de="Pantalla" a="ViewModel" titulo="collectAsStateWithLifecycle()">
+    La pantalla empieza a observar `uiState`. Mientras no haya nada, ve el `initialValue`: `Loading`.
+  </Mensaje>
+  <Mensaje de="ViewModel" a="Room" titulo="observeProductos()">
+    El `uiState` se construye sobre el `Flow` del repositorio, que es el `Flow` del DAO. Room emite enseguida lo que tenga guardado, aunque sea una lista vacía.
+  </Mensaje>
+  <Mensaje de="ViewModel" a="Repositorio" titulo="refresh()">
+    A la vez, el `init` del ViewModel lanza `refresh()` dentro de `viewModelScope.launch`. No bloquea nada.
+  </Mensaje>
+  <Mensaje de="Repositorio" a="API" titulo="GET api/productos">
+    El repositorio pide los datos a la API con Retrofit.
+  </Mensaje>
+  <Mensaje de="API" a="Repositorio" tipo="respuesta" titulo="200 OK + JSON">
+    Si la respuesta va bien, el repositorio pasa los DTO a entidades con `toEntity()`.
+  </Mensaje>
+  <Mensaje de="Repositorio" a="Room" titulo="upsert…()">
+    Guarda primero las categorías y luego los productos. El repositorio **no** le devuelve nada al ViewModel.
+  </Mensaje>
+  <Mensaje de="Room" a="ViewModel" tipo="respuesta" titulo="El Flow emite">
+    Como la tabla ha cambiado, el `Flow` de Room vuelve a emitir con los datos nuevos.
+  </Mensaje>
+  <Mensaje de="ViewModel" a="Pantalla" tipo="respuesta" titulo="Success(productos)">
+    `combine` calcula el estado nuevo y la pantalla se repinta sola.
+  </Mensaje>
+</Flujo>
+
+La clave es el penúltimo paso: **los datos nunca van de la API a la pantalla directamente**. Siempre pasan por Room, y la pantalla se entera porque observa Room.
+
+### El repositorio
+
+<Recorrido
+  titulo="ProductoRepository.kt"
+  lenguaje="kotlin"
+  codigo={`data class Producto(
+    val id: Int,
+    val nombre: String,
+    val precio: Double,
+    val categoriaId: Int
+)
+
+fun ProductoEntity.toModel() = Producto(id, nombre, precio, categoriaId)
+
+fun ProductoDto.toEntity() = ProductoEntity(
+    id = id,
+    nombre = nombre,
+    precio = precio.toDouble(),
+    categoriaId = categoria.id
+)
+
+fun CategoriaDto.toEntity() = CategoriaEntity(id = id, nombre = nombre)
+
+interface ProductoRepository {
+    val productos: Flow<List<Producto>>
+    suspend fun refresh()
+}
+
+class ProductoRepositoryImpl @Inject constructor(
+    private val dao: TiendaDao,
+    private val api: TiendaApi
+) : ProductoRepository {
+
+    override val productos: Flow<List<Producto>> =
+        dao.observeProductos().map { lista -> lista.map { it.toModel() } }
+
+    override suspend fun refresh() {
+        val respuesta = api.getProductos()
+        val pagina = respuesta.body()
+        if (!respuesta.isSuccessful || pagina == null) {
+            throw IOException("La API respondió \${respuesta.code()}")
+        }
+        dao.upsertCategorias(pagina.items.map { it.categoria.toEntity() }.distinctBy { it.id })
+        dao.upsertProductos(pagina.items.map { it.toEntity() })
+    }
+}`}
+>
+  <Paso lineas="1-6" titulo="El modelo de la app">
+    `Producto` es lo que ve la interfaz. No es ni la entidad de Room ni el DTO de la API, igual que el `Pokemon` de clase.
+  </Paso>
+  <Paso lineas="8-17" titulo="Los mappers">
+    Funciones de extensión, como el `toModel()` de clase: de entidad a modelo y de DTO a entidad. `precio.toDouble()` porque Prisma manda los `Decimal` como texto en el JSON (`"59.9"`), y por eso el DTO lo tiene como `String`.
+  </Paso>
+  <Paso lineas="19-22" titulo="La interfaz">
+    Lo que conoce el ViewModel: un `Flow` con los productos y una función para refrescar.
+  </Paso>
+  <Paso lineas="29-30" titulo="Leer siempre de Room">
+    El primer `map` es el de `Flow` (transforma cada emisión) y el segundo, el de `List` (transforma cada elemento). Cada vez que cambia la tabla, sale la lista nueva ya convertida a modelo.
+  </Paso>
+  <Paso lineas="32-37" titulo="Sin !!">
+    En vez del `body()!!` de clase, se comprueba si la respuesta fue bien y que el cuerpo no sea `null`. Si no, se lanza una `IOException` que recoge el ViewModel.
+  </Paso>
+  <Paso lineas="38-39" titulo="Primero los padres">
+    Primero las categorías (sin repetir, con `distinctBy`) y después los productos. Al revés, la clave ajena no deja guardar productos de categorías que todavía no existen.
+  </Paso>
+</Recorrido>
+
+Hilt necesita saber qué implementación dar cuando alguien pide un `ProductoRepository`. Es un `@Binds`, como en el `AppModule` de clase:
+
+```kotlin title="AppModule.kt"
+@Module
+@InstallIn(SingletonComponent::class)
+interface AppModule {
+    @Binds
+    @Singleton
+    fun bindProductoRepository(r: ProductoRepositoryImpl): ProductoRepository
+}
+```
+
+`TiendaApi`, `ProductoDto` y `CategoriaDto` están en [POST, PUT y DELETE con Retrofit](/docs/2-dam/kotlin/para-el-proyecto/crud-con-retrofit). El DAO y las entidades, en [Room con relaciones](/docs/2-dam/kotlin/para-el-proyecto/room-relaciones).
+
+### El ViewModel
+
+El ViewModel lanza `refresh()` en su `init`, **dentro de `viewModelScope.launch`**. Así no se bloquea nada y la corrutina se cancela sola si se cierra la pantalla.
+
+<Recorrido
+  titulo="ProductosViewModel.kt"
+  lenguaje="kotlin"
+  codigo={`sealed interface ProductosUiState {
+    data object Loading : ProductosUiState
+    data class Success(val productos: List<Producto>) : ProductosUiState
+    data class Error(val mensaje: String) : ProductosUiState
+}
+
+@HiltViewModel
+class ProductosViewModel @Inject constructor(
+    private val repository: ProductoRepository
+) : ViewModel() {
+
+    private val _error = MutableStateFlow<String?>(null)
+
+    val uiState: StateFlow<ProductosUiState> =
+        combine(repository.productos, _error) { productos, error ->
+            if (productos.isEmpty() && error != null) {
+                ProductosUiState.Error(error)
+            } else {
+                ProductosUiState.Success(productos)
+            }
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000L),
+            initialValue = ProductosUiState.Loading
+        )
+
+    init {
+        refresh()
+    }
+
+    fun refresh() {
+        viewModelScope.launch {
+            try {
+                _error.value = null
+                repository.refresh()
+            } catch (e: IOException) {
+                _error.value = e.message ?: "No hay conexión"
+            }
+        }
+    }
+}`}
+>
+  <Paso lineas="1-5" titulo="Los estados">
+    Como los estados sellados de clase. `data object` es un `object` con `toString()` legible; se usa igual en el `when`.
+  </Paso>
+  <Paso lineas="12" titulo="El error, aparte">
+    El error no viene de Room, así que va en su propio `MutableStateFlow`, que empieza en `null`.
+  </Paso>
+  <Paso lineas="14-20" titulo="combine">
+    Junta dos `Flow` (lo que hay en Room y el error) en un solo estado. Se recalcula cada vez que cambia **cualquiera** de los dos.
+  </Paso>
+  <Paso lineas="16-17" titulo="Error solo si no hay nada">
+    Solo se enseña `Error` si no hay nada guardado. Si hay datos viejos en Room, se enseñan aunque falle la red: eso es *offline first*.
+  </Paso>
+  <Paso lineas="21-25" titulo="stateIn, como en clase">
+    Igual que el 09/11: convierte el `Flow` en un `StateFlow` que vive en `viewModelScope`, deja de escuchar 5 segundos después de que nadie lo observe y empieza en `Loading`.
+  </Paso>
+  <Paso lineas="27-29" titulo="Carga al crearse">
+    El `init` del ViewModel, no el del repositorio. Así se sustituye el `runBlocking` de clase.
+  </Paso>
+  <Paso lineas="31-40" titulo="Capturar la IOException">
+    Es lo que lanza Retrofit cuando no hay red (y la que lanza el repositorio si la API responde mal). Con `catch (e: Exception)` se capturaría también la cancelación de la corrutina, que no se debe tapar.
+  </Paso>
+</Recorrido>
+
+### La pantalla
+
+```kotlin title="ProductosScreen.kt"
+@Composable
+fun ProductosScreen(
+    onAnadir: () -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: ProductosViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    when (val estado = uiState) {
+        ProductosUiState.Loading -> CircularProgressIndicator(modifier)
+        is ProductosUiState.Error -> Text(estado.mensaje, modifier)
+        is ProductosUiState.Success -> ListaProductos(estado.productos, onAnadir, modifier)
+    }
+}
+```
+
+- `when (val estado = uiState)` guarda el valor en una variable local, y así Kotlin hace el *smart cast* solo: no hace falta el `(state as TaskListScreenState.Success).tasks` de clase.
+- `ListaProductos` es tu composable con la `LazyColumn`.
+- En el estado `Error` puedes poner un botón "Reintentar" con `onClick = viewModel::refresh`.
+
+## Pruébalo
+
+Quita el wifi, refresca, borra los datos de la app… y mira qué estado ve la pantalla en cada caso:
+
+<SimuladorOfflineFirst />
+
+Lo que tienes que ver en la demo:
+
+- Con datos en Room y **sin red**, `refresh()` falla pero la pantalla sigue en `Success` con lo de antes.
+- Con Room **vacía y sin red**, la pantalla pasa a `Error`.
+- Si cambia un precio en la API, la pantalla no se entera hasta el siguiente `refresh()`: lo que se ve es siempre lo que hay en Room.
+
+<Callout type="warn" title="La lista vacía no es un error">
+  Room emite su lista enseguida, aunque esté vacía. Por eso, mientras llega la primera respuesta de la API, la pantalla ve `Success` con la lista vacía y no `Loading`. Pon un texto del tipo "Todavía no hay productos" cuando `productos` esté vacía, en vez de una pantalla en blanco.
+</Callout>
+
+## Practica
+
+<Quiz titulo="Test: Room como fuente de verdad">
+  <Pregunta enunciado="En este patrón, ¿de dónde lee la pantalla los datos?" explicacion="La pantalla observa siempre el `Flow` de Room. La API solo sirve para rellenar Room.">
+    <Opcion>De la API, y de Room si no hay red</Opcion>
+    <Opcion correcta>Siempre de Room</Opcion>
+    <Opcion>De lo que devuelve `refresh()`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="`refresh()` devuelve la lista nueva al ViewModel para que la pinte." respuesta={false} explicacion="`refresh()` guarda en Room y no devuelve nada. La pantalla se entera porque el `Flow` de Room vuelve a emitir." />
+  <Pregunta enunciado="¿Por qué se llama a `refresh()` con `viewModelScope.launch` en el `init` del ViewModel y no con `runBlocking` en el del repositorio?" explicacion="`runBlocking` bloquea el hilo hasta que responde la red y congela la app. `viewModelScope.launch` no bloquea y se cancela con el ViewModel.">
+    <Opcion>Porque `runBlocking` no compila en un `init`</Opcion>
+    <Opcion correcta>Porque `runBlocking` congela la app hasta que responde la red</Opcion>
+    <Opcion>Porque el repositorio no puede tener `init`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Hay productos guardados en Room y quitas el wifi. Pulsas refrescar. ¿Qué ve la pantalla?" explicacion="El error solo se enseña si no hay nada guardado. Con datos en Room, se siguen viendo.">
+    <Opcion>`Error("No hay conexión")`</Opcion>
+    <Opcion correcta>`Success` con los productos guardados</Opcion>
+    <Opcion>`Loading` para siempre</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué se captura `IOException` y no `Exception`?" explicacion="Retrofit lanza `IOException` cuando no hay red. `Exception` capturaría también la `CancellationException` de la corrutina, que no se debe tapar.">
+    <Opcion>Porque `Exception` no se puede capturar en Kotlin</Opcion>
+    <Opcion correcta>Porque `Exception` taparía también la cancelación de la corrutina</Opcion>
+    <Opcion>Porque Retrofit nunca lanza otras excepciones</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué hace `combine(repository.productos, _error) { ... }`?" explicacion="Junta los dos `Flow` y vuelve a calcular el estado cada vez que cambia cualquiera de ellos.">
+    <Opcion>Espera a que los dos terminen y emite una vez</Opcion>
+    <Opcion correcta>Calcula un estado nuevo cada vez que cambia cualquiera de los dos</Opcion>
+    <Opcion>Concatena las dos listas</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué el `ProductoDto` tiene el precio como `String`?" explicacion='Prisma manda los `Decimal` como texto en el JSON (`"59.9"`) para no perder decimales. Se convierte con `toDouble()` al pasar a entidad.'>
+    <Opcion>Porque Gson no sabe leer números</Opcion>
+    <Opcion correcta>Porque Prisma manda los `Decimal` como texto</Opcion>
+    <Opcion>Porque Room no guarda `Double`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: offline first">
+  <Tarjeta frente="Fuente de verdad">El sitio del que lee la interfaz: aquí, Room. La API solo rellena Room.</Tarjeta>
+  <Tarjeta frente="Qué hace `refresh()`">Pide los datos a la API y los guarda en Room (primero padres, luego hijos). No devuelve nada.</Tarjeta>
+  <Tarjeta frente="`combine`">Junta varios `Flow` en uno y recalcula cada vez que cambia cualquiera.</Tarjeta>
+  <Tarjeta frente="¿Cuándo se enseña `Error`?">Solo si falla la red **y** no hay nada guardado en Room.</Tarjeta>
+  <Tarjeta frente="Database Inspector">View → Tool Windows → App Inspection. Enseña las tablas de Room en directo mientras la app corre (salió el 16/11).</Tarjeta>
+  <Tarjeta frente="`when (val estado = uiState)`">Guarda el estado en una variable local para que Kotlin haga el *smart cast* sin `as`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Botón de reintentar" dificultad="facil">
+  Cambia la rama `Error` de `ProductosScreen` para que, además del mensaje, tenga un botón "Reintentar" que vuelva a llamar a la API.
+
+  <Pista>El ViewModel ya tiene una función pública `refresh()`. Pásala como referencia a función, como el `viewModel::onCreate` de clase.</Pista>
+
+  <Solucion>
+
+```kotlin
+is ProductosUiState.Error -> Column(modifier) {
+    Text(estado.mensaje)
+    Button(onClick = viewModel::refresh) {
+        Text(stringResource(R.string.reintentar))
+    }
+}
+```
+
+  Al pulsar, `refresh()` pone `_error` a `null`: el estado pasa a `Success` con la lista vacía mientras espera y, si vuelve a fallar, otra vez a `Error`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="El detalle de un producto" dificultad="media">
+  Añade al repositorio una función `observeProducto(id: Int): Flow<Producto?>` que lea de Room, y úsala en un `ProductoDetalleViewModel` que lea el id de la ruta con `savedStateHandle.toRoute`, como el `PokemonDetailViewModel` del 09/11.
+
+  <Pista>El DAO ya tiene `observeProducto(id)`, que devuelve `Flow<ProductoEntity?>`. Solo hay que convertir a modelo, teniendo en cuenta que puede ser `null`.</Pista>
+  <Pista>Para el ViewModel: `map` + `stateIn`, como en clase. La ruta puede ser `@Serializable class DetalleProducto(val id: Int) : Ruta()`.</Pista>
+
+  <Solucion>
+
+```kotlin title="ProductoRepository.kt"
+// En la interfaz
+fun observeProducto(id: Int): Flow<Producto?>
+
+// En ProductoRepositoryImpl
+override fun observeProducto(id: Int): Flow<Producto?> =
+    dao.observeProducto(id).map { it?.toModel() }
+```
+
+```kotlin title="ProductoDetalleViewModel.kt"
+sealed interface DetalleUiState {
+    data object Loading : DetalleUiState
+    data object NoExiste : DetalleUiState
+    data class Success(val producto: Producto) : DetalleUiState
+}
+
+@HiltViewModel
+class ProductoDetalleViewModel @Inject constructor(
+    repository: ProductoRepository,
+    savedStateHandle: SavedStateHandle
+) : ViewModel() {
+    private val id = savedStateHandle.toRoute<Ruta.DetalleProducto>().id
+
+    val uiState: StateFlow<DetalleUiState> = repository.observeProducto(id)
+        .map { producto ->
+            if (producto != null) DetalleUiState.Success(producto) else DetalleUiState.NoExiste
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), DetalleUiState.Loading)
+}
+```
+
+  `it?.toModel()` solo llama a `toModel()` si `it` no es `null`; si lo es, el resultado es `null`. Esta es justo la pieza `observePokemon(id)` que en clase no se llegó a ver.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

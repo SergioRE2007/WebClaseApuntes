@@ -1,0 +1,341 @@
+---
+title: Pipes y directivas
+description: "Qué es un pipe, el pipe json para depurar (y el error de estructura circular), los pipes de Angular como currency, date o uppercase, qué es una directiva y cómo se crean pipes y directivas propios."
+icon: Funnel
+---
+
+import { CadenaPipes } from '@/components/temas/angular/cadena-pipes';
+
+Un **pipe** transforma un valor justo antes de pintarlo, sin cambiar el dato de la clase: `{{ precio | currency:'EUR' }}`. Una **directiva** es algo que se pone en una etiqueta para cambiar cómo se comporta o cómo se ve: ya has usado unas cuantas sin saberlo (`ngModel`, `routerLink`, `required`…).
+
+En clase solo se usó el pipe `json`. El resto de la página viene de la unidad 4 de pipes y directivas de las guías y se marca como no dado.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - La sintaxis `valor | pipe:parametro` y cómo se encadenan pipes.
+  - Depurar con el pipe `json` y por qué no sirve con un `NgForm`.
+  - Los pipes que trae Angular y cómo se importan en un componente standalone.
+  - Qué es una directiva y cuáles has usado ya.
+</Callout>
+
+## El pipe `json`
+
+<DeClase fecha="05/11, 12/11" proyecto="proj-game" />
+
+Convierte un objeto en texto JSON con formato. Es muy útil para **ver qué tiene un objeto** mientras desarrollas, sin abrir la consola:
+
+```html title="app.component.html (05/11)"
+@for( game of this.games; track game.id ) {
+  {{game | json}}
+  <br/>
+}
+```
+
+```html title="crud.component.html (05/11)"
+{{ this.game | json }}
+```
+
+Sin el pipe, `{{ game }}` pintaría `[object Object]`.
+
+### Hay que importarlo
+
+En un componente standalone, **cada pipe que use la plantilla tiene que estar en `imports`**:
+
+```ts title="app.component.ts"
+import { JsonPipe } from '@angular/common';
+
+@Component({
+  selector: 'app-root',
+  imports: [RouterOutlet, JsonPipe, CrudComponent],
+  templateUrl: './app.component.html',
+  styleUrl: './app.component.css'
+})
+```
+
+Si se te olvida, el compilador da el error `NG8004: No pipe found with name 'json'` <NoDadoEnClase inline />. También vale importar `CommonModule`, que trae todos los pipes de Angular de golpe (así estaba en `angular-http`).
+
+### El error de estructura circular
+
+El 05/11 se probó `{{ gameForm | json }}` para ver el formulario entero, y la consola dio:
+
+```text title="Consola del navegador"
+TypeError: Converting circular structure to JSON
+```
+
+`gameForm` es un `NgForm`, un objeto que tiene referencias a otros objetos que a su vez apuntan de vuelta a él (un ciclo), y `JSON.stringify` no sabe convertir eso a texto. Se borró la línea y se dejó solo `{{ this.game | json }}`, que es un objeto de datos normal. Regla práctica: usa `json` con **modelos de datos**, no con objetos de Angular.
+
+## Cómo se escribe un pipe
+
+```text
+{{ valor | pipe }}
+{{ valor | pipe:parametro1:parametro2 }}
+{{ valor | pipe1 | pipe2 }}
+```
+
+- El pipe va después de `|` (una barra vertical, no la `||` del "o" lógico).
+- Los parámetros van detrás, separados por `:`.
+- Se pueden encadenar: el resultado de uno entra en el siguiente.
+- Se pueden usar en interpolación y en property binding: `[title]="nombre | uppercase"`.
+
+Monta una cadena en la demo. Usa los pipes de la tabla de abajo (no se vieron en clase) y el pipe propio `recortar`, que se explica más abajo:
+
+<CadenaPipes />
+
+Lo que enseña la demo:
+
+- El valor de la clase entra por la izquierda y **cada pipe recibe lo que devuelve el anterior**.
+- En una cadena **importa el orden**: `lowercase | titlecase` da `Neon Racer`, pero `titlecase | lowercase` da `neon racer`, porque manda el último.
+- La propiedad `titulo` de la clase **no cambia**: solo cambia lo que se pinta.
+- `json` con un texto le añade las comillas, igual que `JSON.stringify`.
+
+## Los pipes de Angular <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Vienen en la unidad 4 de las guías ([repositorio de guías](https://github.com/hokahey007/guides-angular)), pero en las clases grabadas solo se usó `json`.
+</NoDadoEnClase>
+
+Todos están en `@angular/common`:
+
+| Pipe | Clase que importas | Ejemplo | Resultado |
+| --- | --- | --- | --- |
+| `uppercase` | `UpperCasePipe` | `{{ 'hola' \| uppercase }}` | `HOLA` |
+| `lowercase` | `LowerCasePipe` | `{{ 'HOLA' \| lowercase }}` | `hola` |
+| `titlecase` | `TitleCasePipe` | `{{ 'neon racer' \| titlecase }}` | `Neon Racer` |
+| `currency` | `CurrencyPipe` | `{{ 14.99 \| currency:'EUR' }}` | `€14.99` |
+| `number` | `DecimalPipe` | `{{ 3.14159 \| number:'1.0-2' }}` | `3.14` |
+| `percent` | `PercentPipe` | `{{ 0.25 \| percent }}` | `25%` |
+| `date` | `DatePipe` | `{{ hoy \| date:'dd/MM/yyyy' }}` | `05/11/2026` |
+| `slice` | `SlicePipe` | `{{ 'Angular' \| slice:0:3 }}` | `Ang` |
+| `keyvalue` | `KeyValuePipe` | `@for (c of obj \| keyvalue; track c.key)` | Recorre un objeto como pares `key` / `value` |
+| `json` | `JsonPipe` | `{{ game \| json }}` | El objeto en JSON |
+| `async` | `AsyncPipe` | `{{ precio$ \| async }}` | Se suscribe a un `Observable` y pinta su valor |
+
+- Los resultados de `currency`, `number`, `percent` y `date` dependen del **idioma** de la aplicación. Por defecto es inglés de EE. UU. (`en-US`), y por eso sale `€14.99` y no `14,99 €`.
+- `slice` no cambia el original: devuelve una copia recortada.
+
+Se importan uno a uno o todos con `CommonModule`:
+
+```ts title="producto.component.ts"
+import { CurrencyPipe, UpperCasePipe } from '@angular/common';
+
+@Component({
+  selector: 'app-producto',
+  imports: [CurrencyPipe, UpperCasePipe],
+  templateUrl: './producto.component.html'
+})
+export class ProductoComponent {
+  protected product = { title: 'Pixel Runner', price: 14.99 };
+}
+```
+
+```html title="producto.component.html"
+<h3>{{ product.title | uppercase }}</h3>
+<p>{{ product.price | currency:'EUR' }}</p>
+```
+
+## Un pipe propio <NoDadoEnClase inline />
+
+Si ningún pipe de Angular hace lo que necesitas, creas uno. Es una clase con `@Pipe` y un método `transform`:
+
+```bash title="Terminal"
+ng g p pipes/recortar
+```
+
+```ts title="src/app/pipes/recortar.pipe.ts"
+import { Pipe, PipeTransform } from '@angular/core';
+
+@Pipe({
+  name: 'recortar'
+})
+export class RecortarPipe implements PipeTransform {
+  transform(valor: string, max = 20): string {
+    return valor.length > max ? valor.slice(0, max) + '…' : valor;
+  }
+}
+```
+
+```html title="Uso (con RecortarPipe en imports)"
+{{ post.title | recortar }}
+{{ post.title | recortar:10 }}
+```
+
+- `name` es el nombre que usas en la plantilla.
+- El primer parámetro de `transform` es el valor de la izquierda del `|`; los demás, los parámetros que van detrás de `:`.
+- Por defecto un pipe es **puro**: Angular solo vuelve a llamar a `transform` cuando cambia el valor de entrada (para un objeto o un array, cuando cambia la referencia, no su contenido). Por eso las guías insisten en crear arrays nuevos en lugar de modificar el que hay.
+
+## Directivas
+
+Una **directiva** es una clase que Angular aplica a una etiqueta para darle comportamiento. Hay tres tipos:
+
+| Tipo | Qué hace | Ejemplos que has visto |
+| --- | --- | --- |
+| **Componente** | Una directiva con plantilla propia. | `<app-lampara>`, `<app-crud>` |
+| **De atributo** | Cambia el aspecto o el comportamiento de un elemento existente. | `ngModel` y `required` (05/11), `routerLink` (27/10), `[ngClass]` |
+| **Estructural** | Añade o quita elementos del DOM. | `*ngIf` y `*ngFor` de la sintaxis antigua |
+
+Ejemplos de clase de que una directiva va "pegada" a una etiqueta:
+
+- **`required` y `minlength`** en un `input` con `ngModel` no son solo atributos de HTML: Angular los convierte en las directivas `RequiredValidator` y `MinLengthValidator` (el *tooltip* de VS Code lo enseñó el 05/11).
+- **`routerLink`** en un `<a>` es una directiva de `@angular/router`. Por eso, si no está `RouterLink` en `imports`, sale *"Can't bind to 'routerLink' since it isn't a known property of 'a'"* (27/10).
+- **`NgModel`** es una directiva de `FormsModule`; por eso no se puede importar suelta (error -992011 del 05/11).
+
+`@if` y `@for` **no** son directivas: son bloques de la sintaxis de las plantillas, y por eso no hay que importarlos.
+
+### `[class.x]` frente a `[ngClass]`
+
+El 05/11 el autocompletado ofreció `[ngClass]` y se eligió `[class.invalid-control]`. Hacen lo mismo de dos formas: `[class.x]` es un binding de la plantilla y `[ngClass]` es una directiva de `@angular/common` (hay que importar `NgClass`). Para una sola clase, `[class.x]` es lo más sencillo.
+
+<Comparar titulo="Marcar el campo inválido" columnas>
+  <Lado tipo="bien" titulo="[class.x] (así se hizo en clase)">
+
+```html
+<input
+  [class.invalid-control]="invalidStock">
+```
+
+Un binding de la plantilla: no hay que importar nada.
+
+  </Lado>
+  <Lado titulo="[ngClass] (no se usó en clase)">
+
+```html
+<input [ngClass]="{
+  'invalid-control': invalidStock
+}">
+```
+
+Una directiva: hay que añadir `NgClass` a `imports`. Compensa cuando son varias clases a la vez.
+
+  </Lado>
+</Comparar>
+
+## Una directiva propia <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  La unidad 4 de las guías crea directivas propias (como una que solo deja escribir números), pero no salió en clase.
+</NoDadoEnClase>
+
+Una directiva de atributo que resalta el elemento al pasar el ratón por encima:
+
+```bash title="Terminal"
+ng g d directives/resaltar
+```
+
+```ts title="src/app/directives/resaltar.directive.ts"
+import { Directive } from '@angular/core';
+
+@Directive({
+  selector: '[appResaltar]',
+  host: {
+    '(mouseenter)': 'activo = true',
+    '(mouseleave)': 'activo = false',
+    '[class.resaltado]': 'activo'
+  }
+})
+export class ResaltarDirective {
+  activo = false;
+}
+```
+
+```html title="Uso (con ResaltarDirective en imports)"
+<article appResaltar>...</article>
+```
+
+```css title="src/styles.css"
+.resaltado { outline: 2px solid orange; }
+```
+
+- El `selector` va entre corchetes, `[appResaltar]`: la directiva se aplica a cualquier elemento que tenga ese atributo.
+- `host` enlaza eventos y propiedades **del elemento donde se pone la directiva**, con la misma sintaxis que la plantilla: `(evento)` y `[class.x]`. En la guía verás los decoradores `@HostListener` y `@HostBinding`, que hacen lo mismo.
+- Una directiva no tiene plantilla ni estilos propios: la clase `.resaltado` tiene que estar en un CSS que le llegue al elemento. En `styles.css` vale para toda la aplicación; en el CSS del componente donde está el `<article>`, solo para ese componente.
+
+## Practica
+
+<Quiz titulo="Test: pipes y directivas">
+  <Pregunta enunciado="¿Qué pinta `{{ game }}` si `game` es un objeto?" explicacion="La interpolación convierte el objeto a texto con `toString()`, que da `[object Object]`. Para verlo entero, `{{ game | json }}`.">
+    <Opcion>El objeto en JSON</Opcion>
+    <Opcion correcta>`[object Object]`</Opcion>
+    <Opcion>Un error de compilación</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué hay que hacer para usar `| json` en un componente standalone?" explicacion="Cada pipe que usa la plantilla tiene que estar en `imports`: `JsonPipe` (o `CommonModule`).">
+    <Opcion>Nada, está siempre disponible</Opcion>
+    <Opcion correcta>Importar `JsonPipe` de `@angular/common` y añadirlo a `imports`</Opcion>
+    <Opcion>Registrarlo en `app.config.ts`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué `{{ gameForm | json }}` da *Converting circular structure to JSON*?" explicacion="`NgForm` tiene referencias que vuelven a él (un ciclo) y `JSON.stringify` no puede convertir eso en texto.">
+    <Opcion>Porque el formulario está vacío</Opcion>
+    <Opcion correcta>Porque `NgForm` tiene referencias circulares que no se pueden pasar a JSON</Opcion>
+    <Opcion>Porque falta importar `FormsModule`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Un pipe cambia el valor de la propiedad en la clase." respuesta={false} explicacion="Solo transforma lo que se pinta. La propiedad de la clase sigue igual." />
+  <Pregunta tipo="vf" enunciado="`@if` y `@for` son directivas y hay que importarlas en `imports`." respuesta={false} explicacion="Son bloques de la sintaxis de las plantillas: no se importan. Las antiguas `*ngIf` y `*ngFor` sí eran directivas." />
+  <Pregunta enunciado="¿Cómo se pasa un parámetro a un pipe?" explicacion="Con dos puntos detrás del nombre: `valor | pipe:parametro`.">
+    <Opcion>`{{ precio | currency('EUR') }}`</Opcion>
+    <Opcion correcta>`{{ precio | currency:'EUR' }}`</Opcion>
+    <Opcion>`{{ currency(precio, 'EUR') }}`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: pipes y directivas">
+  <Tarjeta frente="Pipe">Transforma un valor al pintarlo: `{{ valor | pipe:parametro }}`. No cambia la clase.</Tarjeta>
+  <Tarjeta frente="`json`">Pinta un objeto en JSON. Para depurar. Hay que importar `JsonPipe`.</Tarjeta>
+  <Tarjeta frente="*Converting circular structure to JSON*">Se intentó pasar a JSON un objeto con ciclos, como un `NgForm`.</Tarjeta>
+  <Tarjeta frente="Directiva">Clase que Angular aplica a una etiqueta para cambiar su comportamiento o su aspecto.</Tarjeta>
+  <Tarjeta frente="Directivas que ya has usado">`ngModel`, `required` (`RequiredValidator`), `minlength`, `routerLink`.</Tarjeta>
+  <Tarjeta frente="`@Pipe` y `transform`">Un pipe propio: `name` es como se llama en la plantilla y `transform` devuelve el valor transformado.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Depurar con json" dificultad="facil">
+  En `proj-fakestore`, añade debajo de la lista un bloque que enseñe el primer producto en JSON, pero solo cuando ya hayan llegado los datos.
+
+  <Pista>Necesitas `JsonPipe` en `imports` y un `@if` para no pintar nada mientras la lista está vacía o es `undefined`.</Pista>
+
+  <Solucion>
+
+```ts title="app.component.ts"
+imports: [JsonPipe],
+```
+
+```html title="app.component.html"
+@if (products && products.length > 0) {
+  <pre>{{ products[0] | json }}</pre>
+}
+```
+
+`<pre>` respeta los saltos de línea y la sangría que pone el pipe `json`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Precio con formato" dificultad="media">
+  Pinta cada producto como "PIXEL RUNNER · €14.99", con el título en mayúsculas y el precio en euros, y recorta las descripciones a 50 caracteres con el pipe `slice`.
+
+  <Pista>Pon `uppercase` en el título y `currency:'EUR'` en el precio. `slice:0:50` recorta cadenas. Cada pipe que uses tiene que estar en `imports`.</Pista>
+
+  <Solucion>
+
+```ts title="app.component.ts"
+import { CurrencyPipe, SlicePipe, UpperCasePipe } from '@angular/common';
+
+@Component({
+  selector: 'app-root',
+  imports: [CurrencyPipe, SlicePipe, UpperCasePipe],
+  templateUrl: './app.component.html',
+  styleUrl: './app.component.css'
+})
+```
+
+```html title="app.component.html"
+@for (product of products; track product.id) {
+  <h3>{{ product.title | uppercase }} · {{ product.price | currency:'EUR' }}</h3>
+  <p>{{ product.description | slice:0:50 }}…</p>
+}
+```
+
+Con el idioma por defecto (`en-US`) el precio sale como `€14.99`. Para `14,99 €` habría que registrar el idioma español en la aplicación.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

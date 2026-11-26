@@ -4,6 +4,16 @@ Web de apuntes interactivos para la clase de **2º DAM** (unos 20 alumnos). Los 
 
 Producción: https://web-clase-apuntes.vercel.app
 
+> Los apuntes de 2º DAM salen del material de clase del dueño (no está en git: `TodoTFG-Apuntes/` y `Extras para TodoTFG/` en local). Sus reglas: lo no dado va con `<NoDadoEnClase>`, lo dudoso con `<Dudoso>`, lo que no se vio con `<NoSeVio>`; ni nombres de profesores ni emojis; versiones de clase (Angular 19, Room 3, Retrofit 3, Prisma 6, Zod 4, Express 5).
+
+## Asignaturas de 2º DAM (así las ha confirmado el dueño)
+
+- **Kotlin** (`2-dam/kotlin`): PMDM y PSP juntas, con Android, Compose, Hilt, Retrofit y Room.
+- **Acceso a Datos** (`2-dam/acceso-a-datos`): sobre todo Angular 19.
+- **Infraestructuras de Servicios y APIs** (`2-dam/apis`): el backend con Node, Express 5, Prisma 6, Zod 4 y PostgreSQL.
+- **Desarrollo de Interfaces** (`2-dam/desarrollo-de-interfaces`): C#.
+- **Proyecto Intermodular**: gestión de proyectos, Git, despliegue en Vercel y requisitos.
+
 ## Comandos
 
 ```bash
@@ -29,7 +39,7 @@ npm run build        # compila todos los MDX: úsalo para validar contenido nuev
 
 ```
 content/docs/              ← TODO el contenido (MDX + meta.json)
-  2-dam/  1-dam/           ← pestañas de curso ("root": true en meta.json); 2º va primero
+  2-dam/                   ← pestaña del curso ("root": true en meta.json); 1º DAM se quitó
   guia-autor/              ← guía para escribir apuntes (componentes, plantilla)
 components/interactive/    ← componentes MDX: Quiz, Flashcards, Ejercicio, Mermaid…
 components/mdx.tsx         ← registro de componentes disponibles en cualquier .mdx
@@ -54,6 +64,7 @@ proxy.ts                   ← refresca la sesión, protege rutas y redirige al 
 - Comprueba que las respuestas de los tests y las soluciones son **correctas**, porque los alumnos estudian con ellas.
 - Valida siempre con `npm run build`: un MDX roto rompe el despliegue.
 - El Tutor IA lee automáticamente todo `content/docs`, así que no hay que tocar nada más.
+- Pendiente de decidir el dueño: el texto de los apuntes pasa de `MAX_CARACTERES_APUNTES` (280.000) en `lib/ai/conocimiento.ts`, así que el tutor solo tiene el texto completo de parte de las páginas (del resto ve el índice y la página en la que está el alumno). No cambies el límite sin preguntar.
 
 ## Diseño
 

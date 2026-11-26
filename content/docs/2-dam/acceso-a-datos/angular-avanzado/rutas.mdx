@@ -1,0 +1,472 @@
+---
+title: Rutas con Angular Router
+description: El Router de Angular tal como se dio el 19/11 en proyecto-rutas. provideRouter, Routes, redirectTo con pathMatch, router-outlet, routerLink, rutas hijas con un segundo outlet, routerLinkActive y navegar desde código.
+icon: Route
+---
+
+import { SimuladorRutas } from '@/components/temas/angular-avanzado/simulador-rutas';
+
+Una app Angular es una **SPA** (*single page application*): el navegador carga un solo `index.html` y, al pulsar un enlace, el **Router** cambia el componente que se ve sin recargar la página. La URL cambia igualmente, así que se puede compartir, recargar y usar el botón Atrás.
+
+El 19/11 se montó un "Portal educativo" (`proyecto-rutas`) siguiendo el enunciado de la **Act 12**, *"Rutas Parametros Redirecciones LazyLoading"*. Esta página recoge lo que se escribió en clase. Lo que solo salió en el enunciado y en la solución desplegada (parámetros `:id`, *query params*, comodín `**`, `loadChildren`) está en [Parámetros, guards y lazy loading](/docs/2-dam/acceso-a-datos/angular-avanzado/rutas-parametros-guards).
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Registrar el router con `provideRouter(routes)` y declarar las rutas.
+  - Redirigir la ruta vacía con `redirectTo` y `pathMatch: 'full'`.
+  - Navegar con `routerLink` y pintar la página en `<router-outlet />`.
+  - Anidar rutas con `children` y un segundo outlet, y distinguir enlaces relativos y absolutos.
+  - Marcar el enlace activo con `routerLinkActive` y navegar desde TypeScript con `Router`.
+</Callout>
+
+## El proyecto y las páginas
+
+<DeClase fecha="19/11" proyecto="proyecto-rutas" rama="master" />
+
+El enunciado proponía `ng new angular-routing --standalone --routing`. El profesor quitó las dos opciones, porque en Angular 19 ya vienen por defecto, y generó una página por ruta dentro de `pages/`:
+
+<Terminal titulo="WSL Ubuntu">
+{`$ ng new proyecto-rutas --style=css
+$ cd proyecto-rutas
+$ ng g c pages/inicio
+$ ng g c pages/ayuda
+$ ng g c pages/no-encontrado
+$ ng g c pages/aula
+$ ng g c pages/aula/materiales
+$ ng g c pages/aula/detalle-material
+$ ng g c pages/aula/avisos
+$ ng serve`}
+</Terminal>
+
+`ng g c` crea el `.ts`, el `.html` (con el texto "inicio works!"), el `.css` y el `.spec.ts`. En el enunciado editado se añadió `--skip-test`, pero la opción real del CLI es `--skip-tests`, en plural. Las páginas hijas van dentro de la carpeta de su padre:
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="app" defaultOpen>
+      <Folder name="pages" defaultOpen>
+        <Folder name="inicio" />
+        <Folder name="ayuda" />
+        <Folder name="no-encontrado" />
+        <Folder name="aula" defaultOpen>
+          <Folder name="materiales" />
+          <Folder name="detalle-material" />
+          <Folder name="avisos" />
+          <File name="aula.component.ts" />
+          <File name="aula.component.html" />
+        </Folder>
+      </Folder>
+      <File name="app.component.ts" />
+      <File name="app.component.html" />
+      <File name="app.config.ts" />
+      <File name="app.routes.ts" />
+    </Folder>
+    <File name="index.html" />
+    <File name="main.ts" />
+    <File name="styles.css" />
+  </Folder>
+</Files>
+
+## Registrar el router
+
+```ts title="src/app/app.config.ts"
+import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
+import { provideRouter } from '@angular/router';
+
+import { routes } from './app.routes';
+
+export const appConfig: ApplicationConfig = {
+  providers: [provideZoneChangeDetection({ eventCoalescing: true }), provideRouter(routes)]
+};
+```
+
+- `provideRouter(routes)` registra el router en una app *standalone*. Viene así de serie al crear el proyecto.
+- `routes` se importa de `./app.routes`. Su tipo es `Routes`, que no es más que `Route[]`: un array de objetos, uno por ruta. El profesor lo dibujó en Excalidraw encima del código.
+- En `index.html`, `<base href="/">` le dice al router desde dónde se cuentan las rutas.
+
+## Declarar las rutas
+
+```ts title="src/app/app.routes.ts"
+import { Routes } from '@angular/router';
+import { InicioComponent } from './pages/inicio/inicio.component';
+import { AulaComponent } from './pages/aula/aula.component';
+import { AyudaComponent } from './pages/ayuda/ayuda.component';
+
+export const routes: Routes = [
+  { path: '', redirectTo: '/inicio', pathMatch: 'full' },
+  { path: 'inicio', component: InicioComponent },
+  { path: 'aula', component: AulaComponent },
+  { path: 'ayuda', component: AyudaComponent }
+];
+```
+
+- Cada ruta une un `path` con el `component` que se pinta.
+- **El `path` va sin barra inicial**: `'inicio'`, no `'/inicio'`. La barra va en los enlaces.
+- La ruta vacía `''` es la portada (`localhost:4200/`). Con `redirectTo` manda a `/inicio`.
+- **`pathMatch: 'full'`** hace que solo coincida si la URL **entera** está vacía. Sin él, `''` sería prefijo de cualquier URL.
+- En el enunciado pone `redirectTo: 'inicio'` (sin barra) y en el código del profesor `'/inicio'`. En la raíz valen las dos.
+- El router prueba las rutas **en orden** y se queda con la primera que coincide.
+
+## Enlaces y router-outlet
+
+```html title="src/app/app.component.html"
+<h1>Portal educativo</h1>
+<nav>
+  <a routerLink="/inicio">Inicio</a>
+  <a routerLink="/aula">Aula</a>
+  <a routerLink="/ayuda">Ayuda</a>
+</nav>
+<hr>
+<router-outlet />
+```
+
+```ts title="src/app/app.component.ts"
+import { Component } from '@angular/core';
+import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+
+@Component({
+  selector: 'app-root',
+  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  templateUrl: './app.component.html',
+  styleUrl: './app.component.css'
+})
+export class AppComponent {
+  title = 'proyecto-rutas';
+}
+```
+
+- **`routerLink`** sustituye a `href`: navega sin recargar la página. Según el tooltip acepta `string | any[] | UrlTree | null`.
+- **`<router-outlet />`** es el hueco donde se pinta el componente de la ruta activa. En la pizarra quedó anotado: *"En este tag de router-outlet se carga el componente asociado a la ruta"*. Lo que está fuera del outlet (el título y el menú) se ve en todas las páginas.
+- Como el componente es *standalone*, cada directiva del router que use la plantilla tiene que estar en su `imports`. Sin `RouterOutlet`, `<router-outlet />` es un elemento desconocido y no compila.
+- En la captura del primer bloque del 19/11 solo se ve `RouterOutlet` en el array, con el cursor dentro <Dudoso nota="Las tres directivas sí se ven juntas en el AulaComponent y en el AppComponent del segundo bloque." />.
+
+<Callout type="idea" title="Sin barra en path, con barra en routerLink">
+  En `app.routes.ts` se escribe `path: 'inicio'`; en el enlace, `routerLink="/inicio"`. La barra del enlace significa "desde la raíz" (enlace **absoluto**). El profesor unió con flechas cada `routerLink` con su `path` en la pizarra para que se viera la correspondencia.
+</Callout>
+
+Los enlaces salían pegados, así que se añadió `a { margin-left: 1rem; }` en `app.component.css`. En el segundo bloque esa regla se movió a **`src/styles.css`**, la hoja global: lo que va en el CSS de un componente solo afecta a ese componente, y los enlaces del aula (que es otro componente) no la recibían.
+
+## Rutas hijas
+
+<DeClase fecha="19/11" proyecto="proyecto-rutas" nota="Fase II del enunciado" />
+
+El Aula tiene dos secciones, Materiales y Avisos, que se pintan **dentro** de la página del Aula, debajo de su propio menú. Para eso, `aula` pasa a ser una ruta padre con `children`:
+
+```ts title="src/app/app.routes.ts (con rutas hijas)"
+export const routes: Routes = [
+  { path: '', redirectTo: '/inicio', pathMatch: 'full' },
+  { path: 'inicio', component: InicioComponent },
+  { path: 'aula', component: AulaComponent,
+    children: [
+      // ruta -> /aula/materiales
+      { path: 'materiales', component: MaterialesComponent },
+      // ruta -> /aula/avisos
+      { path: 'avisos', component: AvisosComponent }
+    ]
+  },
+  { path: 'ayuda', component: AyudaComponent }
+];
+```
+
+- La URL de una hija es la del padre más la suya: `/aula` + `materiales` = `/aula/materiales`.
+- El padre (`AulaComponent`) necesita **su propio `<router-outlet />`**. El outlet de `AppComponent` pinta el Aula y el outlet del Aula pinta Materiales o Avisos.
+
+```html title="src/app/pages/aula/aula.component.html"
+<h2>Aula virtual</h2>
+<nav>
+  <a routerLinkActive="class-css-activo" [routerLinkActiveOptions]="{exact: true}" routerLink="materiales">Materiales</a>
+  <a routerLinkActive="class-css-activo" [routerLinkActiveOptions]="{exact: true}" routerLink="avisos">Avisos</a>
+</nav>
+<hr>
+<router-outlet />
+```
+
+```ts title="src/app/pages/aula/aula.component.ts"
+import { Component } from '@angular/core';
+import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+
+@Component({
+  selector: 'app-aula',
+  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  templateUrl: './aula.component.html',
+  styleUrl: './aula.component.css'
+})
+export class AulaComponent {}
+```
+
+Al principio el editor marcaba error en esta plantilla porque `AulaComponent` no importaba las directivas: cada componente importa lo suyo, aunque el padre ya las tenga. En el navegador, el texto "avisos works!" sale **dentro** de la página del Aula.
+
+### Enlaces relativos y absolutos
+
+| Enlace | Tipo | A dónde va |
+| --- | --- | --- |
+| `routerLink="materiales"` (en el Aula) | Relativo | Cuelga de la ruta del componente: `/aula/materiales` |
+| `routerLink="/aula/materiales"` (en el menú principal) | Absoluto | Desde la raíz: `/aula/materiales` |
+
+Los dos llegan al mismo sitio. El relativo es el que se usa dentro del Aula (si mañana el Aula cambia de URL, sus enlaces siguen funcionando). Al final de la clase se añadió al menú principal un enlace absoluto a una hija: `<a routerLink="/aula/materiales">Aula > Materiales</a>`.
+
+### Redirección por defecto dentro de children
+
+El apartado 4.3 del enunciado pide que `/aula` lleve directamente a Materiales. Se hace con una ruta vacía al principio de `children`:
+
+```ts
+children: [
+  { path: '', redirectTo: 'materiales', pathMatch: 'full' },
+  { path: 'materiales', component: MaterialesComponent },
+  { path: 'avisos', component: AvisosComponent }
+]
+```
+
+Solo se ve en el enunciado, y el `'full'` sale <Dudoso nota="El final de la línea está cortado en la captura.">cortado</Dudoso>. Aquí `'materiales'` va sin barra: es relativo a `/aula`.
+
+## Marcar el enlace activo
+
+<DeClase fecha="19/11" proyecto="proyecto-rutas" />
+
+`routerLinkActive` añade una clase CSS al enlace mientras su ruta está activa. Acepta `string | string[]`, según el tooltip. Como la clase se usa en varios componentes, va en `styles.css`:
+
+```css title="src/styles.css"
+a {
+  margin-left: 1rem;
+}
+.class-css-activo {
+  color: yellow;
+}
+```
+
+Por defecto un enlace se marca si su ruta es **prefijo** de la URL actual: estando en `/aula/materiales`, un enlace a `/aula` también saldría activo. Con `routerLinkActiveOptions` y `exact: true` solo se marca si la URL coincide entera.
+
+<Comparar titulo="routerLinkActiveOptions">
+  <Lado tipo="evitar" titulo="Como atributo de texto">
+
+```html
+<a routerLinkActive="class-css-activo"
+   routerLinkActiveOptions="{exact: true}"
+   routerLink="materiales">Materiales</a>
+```
+
+Sin corchetes, Angular le pasa **el texto** `"{exact: true}"`, no un objeto. Error **ngtsc(2322)**: *Type 'string' is not assignable to type '\{ exact: boolean; \} | IsActiveMatchOptions'*.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Con property binding">
+
+```html
+<a routerLinkActive="class-css-activo"
+   [routerLinkActiveOptions]="{exact: true}"
+   routerLink="materiales">Materiales</a>
+```
+
+Con `[ ]`, lo de dentro se evalúa como expresión y llega un objeto.
+
+  </Lado>
+</Comparar>
+
+En una captura del minuto 31:34 parece que la versión sin corchetes ya no daba error <Dudoso nota="No es lógico: seguiría llegando como texto. Justo después se escribe con corchetes, que es la versión que vale." />.
+
+## Experimento: ruta hija o ruta plana
+
+<DeClase fecha="19/11" proyecto="proyecto-rutas" nota="minutos 37 a 42" />
+
+Para comparar, se comentó la hija `avisos` y se declaró en la raíz una ruta con el *path* compuesto:
+
+```ts title="app.routes.ts (experimento)"
+  { path: 'inicio', component: InicioComponent },
+  { path: 'aula/avisos', component: AvisosComponent },
+  { path: 'aula', component: AulaComponent,
+    children: [
+      { path: 'materiales', component: MaterialesComponent },
+      //{ path: 'avisos', component: AvisosComponent }
+    ]
+  },
+```
+
+Las dos responden a la misma URL, `/aula/avisos`, pero la plana **no está dentro** de `AulaComponent`: se pinta en el outlet principal, sin la cabecera ni el menú del Aula. En el menú principal se añadió `<a routerLink="/aula/avisos">`, cuyo texto se quedó como "Aula > Materiales" en la última captura <Dudoso nota="Seguramente se cambió después." />.
+
+<NoSeVio titulo="Qué pinta la ruta plana">
+  En ninguna captura del navegador se ve el resultado del experimento. Que se pinte fuera de la cabecera del Aula es lo que se deduce de la configuración.
+</NoSeVio>
+
+## Pruébalo
+
+El simulador usa la misma tabla de rutas de clase. Pulsa los enlaces o escribe una URL (prueba `/`, `/aula`, `/aula/avisos` y `/otra`) y mira qué componente cae en cada outlet. Después activa las opciones:
+
+<SimuladorRutas />
+
+- Con `/` se ve la redirección a `/inicio`.
+- `/aula` pinta el Aula con su outlet **vacío**: en el código de clase no hay hija por defecto. Con la opción del apartado 4.3, redirige a `/aula/materiales`.
+- `/otra` no coincide con ninguna ruta y la navegación falla con `NG04002: Cannot match any routes`: el proyecto de clase no tiene ruta comodín `**`.
+- Quita `exact` y ve a `/aula/materiales`: en el menú principal se marcan a la vez "Aula" y "Aula > Materiales", porque `/aula` es prefijo de la URL. En clase `routerLinkActive` solo se puso en el menú del Aula; en el simulador también está en el principal para que se vea el efecto.
+- Con el experimento, `/aula/avisos` sale en el outlet principal, sin el Aula alrededor.
+
+## Navegar desde código
+
+<DeClase fecha="19/11" proyecto="proyecto-rutas" nota="minuto 49" />
+
+Además de los enlaces, se puede navegar desde TypeScript inyectando el `Router`:
+
+```ts title="src/app/app.component.ts (49:17)"
+export class AppComponent {
+  title = 'proyecto-rutas';
+  router = inject(Router);
+  ngOnInit() {
+    //Id que no exist... [comentario cortado]
+    this.router.navigate(['/inicio']);
+  }
+}
+```
+
+- `navigate` recibe un **array de segmentos**, como `[routerLink]`: `['/aula/materiales', 7]` iría a `/aula/materiales/7`.
+- Es lo que se usa después de guardar o borrar algo, para volver al listado.
+- En la línea de `import` de esa captura no se ve `Router` <Dudoso nota="Sale ActivatedRoute y la línea está cortada; el editor marca 2 errores." />: puede que aún faltara importarlo. Para que compile hace falta `import { Router } from '@angular/router'`. El comentario del principio está cortado y no se lee.
+
+## Carga perezosa con loadComponent
+
+<DeClase fecha="27/10" proyecto="angular-http" />
+
+El 27/10, en `angular-http`, ya salió una forma de cargar un componente **solo cuando se visita su ruta**:
+
+```ts title="src/app/app.routes.ts (angular-http)"
+export const routes: Routes = [
+  { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
+  { path: 'dashboard', component: DashboardComponent },
+  { path: 'posts', loadComponent: () => import('./pages/posts/posts.component').then(m => m.PostsComponent) },
+  { path: 'comments', component: CommentsComponent },
+];
+```
+
+```html title="dashboard.component.html (fragmento)"
+<a class="text-blue-500 cursor-pointer" [routerLink]="['/posts']">Posts</a>
+```
+
+- Con `component`, el componente va en el JavaScript inicial de la app. Con **`loadComponent`**, el `import()` dinámico lo separa en otro fichero (*chunk*) que el navegador descarga la primera vez que vas a `/posts`. Lo verás en la pestaña Network.
+- `[routerLink]="['/posts']"` es la forma con array. Si falta `RouterLink` en `imports`, sale el error *Can't bind to 'routerLink' since it isn't a known property of 'a'*.
+- En `angular-http`, la ruta `posts` sale primero con `loadComponent` y después con `component` <Dudoso nota="No se ve con cuál se queda." />. `RouterLinkActive` se importa ese día pero no se usa.
+
+La Fase VI del enunciado (lazy loading de rutas enteras con `loadChildren` y `AULA_ROUTES`) solo se vio de pasada y muy pequeña: está explicada aparte, en [Parámetros, guards y lazy loading](/docs/2-dam/acceso-a-datos/angular-avanzado/rutas-parametros-guards).
+
+## La entrega de la Act 12
+
+La tarea de Classroom (tema "3. angular II") pide además: *"Añade un excalidraw explicativo de configuración rutas hasta rutas children"*. Lleva adjunta la imagen "Resumen visual de rutas en Angular". El profesor enseñó la solución desplegada en Vercel y su CLI: `vercel login` (con código de dispositivo) y `vercel project ls`.
+
+## Practica
+
+<CompletarCodigo
+  titulo="Rutas con hijas"
+  enunciado="Completa la configuración para que /aula/avisos se pinte dentro del Aula."
+  lenguaje="typescript"
+  codigo={`export const routes: [[Routes]] = [
+  { path: '', [[redirectTo]]: '/inicio', [[pathMatch]]: 'full' },
+  { path: '[[aula]]', component: AulaComponent,
+    [[children]]: [
+      { path: 'avisos', component: AvisosComponent }
+    ]
+  }
+];`}
+/>
+
+<Quiz titulo="Test: Angular Router">
+  <Pregunta enunciado="¿Cuál de estas rutas está bien escrita en `app.routes.ts`?" explicacion="El `path` va sin barra inicial. La barra se pone en el `routerLink`.">
+    <Opcion correcta>`{ path: 'inicio', component: InicioComponent }`</Opcion>
+    <Opcion>`{ path: '/inicio', component: InicioComponent }`</Opcion>
+    <Opcion>`{ path: 'inicio', routerLink: InicioComponent }`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Para qué sirve `pathMatch: 'full'` en `{ path: '', redirectTo: '/inicio', pathMatch: 'full' }`?" explicacion="La ruta vacía es prefijo de todas las URL. Con `'full'` solo coincide si la URL entera está vacía.">
+    <Opcion>Para que la redirección sea permanente</Opcion>
+    <Opcion correcta>Para que solo coincida cuando la URL entera está vacía</Opcion>
+    <Opcion>Para cargar el componente completo</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Con las rutas hijas de clase, ¿dónde se pinta `MaterialesComponent`?" explicacion="El outlet de `AppComponent` pinta el Aula, y el outlet del Aula pinta la hija.">
+    <Opcion>En el `<router-outlet />` de `AppComponent`, en lugar del Aula</Opcion>
+    <Opcion correcta>En el `<router-outlet />` de `AulaComponent`</Opcion>
+    <Opcion>En un outlet con nombre `materiales`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado={'Dentro de `AulaComponent`, `routerLink="avisos"` y `routerLink="/aula/avisos"` llevan a la misma URL.'} respuesta={true} explicacion="El primero es relativo a la ruta del Aula (`/aula`) y el segundo es absoluto desde la raíz. Los dos acaban en `/aula/avisos`." />
+  <Pregunta enunciado={'Escribes `routerLinkActiveOptions="{exact: true}"` sin corchetes. ¿Qué pasa?'} explicacion="Sin corchetes llega el texto, no un objeto: error ngtsc 2322 (*Type 'string' is not assignable…*).">
+    <Opcion>Funciona igual</Opcion>
+    <Opcion correcta>Error ngtsc 2322: llega un `string` y se espera un objeto</Opcion>
+    <Opcion>El enlace deja de navegar</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Estás en `/aula/materiales` y un enlace a `/aula` tiene `routerLinkActive` sin `exact`. ¿Sale marcado?" explicacion="Por defecto basta con que su ruta sea prefijo de la URL actual. Con `exact: true`, no se marcaría.">
+    <Opcion correcta>Sí, porque `/aula` es prefijo de la URL actual</Opcion>
+    <Opcion>No, porque no es la misma URL</Opcion>
+    <Opcion>Solo si es un enlace relativo</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Dónde va la regla `.class-css-activo` para que funcione en el menú del Aula y en el principal?" explicacion="El CSS de un componente solo afecta a ese componente. Lo que se comparte va en `src/styles.css`.">
+    <Opcion>En `app.component.css`</Opcion>
+    <Opcion correcta>En `src/styles.css`, la hoja global</Opcion>
+    <Opcion>En `app.routes.ts`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿Qué método del `Router` se usa para navegar desde TypeScript?" respuesta={["navigate", "router.navigate", "this.router.navigate"]} explicacion="`this.router.navigate(['/inicio'])`, con el `Router` inyectado con `inject(Router)`." />
+</Quiz>
+
+<Flashcards titulo="Repaso: Router">
+  <Tarjeta frente="`provideRouter(routes)`">Registra el router en `app.config.ts`. `routes` es de tipo `Routes`, que es un `Route[]`.</Tarjeta>
+  <Tarjeta frente="`<router-outlet />`">El hueco donde se pinta el componente de la ruta activa. Con rutas hijas, el padre tiene el suyo.</Tarjeta>
+  <Tarjeta frente="`path` y `routerLink`">`path: 'inicio'` sin barra; `routerLink="/inicio"` con barra (absoluto) o sin ella (relativo a la ruta actual).</Tarjeta>
+  <Tarjeta frente="`redirectTo` + `pathMatch: 'full'`">Redirige la ruta vacía. `'full'` hace que solo coincida con la URL entera vacía.</Tarjeta>
+  <Tarjeta frente="`children`">Rutas hijas: la URL es la del padre más la suya, y se pintan en el outlet del padre.</Tarjeta>
+  <Tarjeta frente="`routerLinkActive`">Pone una clase CSS al enlace activo. Con `[routerLinkActiveOptions]="{exact: true}"` solo si la URL coincide entera.</Tarjeta>
+  <Tarjeta frente="`loadComponent`">Carga el componente con un `import()` dinámico la primera vez que se visita la ruta (*lazy loading*).</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Las redirecciones del enunciado" dificultad="media">
+  La fase de redirecciones de la Act 12 pide: `/portal` tiene que llevar a `/aula`, cualquier URL que no exista tiene que enseñar `NoEncontradoComponent`, y las redirecciones tienen que ir antes del comodín. Escribe el `app.routes.ts` completo con las rutas de clase.
+
+  <Pista>La ruta comodín se escribe `path: '**'` y va la última, porque el router se queda con la primera que coincide.</Pista>
+  <Pista>Para `/portal`, una ruta con `redirectTo: '/aula'` y `pathMatch: 'full'`.</Pista>
+
+  <Solucion>
+
+Esta parte no se escribió en clase (solo está en el enunciado):
+
+```ts
+export const routes: Routes = [
+  { path: '', redirectTo: '/inicio', pathMatch: 'full' },
+  { path: 'portal', redirectTo: '/aula', pathMatch: 'full' },
+  { path: 'inicio', component: InicioComponent },
+  { path: 'aula', component: AulaComponent,
+    children: [
+      { path: '', redirectTo: 'materiales', pathMatch: 'full' },
+      { path: 'materiales', component: MaterialesComponent },
+      { path: 'avisos', component: AvisosComponent }
+    ]
+  },
+  { path: 'ayuda', component: AyudaComponent },
+  { path: '**', component: NoEncontradoComponent }
+];
+```
+
+  Si pones `'**'` al principio, todas las URL coinciden con ella y la app solo enseña la página de no encontrado.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Volver al inicio tras una acción" dificultad="facil">
+  En `AyudaComponent` añade un botón "Volver al inicio" que navegue a `/inicio` desde TypeScript, sin `routerLink`.
+
+  <Pista>Inyecta el `Router` y llama a `navigate` con un array.</Pista>
+
+  <Solucion>
+
+```ts
+import { Component, inject } from '@angular/core';
+import { Router } from '@angular/router';
+
+@Component({ selector: 'app-ayuda', templateUrl: './ayuda.component.html' })
+export class AyudaComponent {
+  private router = inject(Router);
+
+  volver(): void {
+    this.router.navigate(['/inicio']);
+  }
+}
+```
+
+```html
+<button type="button" (click)="volver()">Volver al inicio</button>
+```
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

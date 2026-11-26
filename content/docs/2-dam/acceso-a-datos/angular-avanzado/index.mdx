@@ -1,0 +1,49 @@
+---
+title: "Angular: signals, rutas, formularios y proyecto"
+description: Segunda parte de Angular en Acceso a Datos. El proyecto proj-game con JSON Server y paginación, signals, el CRUD con padre e hijo, formularios reactivos, Angular Router y lo que piden los requisitos y no se dio.
+icon: Route
+---
+
+Las actividades salen en Classroom como "2627 Acceso a Datos", pero el contenido es **Angular 19**. Este bloque sigue el proyecto `proj-game` desde que se crea (28/10) hasta que se migra a formularios reactivos y se despliega (18/11), y termina con el Router (`proyecto-rutas`, 19/11). Lo anterior (proyecto, componentes, servicios con `HttpClient` y primeros formularios) está en [Angular: componentes, plantillas y servicios](/docs/2-dam/acceso-a-datos/angular).
+
+## Qué clases cubre
+
+| Fecha | Proyecto | Qué se hizo | Página |
+| --- | --- | --- | --- |
+| 27/10 | `angular-http` | Signals con `signal()` y `set()`, `loadComponent` | [Signals](/docs/2-dam/acceso-a-datos/angular-avanzado/signals), [Rutas](/docs/2-dam/acceso-a-datos/angular-avanzado/rutas) |
+| 28/10 | `proj-game` | Proyecto nuevo, JSON Server 0.17.4 y `db.json` (Act 9) | [proj-game](/docs/2-dam/acceso-a-datos/angular-avanzado/proj-game) |
+| 05/11 | `proj-game` | Componente `crud` y formulario *template-driven* (Act 10) | [CRUD con formulario](/docs/2-dam/acceso-a-datos/angular-avanzado/crud-padre-hijo) |
+| 12/11 | `proj-game` | `GameService` con paginación (`_page`, `_limit`), `input.required`, `output`, `ngOnChanges`, alta o edición; lectura de la Act 11 | [proj-game](/docs/2-dam/acceso-a-datos/angular-avanzado/proj-game), [CRUD con formulario](/docs/2-dam/acceso-a-datos/angular-avanzado/crud-padre-hijo) |
+| 18/11 | `proj-game` | Migración a formularios reactivos en `refactor/reactive-form2`, build y Vercel (Act 11) | [Formularios reactivos](/docs/2-dam/acceso-a-datos/angular-avanzado/formularios-reactivos) |
+| 19/11 | `proyecto-rutas` | Router: rutas, redirecciones, hijas, `routerLinkActive` y `navigate` (Act 12) | [Rutas](/docs/2-dam/acceso-a-datos/angular-avanzado/rutas) |
+
+## Páginas, en orden de estudio
+
+<Cards>
+  <Card icon="Gamepad2" title="proj-game: JSON Server, GameService y paginación" href="/docs/2-dam/acceso-a-datos/angular-avanzado/proj-game" description="La API falsa, el modelo Game, el servicio y el listado paginado con observe 'response'." />
+  <Card icon="Activity" title="Signals: signal, computed y effect" href="/docs/2-dam/acceso-a-datos/angular-avanzado/signals" description="Lo que se dio (signal, set, inputs con signals) y lo que está en la guía (computed, toSignal)." />
+  <Card icon="ArrowLeftRight" title="CRUD con formulario: padre e hijo" href="/docs/2-dam/acceso-a-datos/angular-avanzado/crud-padre-hijo" description="Formulario template-driven, input.required, output, ngOnChanges y crear o editar." />
+  <Card icon="ListChecks" title="Formularios reactivos: migrar el CRUD" href="/docs/2-dam/acceso-a-datos/angular-avanzado/formularios-reactivos" description="FormControl, FormGroup, Validators, hasError, FormGroupDirective y patchValue." />
+  <Card icon="Route" title="Rutas con Angular Router" href="/docs/2-dam/acceso-a-datos/angular-avanzado/rutas" description="provideRouter, redirectTo, router-outlet, rutas hijas y routerLinkActive." />
+  <Card icon="Signpost" title="Parámetros, guards y lazy loading" href="/docs/2-dam/acceso-a-datos/angular-avanzado/rutas-parametros-guards" description="Lo del enunciado de la Act 12 que no se escribió en clase, y guards y resolvers." />
+  <Card icon="TriangleAlert" title="RxJS y gestión de errores" href="/docs/2-dam/acceso-a-datos/angular-avanzado/rxjs-y-errores" description="Observable y subscribe, pipe, catchError, retry y ErrorHandler." />
+  <Card icon="ListFilter" title="Listado con filtros, paginación y token" href="/docs/2-dam/acceso-a-datos/angular-avanzado/listado-filtros-y-token" description="Lo que piden los requisitos y no se dio: filtros contra tu API, estados y sesión." />
+  <Card icon="Bug" title="Errores típicos en Angular" href="/docs/2-dam/acceso-a-datos/angular-avanzado/errores-tipicos-angular" description="Cada error con su mensaje, por qué pasa y cómo se arregla." />
+</Cards>
+
+## Cómo leer estos apuntes
+
+El código de clase sale de capturas de los vídeos, así que verás cuatro marcas:
+
+- **"Visto en clase el …"**: cuándo y en qué proyecto se vio algo.
+- La etiqueta de **no dado en clase**: lo que no salió en las clases (la forma estándar de hacerlo, de las guías o de los requisitos). Si lo usas en la defensa, di que lo has buscado tú.
+- **[dudoso]**: algo que no se leía bien en las capturas. Se deja como estaba, sin corregir.
+- **"Esto no se llega a ver en clase"**: código que no sale en las capturas. No se rellena.
+
+Las guías de Angular que se usaron como apoyo son una copia de [guides-angular](https://github.com/hokahey007/guides-angular); el código de ejemplo de cada una está en [codebase-angular](https://github.com/hokahey007/codebase-angular). Aquí se resumen con nuestras palabras y se enlaza al original.
+
+<Callout title="Versiones">
+  Todo es Angular 19 (`ng-version` 19.2.25, paquetes en `^19.2.0`, TypeScript `~5.7.2`) y `json-server@0.17.4`. Muchas cosas de internet son de Angular 20 o posterior, o de JSON Server 1.x, y no se escriben igual.
+</Callout>
+
+<MarcarCompletado />

@@ -1,0 +1,518 @@
+---
+title: Producción con Docker y documentación con Swagger
+description: "La v1.0.0 de la referencia: el Dockerfile multietapa con dumb-init y USER node, el docker-compose de producción con la API y la base, los secretos fuera del repositorio y la documentación OpenAPI en /api-docs con swagger-jsdoc y swagger-ui-express."
+icon: Container
+---
+
+La **v1.0.0** del repositorio de referencia es la de "Producción y documentación": empaqueta la API en una imagen de Docker, la arranca junto a PostgreSQL con un `docker-compose` de producción y añade una página `/api-docs` con la documentación de todos los endpoints. El 03/11 el profesor la recorrió línea a línea, con los tooltips del editor.
+
+<DeClase fecha="03/11" proyecto="node-server-26-27" nota="v1.0.0 (commit 556a6f84) y, por encima, v1.0.1 a v1.1.3" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué hace cada línea de un Dockerfile multietapa y por qué `COPY package*.json` va antes de `COPY . .`.
+  - Para qué sirven `dumb-init` y `USER node`.
+  - Cómo se conectan la API y la base en el compose de producción (`db:5432`, `depends_on`, `service_healthy`).
+  - Cómo se guardan los secretos sin subirlos al repositorio.
+  - Cómo se genera y se sirve la documentación OpenAPI con Swagger.
+</Callout>
+
+## La imagen de la API: el Dockerfile
+
+Una <Concepto termino="Imagen de Docker" definicion="Una plantilla con todo lo que necesita un programa para ejecutarse (sistema base, Node, dependencias, código compilado). Un contenedor es una imagen en marcha.">imagen</Concepto> es una plantilla con todo lo que hace falta para ejecutar la API: un sistema mínimo, Node, las dependencias y el código compilado. El `Dockerfile` dice cómo se construye. El de la referencia es **multietapa**: una etapa compila y otra, más pequeña, solo ejecuta.
+
+<Recorrido
+  titulo="Dockerfile"
+  lenguaje="dockerfile"
+  codigo={`FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npx prisma generate
+RUN npm run build
+
+FROM node:20-alpine
+WORKDIR /app
+RUN apk add --no-cache dumb-init
+COPY package*.json ./
+RUN npm ci --only=production
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY prisma ./prisma
+ENV NODE_ENV=production
+USER node
+EXPOSE 3000
+CMD ["dumb-init", "node", "dist/index.js"]`}
+>
+  <Paso lineas="1-2" titulo="Etapa builder">
+    Parte de la imagen oficial `node:20-alpine` (Alpine es un Linux muy pequeño) y la llama `builder`. `WORKDIR /app` es la carpeta de trabajo dentro de la imagen.
+  </Paso>
+  <Paso lineas="3-4" titulo="Primero solo el package.json">
+    Copia `package.json` y `package-lock.json` y hace `npm ci` (las versiones exactas del lockfile). Docker guarda cada paso en una capa: si no has cambiado las dependencias, la próxima vez reutiliza esta capa y **no vuelve a instalar**.
+  </Paso>
+  <Paso lineas="5" titulo="Después, el resto del código">
+    `COPY . .` va **después** a propósito: el código cambia mucho más que las dependencias, y si fuera antes, cada cambio obligaría a reinstalarlo todo.
+  </Paso>
+  <Paso lineas="6-7" titulo="Generar el cliente y compilar">
+    `prisma generate` crea el cliente en `node_modules/.prisma` y `npm run build` compila TypeScript a `dist/`.
+  </Paso>
+  <Paso lineas="9-11" titulo="Etapa final, desde cero">
+    Una imagen nueva y limpia, sin TypeScript ni nada de desarrollo. Instala `dumb-init` con `apk`, el gestor de paquetes de Alpine.
+  </Paso>
+  <Paso lineas="12-13" titulo="Solo dependencias de producción">
+    `npm ci --only=production` deja fuera las `devDependencies` (typescript, jest, nodemon…): la imagen pesa menos.
+  </Paso>
+  <Paso lineas="14-16" titulo="Coger lo compilado de la otra etapa">
+    `COPY --from=builder` trae de la primera etapa solo lo necesario: `dist` y el cliente generado de Prisma. La carpeta `prisma/` (el schema y las migraciones) se copia del proyecto con un `COPY` normal.
+  </Paso>
+  <Paso lineas="17-18" titulo="Producción y sin root">
+    `ENV NODE_ENV=production` y `USER node`: el contenedor no corre como administrador. Si alguien encontrara un fallo en la API, tendría menos permisos.
+  </Paso>
+  <Paso lineas="19-20" titulo="Puerto y arranque">
+    `EXPOSE 3000` documenta el puerto. `CMD` en forma de array arranca `node dist/index.js` a través de `dumb-init`.
+  </Paso>
+</Recorrido>
+
+**¿Para qué `dumb-init`?** Dentro del contenedor, el primer proceso (PID 1) es el que recibe las señales como `SIGTERM` cuando Docker para el contenedor. `dumb-init` hace de PID 1 y le pasa bien las señales a Node, así que el cierre ordenado de `index.ts` (`process.on('SIGTERM')` → `server.close()` → `process.exit(0)`) funciona de verdad.
+
+<Comparar titulo="Instalar solo las dependencias de producción">
+  <Lado tipo="evitar">
+
+```dockerfile
+RUN npm ci --only=production
+```
+
+Funciona, pero `--only=production` está obsoleto en las versiones actuales de npm.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```dockerfile
+RUN npm ci --omit=dev
+```
+
+<NoDadoEnClase inline /> Es la forma actual de decir lo mismo.
+
+  </Lado>
+</Comparar>
+
+### `.dockerignore`
+
+Igual que `.gitignore`, pero para `COPY . .`: lo que no tiene que entrar en la imagen. La referencia deja fuera `node_modules`, `dist`, los `.env`, `.git`, los `*.md`… Así no se cuelan secretos ni archivos que se van a regenerar dentro.
+
+- Hay un commit sin tag después de la v1.0.0 que arregla los permisos de la carpeta `logs` en Docker. No se ve el cambio.
+- El `CHANGELOG.md` habla de *health checks* del contenedor, pero el `Dockerfile` <Dudoso nota="Solo está el healthcheck de Postgres en el compose.">no tiene `HEALTHCHECK`</Dudoso>.
+
+## El compose de producción
+
+El de desarrollo solo levantaba Postgres ([PostgreSQL con Docker y Supabase](/docs/2-dam/apis/backend/postgres-docker-supabase)). El de producción, `docker-compose.prod.yml`, levanta **la base y la API**:
+
+<Recorrido
+  titulo="docker-compose.prod.yml"
+  lenguaje="yaml"
+  codigo={`version: '3.9'
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: \${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: \${POSTGRES_DB:-app_db}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [app-network]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  api:
+    build: .
+    ports: ["3000:3000"]
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:\${POSTGRES_PASSWORD:-postgres}@db:5432/\${POSTGRES_DB:-app_db}
+      JWT_SECRET: \${JWT_SECRET}
+      BCRYPT_SALT_ROUNDS: \${BCRYPT_SALT_ROUNDS:-10}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [app-network]
+    restart: unless-stopped
+volumes:
+  pgdata:
+networks:
+  app-network:
+    driver: bridge`}
+>
+  <Paso lineas="3-7" titulo="El servicio db">
+    El mismo Postgres 16, pero con las variables leídas del entorno. `${POSTGRES_PASSWORD:-postgres}` significa "el valor de `POSTGRES_PASSWORD` o, si no hay, `postgres`".
+  </Paso>
+  <Paso lineas="8-10" titulo="Volumen y red, sin ports">
+    `db` no publica ningún puerto: desde fuera no se puede entrar a la base. Solo la ve la API, porque están en la misma red.
+  </Paso>
+  <Paso lineas="11-15" titulo="healthcheck">
+    El mismo `pg_isready` que en desarrollo. Lo usa `depends_on` más abajo.
+  </Paso>
+  <Paso lineas="16-18" titulo="El servicio api">
+    `build: .` construye la imagen con el `Dockerfile` de la carpeta. Publica el 3000.
+  </Paso>
+  <Paso lineas="22" titulo="El host es el nombre del servicio">
+    Dentro de la red de Docker, la base no está en `localhost`: está en **`db`**, el nombre del servicio. Por eso `@db:5432`.
+  </Paso>
+  <Paso lineas="23" titulo="El secreto viene de fuera">
+    `JWT_SECRET` no tiene valor por defecto ni está escrito en el YAML: se pasa desde el entorno. Si faltara, `env.ts` no dejaría arrancar la API.
+  </Paso>
+  <Paso lineas="25-27" titulo="Esperar a que la base esté sana">
+    `depends_on` con `condition: service_healthy`: la API no arranca hasta que el healthcheck de `db` da bien.
+  </Paso>
+  <Paso lineas="29" titulo="Volver a arrancar">
+    `restart: unless-stopped`: si la API se cae, Docker la levanta otra vez, salvo que la hayas parado tú.
+  </Paso>
+  <Paso lineas="32-34" titulo="Una red propia">
+    Una red `bridge` para los dos servicios. Dentro de ella se encuentran por su nombre.
+  </Paso>
+</Recorrido>
+
+La clave `version` está obsoleta: Compose la ignora.
+
+<NoDadoEnClase titulo="Cómo se arranca">
+  En las capturas no se ve el comando. El estándar es `docker compose -f docker-compose.prod.yml up -d --build`. Compose lee las variables `${...}` del entorno de la terminal o de un fichero `.env` en la misma carpeta.
+</NoDadoEnClase>
+
+<NoSeVio titulo="Las migraciones en producción">
+  La imagen copia la carpeta `prisma/`, pero en lo que se vio no aparece dónde se ejecuta `npx prisma migrate deploy` contra la base de producción.
+</NoSeVio>
+
+### Los secretos
+
+```bash title="env.production.example"
+NODE_ENV=production
+PORT=3000
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+DATABASE_URL=postgresql://postgres:postgres@db:5432/app_db
+BCRYPT_SALT_ROUNDS=10
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=app_db
+```
+
+- Se versiona una **plantilla** (`env.production.example`) con valores de ejemplo, y el `.env.production` de verdad **no se sube**.
+- El `.gitignore` de la referencia:
+
+```bash title=".gitignore"
+node_modules/
+dist/
+.env
+.env.test
+.env.production
+*.log
+logs/
+coverage/
+.vscode/
+.idea/
+*.tsbuildinfo
+/src/generated/prisma
+```
+
+## Swagger: la documentación de la API
+
+<Concepto termino="OpenAPI" definicion="Un formato estándar (JSON o YAML) para describir una API REST: rutas, parámetros, cuerpos, respuestas y seguridad. Swagger es el conjunto de herramientas que lo usa.">OpenAPI</Concepto> es un formato estándar para describir una API: qué rutas tiene, qué reciben y qué responden. **Swagger UI** pinta esa descripción como una web en la que, además, se pueden probar los endpoints. En la referencia:
+
+- **`swagger-jsdoc`** genera la especificación OpenAPI 3.0.0 a partir de **comentarios JSDoc** escritos encima de las rutas, en los `*.routes.ts`.
+- **`swagger-ui-express`** la sirve como web en **`/api-docs`**.
+
+```bash title="Instalación (README de la v1.0.0)"
+npm install swagger-ui-express swagger-jsdoc @types/swagger-ui-express
+npm install -D @types/swagger-jsdoc
+```
+
+`@types/swagger-ui-express` acaba en `dependencies` (en el `package.json` sale `^4.1.8`) y `@types/swagger-jsdoc` en `devDependencies`. Lo normal es que los dos `@types` vayan en desarrollo.
+
+<Recorrido
+  titulo="src/config/swagger.ts"
+  lenguaje="ts"
+  codigo={`import swaggerJsdoc from 'swagger-jsdoc';
+import { env } from './env.js';
+
+const options: swaggerJsdoc.Options = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'API Express + PostgreSQL',
+      version: '1.0.0',
+      description: 'API REST con autenticación JWT, validación Zod, rate limiting y testing completo',
+      contact: { name: 'API Support' },
+    },
+    servers: [{ url: \`http://localhost:\${env.PORT}\`, description: 'Servidor de desarrollo' }],
+    components: {
+      securitySchemes: {
+        bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      },
+      schemas: {
+        User: { type: 'object', properties: {} },
+      },
+    },
+    tags: [
+      { name: 'Auth', description: 'Endpoints de autenticación' },
+      { name: 'Users', description: 'Gestión de usuarios' },
+    ],
+  },
+  apis: ['./src/modules/*/*.routes.ts'],
+};
+
+export const swaggerSpec = swaggerJsdoc(options);`}
+>
+  <Paso lineas="6-12" titulo="info">
+    Título, versión y descripción que salen arriba en la página.
+  </Paso>
+  <Paso lineas="13" titulo="servers">
+    La URL base contra la que se prueban los endpoints desde Swagger UI.
+  </Paso>
+  <Paso lineas="15-17" titulo="bearerAuth">
+    Declara que la API usa un token *Bearer* JWT. En Swagger UI sale un botón para pegar el token y probar las rutas protegidas.
+  </Paso>
+  <Paso lineas="18-20" titulo="schemas">
+    Las formas de los objetos (como `User`) para reutilizarlas en las rutas.
+  </Paso>
+  <Paso lineas="22-25" titulo="tags">
+    Grupos de endpoints: Auth y Users.
+  </Paso>
+  <Paso lineas="27" titulo="apis">
+    Dónde buscar los comentarios JSDoc: todos los `*.routes.ts` de los módulos.
+  </Paso>
+</Recorrido>
+
+El contenido de `schemas` <Dudoso nota="Las líneas 26 a 135 del fichero no salen en ninguna captura; aquí properties va vacío.">no se ve</Dudoso>: el `User` con `properties: {}` es un hueco, no el código real.
+
+Y en `app.ts`, una línea más y un cambio en helmet:
+
+```ts title="src/app.ts (v1.0.0, lo nuevo)"
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './config/swagger.js';
+
+app.use(helmet({ contentSecurityPolicy: false })); // antes: app.use(helmet())
+// ...
+app.get('/health', (_req, res) => res.json({ ok: true }));
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+```
+
+`swaggerUi.serve` sirve los ficheros de la web y `swaggerUi.setup(swaggerSpec)` la página con tu especificación. La v1.0.0 también añade `validate(schema)` a las rutas de auth ([Autenticación](/docs/2-dam/apis/backend/autenticacion)).
+
+El `export default app` del final <Dudoso nota="No se ve en la v1.0.0, pero index.ts y los tests lo importan así.">no se ve en esta versión</Dudoso>.
+
+### Helmet y Swagger
+
+Con la CSP (*Content Security Policy*) de helmet activa, el navegador no carga bien Swagger UI, así que la v1.0.0 la quita. Pero la quita **para toda la API**, aunque el `CHANGELOG` dice "CSP deshabilitado solo para Swagger":
+
+<Comparar titulo="Quitar la CSP solo donde hace falta">
+  <Lado tipo="evitar">
+
+```ts
+app.use(helmet({ contentSecurityPolicy: false }));
+```
+
+Toda la API se queda sin la cabecera de CSP, no solo `/api-docs`.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```ts
+const helmetApi = helmet();
+const helmetDocs = helmet({ contentSecurityPolicy: false });
+
+app.use((req, res, next) =>
+  req.path.startsWith('/api-docs')
+    ? helmetDocs(req, res, next)
+    : helmetApi(req, res, next),
+);
+```
+
+<NoDadoEnClase inline /> Cada petición pasa por un helmet u otro según la ruta: la CSP solo se quita en la documentación.
+
+  </Lado>
+</Comparar>
+
+<NoSeVio titulo="Las anotaciones de las rutas">
+  No se ven los comentarios JSDoc de las rutas. En la v1.0.1 ("Swagger/OpenAPI completo") el diff dice +64 líneas en `auth.routes.ts` y +245 en `users.routes.ts`, pero su contenido no sale en las capturas.
+</NoSeVio>
+
+<NoDadoEnClase titulo="Cómo es una anotación de swagger-jsdoc">
+
+Un ejemplo estándar, encima de la ruta del login:
+
+```ts title="src/modules/auth/auth.routes.ts"
+/**
+ * @openapi
+ * /api/auth/login:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Iniciar sesión
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email: { type: string }
+ *               password: { type: string }
+ *     responses:
+ *       200:
+ *         description: Usuario y token
+ *       401:
+ *         description: Credenciales inválidas
+ */
+router.post('/login', validate(loginSchema), loginCtrl);
+```
+
+Ojo si lo despliegas con el `Dockerfile` de arriba: en la imagen final solo está `dist/`, no `src/`, así que `apis: ['./src/modules/*/*.routes.ts']` no encontraría nada. `tsc` mantiene los comentarios en el `.js` compilado, así que habría que añadir también `'./dist/modules/*/*.routes.js'`.
+
+</NoDadoEnClase>
+
+### La alternativa: swagger-autogen
+
+El profesor lo comparó con un artículo de freeCodeCamp que usa **swagger-autogen**: en vez de escribir comentarios, lee el código de las rutas y genera un `swagger_output.json`, que se sirve igual (el ejemplo está en CommonJS, con `require`):
+
+```js title="Ejemplo de freeCodeCamp"
+const swaggerUi = require('swagger-ui-express');
+const swaggerFile = require('./swagger_output.json');
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerFile));
+```
+
+| | swagger-jsdoc (clase) | swagger-autogen |
+| --- | --- | --- |
+| De dónde sale la documentación | Comentarios JSDoc que escribes tú | Del código de las rutas, automáticamente |
+| Detalle | Todo el que quieras (cuerpos, respuestas…) | Lo que pueda deducir; se completa a mano |
+
+## Las versiones después de la v1.0.0
+
+| Versión | Qué trae |
+| --- | --- |
+| v1.0.1 | Swagger/OpenAPI completo (las anotaciones de las rutas) |
+| v1.0.2 | `ts-node` → `tsx` (ES Modules) |
+| v1.1.0 | Subida de archivos con Cloudinary (el modelo `Media`) |
+| v1.1.1 | Variables de Cloudinary en `env.production.example` |
+| v1.1.2 | Errores de TypeScript del módulo media |
+| v1.1.3 | Swagger muestra todos los endpoints |
+
+<NoSeVio titulo="El módulo media y Vercel">
+  Del módulo `media` (Cloudinary y Multer) solo se ven el modelo de Prisma y las variables de entorno. La rama `vercel-deployment`, para desplegar la API en Vercel, no se llegó a abrir.
+</NoSeVio>
+
+## Practica
+
+<Quiz titulo="Test: Docker de producción y Swagger" descripcion="8 preguntas">
+  <Pregunta enunciado="¿Por qué `COPY package*.json ./` y `RUN npm ci` van antes de `COPY . .`?" explicacion="Para aprovechar la caché de capas: si las dependencias no cambian, Docker reutiliza la capa de `npm ci` aunque cambie el código.">
+    <Opcion>Porque `npm ci` borra el código copiado</Opcion>
+    <Opcion correcta>Para que Docker reutilice la capa de las dependencias cuando solo cambia el código</Opcion>
+    <Opcion>Porque Docker copia los ficheros por orden alfabético</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué gana la imagen con la etapa `builder`?" explicacion="La imagen final no lleva TypeScript ni las devDependencies: solo `dist`, el cliente de Prisma y las dependencias de producción.">
+    <Opcion>Que arranca en modo desarrollo</Opcion>
+    <Opcion correcta>Que la imagen final solo lleva lo compilado y las dependencias de producción</Opcion>
+    <Opcion>Que no hace falta `prisma generate`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Para qué sirve `dumb-init` en el `CMD`?" explicacion="Hace de PID 1 y pasa bien las señales (SIGTERM) a Node, así que funciona el cierre ordenado.">
+    <Opcion>Para arrancar más rápido</Opcion>
+    <Opcion correcta>Para que las señales como SIGTERM lleguen bien a Node</Opcion>
+    <Opcion>Para instalar las dependencias que falten</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En el compose de producción, ¿por qué la `DATABASE_URL` de la API usa `@db:5432` y no `@localhost:5432`?" explicacion="Dentro de la red de Docker cada servicio se encuentra por su nombre. `localhost` sería el propio contenedor de la API.">
+    <Opcion correcta>Porque dentro de la red de Docker la base se llama como su servicio, `db`</Opcion>
+    <Opcion>Porque `localhost` está prohibido en producción</Opcion>
+    <Opcion>Porque Supabase se llama `db`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué significa `${POSTGRES_DB:-app_db}`?" explicacion="El valor de la variable `POSTGRES_DB` o, si no existe, `app_db`.">
+    <Opcion>Restar `app_db` a `POSTGRES_DB`</Opcion>
+    <Opcion correcta>El valor de `POSTGRES_DB` o, si no hay, `app_db`</Opcion>
+    <Opcion>Que `POSTGRES_DB` es obligatoria</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Con `depends_on: db: condition: service_healthy`, la API arranca en cuanto se crea el contenedor de la base." respuesta={false} explicacion="Espera a que el healthcheck de `db` (`pg_isready`) diga que está sana." />
+  <Pregunta enunciado="¿Qué hace `swagger-jsdoc`?" explicacion="Genera la especificación OpenAPI a partir de los comentarios JSDoc de los `*.routes.ts`. La web la sirve `swagger-ui-express`.">
+    <Opcion>Sirve la web de `/api-docs`</Opcion>
+    <Opcion correcta>Genera la especificación OpenAPI a partir de comentarios JSDoc</Opcion>
+    <Opcion>Valida los cuerpos de las peticiones</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué la v1.0.0 cambia `helmet()` por `helmet({ contentSecurityPolicy: false })`?" explicacion="Para que se vea Swagger UI. El problema es que así la CSP se quita en toda la API, no solo en `/api-docs`.">
+    <Opcion>Porque helmet no funciona con Express 5</Opcion>
+    <Opcion correcta>Para que se vea Swagger UI (aunque así se quita en toda la API)</Opcion>
+    <Opcion>Para permitir CORS</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: producción y documentación">
+  <Tarjeta frente="Dockerfile multietapa">Una etapa `builder` instala todo, genera Prisma y compila; la final solo copia `dist`, `.prisma` y `prisma/` con las dependencias de producción.</Tarjeta>
+  <Tarjeta frente="`npm ci --only=production`">Instala sin `devDependencies`. Hoy se escribe `npm ci --omit=dev`.</Tarjeta>
+  <Tarjeta frente="`USER node`">El contenedor no corre como root.</Tarjeta>
+  <Tarjeta frente="`.dockerignore`">Lo que no entra en la imagen con `COPY . .`: `node_modules`, `dist`, los `.env`, `.git`…</Tarjeta>
+  <Tarjeta frente="Host de la base en el compose de producción">El nombre del servicio: `db:5432`.</Tarjeta>
+  <Tarjeta frente="`restart: unless-stopped`">Si la API se cae, Docker la vuelve a levantar, salvo que la pares tú.</Tarjeta>
+  <Tarjeta frente="`/api-docs`">Swagger UI: `swaggerUi.serve` y `swaggerUi.setup(swaggerSpec)`.</Tarjeta>
+  <Tarjeta frente="`bearerAuth` en Swagger">Declara el token JWT para poder probar las rutas protegidas desde Swagger UI.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Encuentra los fallos del Dockerfile" dificultad="facil">
+  Este Dockerfile funciona, pero tiene cuatro cosas peor hechas que el de clase. Encuéntralas.
+
+```dockerfile title="Dockerfile"
+FROM node:20-alpine
+WORKDIR /app
+COPY . .
+RUN npm install
+RUN npx prisma generate
+RUN npm run build
+CMD node dist/index.js
+```
+
+  <Pista>Piensa en la caché de capas, en el tamaño de la imagen, en el usuario y en las señales.</Pista>
+
+  <Solucion>
+
+1. `COPY . .` antes de instalar: cada cambio de código obliga a reinstalar todo. Hay que copiar primero `package*.json` y hacer `npm ci`.
+2. Una sola etapa: la imagen final lleva TypeScript y todas las `devDependencies`. Mejor una etapa `builder` y otra final con solo lo de producción.
+3. Corre como root: falta `USER node`.
+4. `CMD` en forma de texto y sin `dumb-init`: Node no recibe bien las señales y el cierre ordenado no funciona. Con el de clase: `CMD ["dumb-init", "node", "dist/index.js"]`.
+
+Además, `npm install` en vez de `npm ci`: el de clase usa `npm ci` para instalar exactamente lo del lockfile.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Pon la API en otro puerto" dificultad="media">
+  Quieres que, en producción, la API escuche en el 8080 dentro del contenedor y se publique también en el 8080 del servidor. ¿Qué cambias en el `Dockerfile` y en el `docker-compose.prod.yml`?
+
+  <Pista>El puerto de la API sale de `env.PORT`, que lee la variable de entorno `PORT`.</Pista>
+  <Pista>`ports` es `servidor:contenedor`.</Pista>
+
+  <Solucion>
+
+En el compose, la variable y el mapeo:
+
+```yaml title="docker-compose.prod.yml"
+  api:
+    build: .
+    ports: ["8080:8080"]
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+```
+
+En el `Dockerfile`, `EXPOSE 8080` (solo documenta el puerto, pero conviene que coincida). No hay que tocar el código: `env.ts` lee `PORT` y `index.ts` hace `app.listen(env.PORT)`.
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Dockerfile">Las instrucciones para construir la imagen de la API.</Termino>
+  <Termino nombre="Multietapa">Una etapa compila y otra, limpia, solo ejecuta.</Termino>
+  <Termino nombre="dumb-init">PID 1 del contenedor: pasa bien las señales a Node.</Termino>
+  <Termino nombre="docker-compose.prod.yml">Levanta `db` y `api` en una red propia; la API espera a que la base esté sana.</Termino>
+  <Termino nombre="OpenAPI">Formato estándar para describir una API REST.</Termino>
+  <Termino nombre="swagger-jsdoc / swagger-ui-express">Generan la especificación desde comentarios / la sirven en `/api-docs`.</Termino>
+</Glosario>
+
+<MarcarCompletado />

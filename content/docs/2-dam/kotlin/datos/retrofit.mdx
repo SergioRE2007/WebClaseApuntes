@@ -1,0 +1,672 @@
+---
+title: "Retrofit 3 con Gson: la capa remota"
+description: "La capa remota de la PokeApp2627: interfaz de Retrofit con @GET y @Path, Response<T>, DTO y toModel(), DataSource, repositorio, NetworkModule con Hilt y el permiso de INTERNET."
+icon: Globe
+---
+
+import { ConstructorUrlRetrofit } from '@/components/temas/datos/url-retrofit';
+
+**Retrofit** convierte una **interfaz de Kotlin** en llamadas HTTP: tú escribes las funciones con anotaciones (`@GET`, `@Path`…) y Retrofit genera el código que monta la URL, hace la petición y convierte el JSON en objetos con **Gson**. Es lo que se usó el 26/10 para que la PokeApp2627 leyera de [PokeAPI](/docs/2-dam/kotlin/datos/pokeapi-y-postman).
+
+<DeClase fecha="26/10, 09/11" proyecto="PokeApp2627" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Escribir la interfaz de la API con `@GET`, `@Path`, funciones `suspend` y `Response<T>`.
+  - Separar el JSON (DTO) del modelo de la app con una función de extensión `toModel()`.
+  - Montar la cadena `PokeApi` → DataSource → repositorio y conectarla con Hilt.
+  - Crear Retrofit en un `NetworkModule` y no olvidar el permiso de `INTERNET`.
+</Callout>
+
+## El recorrido de una petición
+
+Cada capa solo conoce la interfaz de la de debajo y la recibe por `@Inject constructor`. Pulsa **Reproducir** para ver el viaje completo de la lista de pokémon.
+
+<Flujo
+  titulo="Pedir la lista de pokémon"
+  nodos={["Pantalla", "ViewModel", "Repositorio", "DataSource", "Retrofit", "API"]}
+>
+  <Mensaje de="Pantalla" a="ViewModel" titulo="collectAsStateWithLifecycle()">
+    La pantalla observa el `state` del `PokemonListViewModel`, que se lo ha dado `hiltViewModel()`.
+  </Mensaje>
+  <Mensaje de="ViewModel" a="Repositorio" titulo="readAllPokemon()">
+    Dentro de una corrutina, el ViewModel le pide los datos al repositorio. Solo conoce la interfaz `PokemonRepository`.
+  </Mensaje>
+  <Mensaje de="Repositorio" a="DataSource" titulo="readAllPokemon()">
+    El repositorio delega en la fuente remota, `PokemonRemoteDataSource`, que Hilt le ha inyectado.
+  </Mensaje>
+  <Mensaje de="DataSource" a="Retrofit" titulo="_api.readAllPokemon()">
+    El DataSource llama a la interfaz `PokeApi`. Su implementación la ha generado Retrofit en el `NetworkModule`.
+  </Mensaje>
+  <Mensaje de="Retrofit" a="API" titulo="GET pokemon">
+    Retrofit junta la `baseUrl` con la ruta de `@GET`: `https://pokeapi.co/api/v2/pokemon`.
+  </Mensaje>
+  <Mensaje de="API" a="Retrofit" tipo="respuesta" titulo="200 OK + JSON">
+    Gson convierte el JSON en un `PokemonListResult` y Retrofit lo envuelve en un `Response`.
+  </Mensaje>
+  <Mensaje de="DataSource" a="DataSource" titulo="isSuccessful, body() y toModel()">
+    El DataSource comprueba la respuesta, pide el detalle de cada pokémon (N+1) y pasa cada DTO al modelo `Pokemon` con `toModel()`.
+  </Mensaje>
+  <Mensaje de="DataSource" a="Repositorio" tipo="respuesta" titulo="`List<Pokemon>`">
+    Devuelve una lista del modelo de la app: ya no hay nada de JSON ni de Retrofit.
+  </Mensaje>
+  <Mensaje de="Repositorio" a="ViewModel" tipo="respuesta" titulo="La lista">
+    El ViewModel la convierte en el estado `Loaded(pokemons)`.
+  </Mensaje>
+  <Mensaje de="ViewModel" a="Pantalla" tipo="respuesta" titulo="Nuevo estado">
+    El `StateFlow` emite y Compose vuelve a pintar la pantalla con la lista.
+  </Mensaje>
+</Flujo>
+
+Así queda el proyecto el 26/10, organizado por *feature*:
+
+<Files>
+  <Folder name="com.alanturing.pokeapp2627" defaultOpen>
+    <Folder name="core" defaultOpen>
+      <File name="PokeApplication.kt" />
+      <Folder name="di" defaultOpen>
+        <File name="AppModule.kt" />
+      </Folder>
+    </Folder>
+    <Folder name="features/pokemon" defaultOpen>
+      <Folder name="data" defaultOpen>
+        <Folder name="model">
+          <File name="Pokemon.kt" />
+        </Folder>
+        <Folder name="remote" defaultOpen>
+          <File name="PokeApi.kt" />
+          <File name="PokemonApiModels.kt" />
+          <File name="PokemonDataSource.kt" />
+          <File name="PokemonRemoteDataSource.kt" />
+        </Folder>
+        <Folder name="repository">
+          <File name="PokemonRepository.kt" />
+          <File name="PokemonRepositoryImpl.kt" />
+        </Folder>
+      </Folder>
+      <Folder name="di" defaultOpen>
+        <File name="NetworkModule.kt" />
+      </Folder>
+    </Folder>
+    <Folder name="ui.theme" />
+    <File name="MainActivity.kt" />
+  </Folder>
+</Files>
+
+El 09/11 se añade la carpeta `local` y las clases remotas se renombran (`PokemonDataSource` pasa a `PokemonRemoteDataSource` y la implementación a `PokemonRemoteDataSourceImpl`). En esta página se usan **los nombres del 09/11**, que son los definitivos.
+
+## Las dependencias
+
+En el log de Gradle del 26/10 salen **Retrofit 3.0.0** y **converter-gson 3.0.0**, que trae **Gson 2.13.1** <Dudoso nota="En la página de GitHub de Gson se leyó 2.15.0 como última versión." />. El paquete de Retrofit sigue siendo `retrofit2` (`retrofit2.Retrofit`, `retrofit2.Response`…), aunque la versión sea la 3.
+
+<NoSeVio titulo="El build.gradle.kts del 26/10">
+  No se ve el archivo de Gradle con las dependencias de Retrofit.
+</NoSeVio>
+
+<NoDadoEnClase titulo="Las líneas de Gradle">
+
+```kotlin title="app/build.gradle.kts"
+dependencies {
+    implementation("com.squareup.retrofit2:retrofit:3.0.0")
+    implementation("com.squareup.retrofit2:converter-gson:3.0.0")
+}
+```
+
+  Es mejor pasarlas a `libs.versions.toml`, como se hizo el 13/11 con Hilt. `converter-gson` ya trae Gson, así que no hace falta añadirlo aparte.
+
+</NoDadoEnClase>
+
+## 1. La interfaz de la API
+
+Cada función es un endpoint. La anotación dice el verbo y la ruta, y los parámetros con `@Path` rellenan los huecos `{...}` de la ruta.
+
+```kotlin title="features/pokemon/data/remote/PokeApi.kt"
+interface PokeApi {
+    @GET("pokemon")
+    suspend fun readAllPokemon(): Response<PokemonListResult>
+
+    @GET("pokemon/{name}")
+    suspend fun readPokemonByName(@Path(value = "name") name: String): Response<PokemonResult>
+
+    @GET("pokemon/{id}")
+    suspend fun readPokemonById(@Path(value = "id") id: Int): Response<PokemonResult>
+}
+```
+
+- Es una `interface`: **no la implementas tú**. Retrofit crea la implementación con `retrofit.create(PokeApi::class.java)`.
+- Las funciones son `suspend`: Retrofit hace la petición sin bloquear el hilo principal, así que se pueden llamar desde `viewModelScope.launch` (ver [Corrutinas](/docs/2-dam/kotlin/datos/corrutinas)).
+- `@Path(value = "name")` sustituye `{name}` por el valor del parámetro: `readPokemonByName("pikachu")` pide `pokemon/pikachu`.
+- `readPokemonById` está en la interfaz, pero en lo que se ve en clase no se llega a usar.
+
+### `Response<T>`
+
+El 26/10 el tipo de retorno pasa de `PokemonListResult` a **`Response<PokemonListResult>`**. Con `Response` no solo tienes el cuerpo, también la información de la respuesta HTTP:
+
+| Miembro | Qué da |
+| --- | --- |
+| `isSuccessful` | `true` si el código es 2xx. |
+| `body()` | El cuerpo ya convertido por Gson. Es **nulable**: si la respuesta no fue bien, es `null`. |
+| `code()` | El código HTTP (200, 404…). <NoDadoEnClase inline /> |
+
+El tooltip del IDE avisa de que `body()` es `@Nullable`, y por eso en clase se escribe `body()!!`. Más abajo verás por qué eso no conviene copiarlo.
+
+### La `baseUrl` y la barra final
+
+<Comparar titulo="Rutas y baseUrl">
+  <Lado tipo="evitar" titulo="Como se leyó el 26/10">
+
+```kotlin
+.baseUrl("https://pokeapi.co/api/v2")
+
+@GET("/pokemon")
+suspend fun readAllPokemon(): Response<PokemonListResult>
+```
+
+La `baseUrl` sin `/` final hace que Retrofit lance una excepción, y una ruta que empieza por `/` se come el `/api/v2`. En clase todavía no se había ejecutado.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Como queda el 09/11">
+
+```kotlin
+.baseUrl("https://pokeapi.co/api/v2/")
+
+@GET("pokemon")
+suspend fun readAllPokemon(): Response<PokemonListResult>
+```
+
+La `baseUrl` acaba en `/` y las rutas **no** empiezan por `/`.
+
+  </Lado>
+</Comparar>
+
+La lectura del 26/10 es <Dudoso nota="El resumen de clase lo corrige porque Retrofit exige la barra final; así salen las rutas el 09/11.">la `baseUrl` sin barra final</Dudoso>. Prueba las cuatro combinaciones:
+
+<ConstructorUrlRetrofit />
+
+- Si la `baseUrl` **no acaba en `/`**, Retrofit lanza `IllegalArgumentException: baseUrl must end in /` al construirse. Como se construye en el `NetworkModule`, la app se cae en cuanto Hilt lo crea.
+- Si la ruta **empieza por `/`**, Retrofit la cuelga de la raíz del dominio: `https://pokeapi.co/pokemon`, que no es la API.
+
+## 2. DTO, modelo y `toModel()`
+
+La forma del JSON y la forma que quiere la app no tienen por qué coincidir. En clase se separan:
+
+- Los **DTO** (*Data Transfer Object*): las `data class` con la misma forma que el JSON. Van en `PokemonApiModels.kt`.
+- El **modelo**: `Pokemon`, la clase que usa el resto de la app. No sabe nada de JSON.
+
+```kotlin title="features/pokemon/data/remote/PokemonApiModels.kt (versión del 09/11)"
+data class PokemonResult(val id: Int, val name: String, val sprites: PokemonSprites?)
+data class PokemonSprites(@SerializedName("front_default") val frontDefault: String)
+data class PokemonListResult(val results: List<PokemonListItemResult>)
+data class PokemonListItemResult(val name: String, val url: String)
+
+fun PokemonResult.toModel(): Pokemon = Pokemon(
+    id = this.id,
+    name = this.name,
+    pokemonImageUrl = this.sprites?.frontDefault,
+)
+```
+
+- La línea `name = this.name` de `toModel()` sale tapada por un tooltip en las capturas del 09/11 <Dudoso />.
+- Una `data class` por cada objeto JSON y una `List` por cada array. Los campos del JSON que no están en la clase (`count`, `next`…) se ignoran.
+- **`@SerializedName("front_default")`**: el JSON trae `front_default` y la propiedad se llama `frontDefault`. Gson empareja por nombre, así que sin la anotación esa propiedad se quedaría a `null`. El 26/10 aún no estaba, y la anotación aparece el 09/11.
+- El 26/10 `sprites` era `PokemonSprites` (no nulable). El 09/11 pasa a `PokemonSprites?` y en `toModel()` se lee con `?.`.
+
+### La función de extensión `toModel()`
+
+`fun PokemonResult.toModel(): Pokemon` es una **función de extensión**: se "añade" a `PokemonResult` sin tocar la clase, y se llama como si fuera suya, `body.toModel()`. Dentro, `this` es el objeto que la llama.
+
+<Comparar columnas titulo="Lo mismo en Java y en Kotlin">
+  <Lado titulo="Java">
+
+```java
+static Pokemon toModel(PokemonResult r) {
+    return new Pokemon(r.id, r.name,
+        r.sprites != null
+            ? r.sprites.frontDefault
+            : null);
+}
+// Uso: toModel(body)
+```
+
+  </Lado>
+  <Lado titulo="Kotlin">
+
+```kotlin
+fun PokemonResult.toModel() = Pokemon(
+    id = this.id,
+    name = this.name,
+    pokemonImageUrl =
+        this.sprites?.frontDefault,
+)
+// Uso: body.toModel()
+```
+
+  </Lado>
+</Comparar>
+
+El modelo del 26/10 es `data class Pokemon(val id: Int, val name: String, val pokemonImageUrl: String)`. Para que compile el `toModel()` del 09/11, `pokemonImageUrl` tiene que ser `String?`, pero esa versión del modelo no se ve en las capturas.
+
+## 3. El DataSource
+
+El DataSource es la clase que habla con **una sola fuente** de datos, aquí la API. Hay una interfaz y una implementación que recibe `PokeApi` por el constructor:
+
+```kotlin title="features/pokemon/data/remote/PokemonRemoteDataSource.kt"
+interface PokemonRemoteDataSource {
+    val pokemons: Flow<List<Pokemon>>
+    suspend fun readAllPokemon(): List<Pokemon>
+    suspend fun readPokemonByName(name: String): Pokemon?
+    suspend fun readPokemonById(id: Int): Pokemon?
+}
+```
+
+`val pokemons: Flow<...>` se añadió el 09/11 y se explica en [Flow y stateIn](/docs/2-dam/kotlin/datos/flow-y-statein). Esta es la implementación, paso a paso:
+
+<Recorrido
+  titulo="features/pokemon/data/remote/PokemonRemoteDataSourceImpl.kt"
+  lenguaje="kotlin"
+  codigo={`class PokemonRemoteDataSourceImpl @Inject constructor(
+    private val _api: PokeApi
+) : PokemonRemoteDataSource {
+    override val pokemons: Flow<List<Pokemon>> = flow { emit(readAllPokemon()) }
+
+    override suspend fun readAllPokemon(): List<Pokemon> {
+        val response = _api.readAllPokemon()
+        val pokemons = mutableListOf<Pokemon>()
+        if (response.isSuccessful) {
+            val body = response.body()!!
+            for (item in body.results) {
+                val pokemon = readPokemonByName(item.name)
+                pokemons.add(pokemon!!)
+            }
+        }
+        return pokemons
+    }
+
+    override suspend fun readPokemonByName(name: String): Pokemon? {
+        val response = _api.readPokemonByName(name)
+        if (response.isSuccessful) {
+            return response.body()!!.toModel()
+        } else {
+            return null
+        }
+    }
+}`}
+>
+  <Paso lineas="1-3" titulo="Recibe la API por el constructor">
+    `@Inject constructor(private val _api: PokeApi)`: Hilt le pasa la `PokeApi` que crea el `NetworkModule`. La clase no sabe cómo se construye Retrofit.
+  </Paso>
+  <Paso lineas="7" titulo="La petición del listado">
+    `_api.readAllPokemon()` es `suspend`: aquí la corrutina espera la respuesta sin bloquear.
+  </Paso>
+  <Paso lineas="8" titulo="Una lista que se va llenando">
+    `mutableListOf<Pokemon>()` es como un `new ArrayList<>()` de Java. Es `val`, pero su contenido sí cambia.
+  </Paso>
+  <Paso lineas="9-10" titulo="Comprobar la respuesta">
+    Solo si el código es 2xx se lee el cuerpo. `body()` es nulable y aquí se fuerza con `!!`.
+  </Paso>
+  <Paso lineas="11-14" titulo="N+1 peticiones">
+    El listado no trae la imagen, así que por cada elemento se pide el detalle con `readPokemonByName(item.name)`. Con 20 resultados son 21 peticiones, una detrás de otra.
+  </Paso>
+  <Paso lineas="16" titulo="Devuelve el modelo">
+    Fuera del DataSource solo sale `List<Pokemon>`: ni `Response`, ni DTO. Si la API falla, la lista vuelve vacía.
+  </Paso>
+  <Paso lineas="19-25" titulo="El detalle">
+    Pide un pokémon por nombre y lo pasa al modelo con `toModel()`. Si la respuesta no es 2xx, devuelve `null`; por eso el tipo es `Pokemon?`.
+  </Paso>
+</Recorrido>
+
+- El 26/10 la rama `else` de `readAllPokemon()` solo tiene el comentario `// Mostrar un error!`: no se ve cómo se informa del error.
+- Por el camino salió el error de tipos *expected Pokemon, actual PokemonListItemResult*: se intentaba meter en la lista el elemento del listado en vez del pokémon del detalle.
+
+### `!!` en las respuestas
+
+<Comparar titulo="Leer el cuerpo de la respuesta">
+  <Lado tipo="evitar">
+
+```kotlin
+if (response.isSuccessful) {
+    val body = response.body()!!
+    for (item in body.results) {
+        val pokemon = readPokemonByName(item.name)
+        pokemons.add(pokemon!!)
+    }
+}
+```
+
+Si un detalle falla, `readPokemonByName` devuelve `null` y `pokemon!!` lanza `NullPointerException`: la app se cierra.
+
+  </Lado>
+  <Lado tipo="bien">
+
+<NoDadoEnClase inline />
+
+```kotlin
+val body = response.body()
+if (!response.isSuccessful || body == null) {
+    throw IOException("La API respondió ${response.code()}")
+}
+for (item in body.results) {
+    val pokemon = readPokemonByName(item.name)
+    if (pokemon != null) pokemons.add(pokemon)
+}
+```
+
+Se comprueba que el cuerpo no sea `null` sin forzarlo. Si la API falla, se lanza una excepción que el ViewModel puede capturar para enseñar un estado de error.
+
+  </Lado>
+</Comparar>
+
+Cómo se rellena un estado de error en el ViewModel no se vio en clase: está en [Room como fuente de verdad](/docs/2-dam/kotlin/para-el-proyecto/offline-first).
+
+## 4. El repositorio
+
+El repositorio es lo que ve el ViewModel. Recibe el DataSource por el constructor (con `javax.inject.Inject`, importado con Alt+Mayús+Intro) y, de momento, solo delega:
+
+```kotlin title="features/pokemon/data/repository/PokemonRepositoryImpl.kt (09/11, bloque 1, con el nombre nuevo de la interfaz)"
+class PokemonRepositoryImpl @Inject constructor(
+    private val _remoteDataSource: PokemonRemoteDataSource
+) : PokemonRepository {
+    override val pokemons: Flow<List<Pokemon>> = _remoteDataSource.pokemons
+
+    override suspend fun readAllPokemon(): List<Pokemon> {
+        return _remoteDataSource.readAllPokemon()
+    }
+
+    override suspend fun readPokemonById(id: Int): Pokemon? {
+        return _remoteDataSource.readPokemonById(id)
+    }
+}
+```
+
+El 26/10 el repositorio acaba la clase con sus funciones en `TODO("Not yet implemented")`, que compila (devuelve `Nothing`) pero lanza `NotImplementedError` si se llama. Por qué tener un repositorio que solo delega se ve en [Offline-first](/docs/2-dam/kotlin/datos/offline-first): ahí decide entre la fuente remota y la local.
+
+## 5. Conectarlo todo con Hilt
+
+### `NetworkModule`: construir Retrofit
+
+Retrofit no se crea con `@Inject constructor`: hay que **construirlo** con su `Builder`. Para eso se usa un módulo con `@Provides`.
+
+<Recorrido
+  titulo="features/pokemon/di/NetworkModule.kt"
+  lenguaje="kotlin"
+  codigo={`@Module
+@InstallIn(SingletonComponent::class)
+class NetworkModule {
+    @Provides
+    @Singleton
+    fun provideHttpClient(): PokeApi {
+        val retrofit: Retrofit = Retrofit.Builder()
+            .baseUrl("https://pokeapi.co/api/v2/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+        return retrofit.create(PokeApi::class.java)
+    }
+}`}
+>
+  <Paso lineas="1-3" titulo="Un módulo de Hilt">
+    `@Module` + `@InstallIn(SingletonComponent::class)`: lo que da este módulo vive mientras vive la app. Es una `class` con `@Provides`, no una `interface` con `@Binds`.
+  </Paso>
+  <Paso lineas="4-6" titulo="@Provides y @Singleton">
+    `@Provides` le dice a Hilt: "cuando alguien pida una `PokeApi`, ejecuta esta función". Con `@Singleton` solo se ejecuta una vez.
+  </Paso>
+  <Paso lineas="7-8" titulo="La baseUrl">
+    El `Builder` empieza por la `baseUrl`, que tiene que acabar en `/`.
+  </Paso>
+  <Paso lineas="9" titulo="Gson">
+    `GsonConverterFactory.create()` le dice a Retrofit que convierta el JSON con Gson.
+  </Paso>
+  <Paso lineas="11" titulo="Retrofit implementa la interfaz">
+    `retrofit.create(PokeApi::class.java)` devuelve un objeto que implementa `PokeApi`. Eso es lo que recibe el DataSource.
+  </Paso>
+</Recorrido>
+
+<Comparar titulo="El nombre de la función">
+  <Lado tipo="evitar">
+
+```kotlin
+@Provides
+@Singleton
+fun provideHttpClient(): PokeApi { ... }
+```
+
+Se llama `provideHttpClient`, pero no devuelve un cliente HTTP, sino la API. El nombre engaña.
+
+  </Lado>
+  <Lado tipo="bien">
+
+<NoDadoEnClase inline />
+
+```kotlin
+@Module
+@InstallIn(SingletonComponent::class)
+object NetworkModule {
+    @Provides
+    @Singleton
+    fun provideRetrofit(): Retrofit = Retrofit.Builder()
+        .baseUrl("https://pokeapi.co/api/v2/")
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+
+    @Provides
+    @Singleton
+    fun providePokeApi(retrofit: Retrofit): PokeApi =
+        retrofit.create(PokeApi::class.java)
+}
+```
+
+Cada función crea una cosa y se llama como lo que crea. Con `object` no hace falta crear instancias del módulo.
+
+  </Lado>
+</Comparar>
+
+### `AppModule`: atar interfaces con `@Binds`
+
+El DataSource y el repositorio sí tienen `@Inject constructor`, así que basta con decirle a Hilt qué implementación va con cada interfaz:
+
+```kotlin title="core/di/AppModule.kt (09/11, fragmento)"
+@Module
+@InstallIn(SingletonComponent::class)
+interface AppModule {
+    @Binds @Singleton
+    fun bindsPokemonRemoteDataSource(ds: PokemonRemoteDataSourceImpl): PokemonRemoteDataSource
+
+    @Binds @Singleton
+    fun bindsPokemonRepository(r: PokemonRepositoryImpl): PokemonRepository
+}
+```
+
+- Son dos de los tres `@Binds` del final del 09/11. El tercero, el de la fuente local, está en [Offline-first](/docs/2-dam/kotlin/datos/offline-first). El 26/10 solo se ve el primero, con los nombres de entonces (`PokemonRemoteDataSource` atado a `PokemonDataSource`).
+- El 26/10 se lee <Dudoso nota="Con el import jakarta.inject.Singleton, en 3 capturas. Lo correcto, y lo que sale en las clases siguientes, es SingletonComponent::class.">`@InstallIn(Singleton::class)`</Dudoso> en este módulo.
+- Al compilar se ven las tareas de KSP y Hilt (`kspDebugKotlin`, `hiltJavaCompileDebug`) y, en `build/generated/ksp`, las clases `..._Factory.java` que genera Dagger para cada `@Inject constructor`.
+- `@Provides` frente a `@Binds`, y Hilt en general, están en [Módulos de Hilt](/docs/2-dam/kotlin/arquitectura/hilt-modulos).
+
+## 6. La `Application` y el manifest
+
+Hilt necesita una clase `Application` propia con `@HiltAndroidApp`:
+
+```kotlin title="core/PokeApplication.kt"
+@HiltAndroidApp
+class PokeApplication() : Application()
+```
+
+<Callout type="error" title="Salió en clase: @AndroidEntryPoint en la Application">
+  El 26/10 a `PokeApplication` se le puso primero `@AndroidEntryPoint` por error. Esa anotación va en la **Activity** (`MainActivity`); la `Application` lleva `@HiltAndroidApp`. Si falta, sale *Hilt Activity must be attached to an @HiltAndroidApp Application*.
+</Callout>
+
+En el manifest hay que hacer dos cosas: registrar esa `Application` con `android:name` y **pedir permiso para usar internet**.
+
+```xml title="AndroidManifest.xml (resumen)"
+<uses-permission android:name="android.permission.INTERNET" />
+
+<application android:name=".core.PokeApplication" ...>
+    <activity android:name=".MainActivity" android:exported="true">
+        ...
+    </activity>
+</application>
+```
+
+- `INTERNET` es un permiso **normal**: se concede solo al instalar la app, sin preguntar al usuario. Basta con declararlo.
+- En clase se añadió `CAMERA` como ejemplo de otro permiso y luego se quitó: al final solo queda `INTERNET`.
+- Sin el permiso, la petición falla con un error como `SecurityException: Permission denied (missing INTERNET permission?)`.
+
+## Lo que no se dio de Retrofit <NoDadoEnClase inline />
+
+En clase solo hubo `@GET` contra PokeAPI. Para el proyecto hacen falta más cosas, explicadas en [Para el proyecto](/docs/2-dam/kotlin/para-el-proyecto):
+
+- `@POST`, `@PUT` y `@DELETE` con `@Body`, y `@Query` para los parámetros `?clave=valor`: [POST, PUT y DELETE con Retrofit](/docs/2-dam/kotlin/para-el-proyecto/crud-con-retrofit).
+- Llamar a vuestra API desde el emulador (`10.0.2.2` en vez de `localhost`, y permitir `http`) y mandar el token en cada petición con un interceptor de OkHttp: [Conectar con tu API](/docs/2-dam/kotlin/para-el-proyecto/conectar-con-tu-api).
+- Capturar los errores de red (`IOException`) para que la app no se caiga sin conexión: [Room como fuente de verdad](/docs/2-dam/kotlin/para-el-proyecto/offline-first).
+
+## Practica
+
+<CompletarCodigo
+  titulo="Un endpoint nuevo"
+  enunciado="Completa la función para pedir un pokémon por su id con GET pokemon/{id}."
+  lenguaje="kotlin"
+  codigo={`interface PokeApi {
+    @[[GET]]("pokemon/{id}")
+    [[suspend]] fun readPokemonById(@[[Path]](value = "id") id: Int): [[Response]]<PokemonResult>
+}`}
+/>
+
+<Quiz titulo="Test: Retrofit">
+  <Pregunta enunciado="¿Quién implementa la interfaz `PokeApi`?" explicacion="Retrofit genera la implementación con `retrofit.create(PokeApi::class.java)` en el `NetworkModule`.">
+    <Opcion>Una clase `PokeApiImpl` que escribes tú</Opcion>
+    <Opcion correcta>Retrofit, con `retrofit.create(PokeApi::class.java)`</Opcion>
+    <Opcion>Gson</Opcion>
+    <Opcion>Hilt, con `@Binds`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Con `baseUrl(&quot;https://pokeapi.co/api/v2/&quot;)` y `@GET(&quot;/pokemon&quot;)`, ¿a qué URL va la petición?" explicacion="Una ruta que empieza por `/` se cuelga de la raíz del dominio y se pierde `/api/v2`.">
+    <Opcion>`https://pokeapi.co/api/v2/pokemon`</Opcion>
+    <Opcion correcta>`https://pokeapi.co/pokemon`</Opcion>
+    <Opcion>Lanza `baseUrl must end in /`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué pasa si la `baseUrl` es `https://pokeapi.co/api/v2` (sin barra final)?" explicacion="Retrofit lanza `IllegalArgumentException: baseUrl must end in /` al construirse, en el `NetworkModule`.">
+    <Opcion>Funciona igual</Opcion>
+    <Opcion>Retrofit añade la barra solo</Opcion>
+    <Opcion correcta>Retrofit lanza una excepción al construirse</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué devuelve `response.body()` si la respuesta no fue 2xx?" explicacion="`body()` es nulable: si la respuesta no fue bien, es `null`. Por eso en clase se ve `body()!!`, que se cae en ese caso.">
+    <Opcion correcta>`null`</Opcion>
+    <Opcion>Una lista vacía</Opcion>
+    <Opcion>El mensaje de error en texto</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="El JSON trae `front_default` y la propiedad Kotlin se llama `frontDefault`. ¿Qué hace falta?" explicacion="Gson empareja por nombre. Sin `@SerializedName(&quot;front_default&quot;)`, la propiedad se queda a `null`.">
+    <Opcion>Nada, Gson lo deduce</Opcion>
+    <Opcion correcta>`@SerializedName(&quot;front_default&quot;)` sobre la propiedad</Opcion>
+    <Opcion>`@Path(&quot;front_default&quot;)`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué anotación lleva la clase `Application` para que funcione Hilt?" explicacion="El 26/10 se le puso `@AndroidEntryPoint` por error. Esa va en la Activity.">
+    <Opcion>`@AndroidEntryPoint`</Opcion>
+    <Opcion correcta>`@HiltAndroidApp`</Opcion>
+    <Opcion>`@HiltViewModel`</Opcion>
+    <Opcion>`@Module`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Para usar la red, la app tiene que declarar el permiso `INTERNET` en el `AndroidManifest.xml`." respuesta={true} explicacion="`<uses-permission android:name=&quot;android.permission.INTERNET&quot; />`. Es un permiso normal: no se pregunta al usuario." />
+  <Pregunta enunciado="¿Por qué Retrofit va en un módulo con `@Provides` y no con `@Binds`?" explicacion="`@Binds` solo ata una interfaz a una clase con `@Inject constructor`. Retrofit hay que construirlo con su `Builder`, y eso se escribe en una función `@Provides`.">
+    <Opcion correcta>Porque hay que construirlo a mano con su `Builder`</Opcion>
+    <Opcion>Porque `@Binds` no existe en Hilt 2.60.1</Opcion>
+    <Opcion>Porque con `@Provides` las peticiones van más rápido</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: Retrofit">
+  <Tarjeta frente="¿Qué hace Retrofit?">Convierte una interfaz de Kotlin con anotaciones (`@GET`, `@Path`…) en llamadas HTTP, y el JSON en objetos con Gson.</Tarjeta>
+  <Tarjeta frente="`Response<T>`">Envuelve la respuesta: `isSuccessful` (código 2xx), `body()` (nulable) y `code()`.</Tarjeta>
+  <Tarjeta frente="`@Path(value = &quot;name&quot;)`">Sustituye el hueco `{name}` de la ruta por el valor del parámetro.</Tarjeta>
+  <Tarjeta frente="DTO">La `data class` con la forma del JSON. Se pasa al modelo con `toModel()`.</Tarjeta>
+  <Tarjeta frente="`@SerializedName`">Le dice a Gson el nombre del campo en el JSON cuando no coincide con el de la propiedad.</Tarjeta>
+  <Tarjeta frente="Regla de la baseUrl">La `baseUrl` acaba en `/` y las rutas de `@GET` no empiezan por `/`.</Tarjeta>
+  <Tarjeta frente="Función de extensión">`fun PokemonResult.toModel()`: se añade a una clase sin tocarla y se llama como `body.toModel()`. Dentro, `this` es el objeto.</Tarjeta>
+  <Tarjeta frente="Manifest para la PokeApp">`<uses-permission android:name=&quot;android.permission.INTERNET&quot; />` y `android:name=&quot;.core.PokeApplication&quot;` en `<application>`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="El detalle por id" dificultad="facil">
+  Implementa `readPokemonById(id: Int): Pokemon?` en `PokemonRemoteDataSourceImpl`, igual que `readPokemonByName`, pero usando el endpoint por id de la interfaz.
+
+  <Pista>Llama a `_api.readPokemonById(id)` y mira `isSuccessful`.</Pista>
+
+  <Solucion>
+
+```kotlin
+override suspend fun readPokemonById(id: Int): Pokemon? {
+    val response = _api.readPokemonById(id)
+    if (response.isSuccessful) {
+        return response.body()!!.toModel()
+    } else {
+        return null
+    }
+}
+```
+
+  Hace lo mismo que la versión de clase del 09/11, que guarda antes el cuerpo en `val body = response.body()!!`. Sin `!!` sería más seguro: `return response.body()?.toModel()`, que devuelve `null` también si el cuerpo es `null`.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Los tipos de un pokémon" dificultad="media">
+  El detalle de PokeAPI trae también los tipos, con esta forma (recortada):
+
+```json
+{
+  "id": 1,
+  "name": "bulbasaur",
+  "types": [
+    { "slot": 1, "type": { "name": "grass", "url": "https://pokeapi.co/api/v2/type/12/" } },
+    { "slot": 2, "type": { "name": "poison", "url": "https://pokeapi.co/api/v2/type/4/" } }
+  ]
+}
+```
+
+  Añade al DTO lo necesario para leer los tipos y haz que `toModel()` rellene una propiedad `types: List<String>` del modelo con los nombres (`["grass", "poison"]`).
+
+  <Pista>Cada objeto JSON es una `data class`: hacen falta dos nuevas, una para cada elemento de `types` y otra para el objeto `type` de dentro.</Pista>
+  <Pista>Para quedarte con los nombres, recorre la lista con `map { it.type.name }`.</Pista>
+
+  <Solucion>
+
+```kotlin
+data class PokemonResult(
+    val id: Int,
+    val name: String,
+    val sprites: PokemonSprites?,
+    val types: List<PokemonTypeSlot>,
+)
+data class PokemonTypeSlot(val slot: Int, val type: PokemonTypeName)
+data class PokemonTypeName(val name: String, val url: String)
+
+data class Pokemon(
+    val id: Int,
+    val name: String,
+    val pokemonImageUrl: String?,
+    val types: List<String>,
+)
+
+fun PokemonResult.toModel(): Pokemon = Pokemon(
+    id = this.id,
+    name = this.name,
+    pokemonImageUrl = this.sprites?.frontDefault,
+    types = this.types.map { it.type.name },
+)
+```
+
+  Los nombres del JSON (`types`, `slot`, `type`, `name`) coinciden con los de las propiedades, así que no hace falta `@SerializedName`. Esto ya no es código de clase: es un ejercicio sobre el mismo patrón.
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Retrofit">Librería que convierte una interfaz con `@GET`, `@Path`… en llamadas HTTP.</Termino>
+  <Termino nombre="Gson">Librería que convierte JSON en objetos y al revés. En Retrofit se añade con `GsonConverterFactory`.</Termino>
+  <Termino nombre="Response">Envoltorio de la respuesta con `isSuccessful`, `body()` y `code()`.</Termino>
+  <Termino nombre="DTO">`data class` con la forma del JSON de la API.</Termino>
+  <Termino nombre="toModel()">Función de extensión que pasa un DTO al modelo de la app.</Termino>
+  <Termino nombre="DataSource">Clase que habla con una sola fuente de datos (aquí, la API).</Termino>
+  <Termino nombre="NetworkModule">Módulo de Hilt con `@Provides` que construye Retrofit y la API.</Termino>
+  <Termino nombre="INTERNET">Permiso que hay que declarar en el manifest para usar la red.</Termino>
+</Glosario>
+
+<MarcarCompletado />

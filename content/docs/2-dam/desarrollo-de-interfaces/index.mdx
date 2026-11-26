@@ -1,25 +1,43 @@
 ---
 title: Desarrollo de Interfaces
-description: "Diseño e implementación de interfaces gráficas, usabilidad y accesibilidad, informes, documentación, pruebas y distribución de aplicaciones."
+description: "C# en consola, delegados, lambdas y eventos: la base para programar interfaces gráficas. Lo dado en clase, explicado para quien viene de Java."
 ---
 
-## De qué va el módulo
+## De qué va
 
-Diseñarás y programarás **interfaces gráficas de usuario** (con herramientas como JavaFX, Compose o tecnologías web), aplicando principios de **usabilidad y accesibilidad**. También verás generación de informes, componentes reutilizables, documentación, pruebas y empaquetado/distribución de aplicaciones.
+En clase el módulo se está dando con **C#** y **Visual Studio**. Se empezó por un repaso del lenguaje en consola y se siguió con **delegados**, **lambdas** y **eventos**, que son lo que hay por debajo de cualquier interfaz gráfica: un botón lanza un evento y tu código se suscribe a él. El siguiente paso de la unidad es WPF.
+
+Los apuntes dan por sabido Java y se centran en lo que cambia. Están escritos para que puedas ponerte al día solo con ellos si te perdiste alguna clase.
 
 Módulo profesional de 2º DAM (código 0488).
 
-## Temas
+## Lo dado en clase
 
-1. Confección de interfaces de usuario
-2. Generación de interfaces a partir de documentos XML
-3. Creación de componentes visuales
-4. Usabilidad y accesibilidad
-5. Confección de informes
-6. Documentación de aplicaciones
-7. Distribución de aplicaciones
-8. Realización de pruebas
+<Cards>
+  <Card icon="Hash" title="C#" href="/docs/2-dam/desarrollo-de-interfaces/csharp" description="Índice del bloque: qué se dio cada día, ejercicios de Moodle y orden recomendado." />
+  <Card icon="ArrowRightLeft" title="De Java a C#" href="/docs/2-dam/desarrollo-de-interfaces/csharp/de-java-a-csharp" description="Si vienes de Java, empieza aquí: las diferencias lado a lado." />
+  <Card icon="Workflow" title="Delegados" href="/docs/2-dam/desarrollo-de-interfaces/csharp/delegados" description="Un tipo que guarda métodos. Es la base de las lambdas y los eventos." />
+  <Card icon="Bell" title="Eventos" href="/docs/2-dam/desarrollo-de-interfaces/csharp/eventos" description="Emisor y receptores, += y -=, y el patrón sender/EventArgs." />
+</Cards>
 
-<Callout type="info" title="Apuntes en construcción">
-  Estamos añadiendo los apuntes de este módulo poco a poco. Si tienes resúmenes, capturas de clase, ejercicios resueltos o enlaces útiles, súbelos desde [Aportar](/aportar) y los revisaremos para incluirlos.
+### Qué se ha visto, por clases
+
+| Clase | Contenido | Páginas |
+| --- | --- | --- |
+| 05/11 | Repaso del lenguaje: consola, formato, tipos, arrays, control y métodos | [Consola, tipos y formato](/docs/2-dam/desarrollo-de-interfaces/csharp/consola-y-formato), [Arrays, control y métodos](/docs/2-dam/desarrollo-de-interfaces/csharp/arrays-y-control) |
+| 09/11 | Delegados, multicast y `GetInvocationList()` | [Delegados](/docs/2-dam/desarrollo-de-interfaces/csharp/delegados) |
+| 18/11 | Validador encadenado, métodos anónimos, lambdas y `Func`, `Action` y `Predicate` | [Validador y lambdas](/docs/2-dam/desarrollo-de-interfaces/csharp/validador-y-lambdas), [Func, Action y Predicate](/docs/2-dam/desarrollo-de-interfaces/csharp/func-action-predicate) |
+| 19/11 | Eventos y captura de variables | [Eventos](/docs/2-dam/desarrollo-de-interfaces/csharp/eventos) |
+
+Para cualquier clase te sirven también [Visual Studio y el proyecto Clase1](/docs/2-dam/desarrollo-de-interfaces/csharp/visual-studio-y-proyecto) y [Errores y glosario](/docs/2-dam/desarrollo-de-interfaces/csharp/errores-y-glosario), con los errores del compilador que salieron en clase.
+
+## Próximamente
+
+Se irá añadiendo conforme se dé en clase:
+
+- **WPF**: interfaces gráficas con XAML, que es lo siguiente de la unidad (ejercicios 8 a 14 y `Ejemplo_Zoos` de Moodle).
+- **Resto del temario oficial**: componentes visuales, usabilidad y accesibilidad, informes, documentación, distribución y pruebas de aplicaciones.
+
+<Callout type="info" title="¿Tienes material?">
+  Si tienes resúmenes, capturas de clase o ejercicios resueltos, súbelos desde [Aportar](/aportar) y se revisarán para incluirlos.
 </Callout>

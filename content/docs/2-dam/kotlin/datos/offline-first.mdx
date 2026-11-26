@@ -1,0 +1,407 @@
+---
+title: "Offline-first: el repositorio con fuente remota y local"
+description: "Cómo se convirtió la PokeApp2627 en offline-first: fuente local en memoria, repositorio con dos DataSource y refresh(), la pantalla de detalle con observePokemon y la versión con Room del 16/11."
+icon: RefreshCw
+---
+
+Una app **offline-first** enseña siempre lo que tiene guardado en el móvil y lo actualiza desde la red cuando puede. Si no hay internet, sigue funcionando con lo último que guardó. El 09/11 la PokeApp2627 empezó a funcionar así, primero con una fuente local en memoria, y el 16/11 se vio ya leyendo de Room.
+
+<DeClase fecha="09/11, 16/11" proyecto="PokeApp2627" nota="el 16/11 es un fragmento de 3 minutos" />
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué es la fuente única de verdad y por qué la pantalla lee siempre de la fuente local.
+  - Añadir una fuente local (`PokemonLocalDataSource`) junto a la remota y conectarlas con Hilt.
+  - Escribir `refresh()`, que copia de la API a la fuente local.
+  - Qué se vio de la PokeApp con Room y qué se quedó sin ver.
+</Callout>
+
+## La idea: una sola fuente de verdad
+
+Hasta ahora el repositorio solo delegaba en la API. Ahora tiene **dos** fuentes de datos, y la pantalla **solo lee de la local**:
+
+<Mermaid
+  titulo="Repositorio offline-first"
+  chart={`flowchart LR
+    VM[ViewModel] -- "observa pokemons" --> R[PokemonRepositoryImpl]
+    R -- "lee siempre de aquí" --> L[(PokemonLocalDataSource)]
+    R -- "refresh(): descarga" --> RE[PokemonRemoteDataSource]
+    RE --> API[(PokeAPI)]
+    R -- "refresh(): guarda" --> L`}
+/>
+
+- La fuente **local** es la *fuente de verdad*: lo que la pantalla enseña sale de ahí.
+- `refresh()` baja los datos de la **remota** y los guarda en la local.
+- Si la fuente local avisa cuando cambia (un `Flow` que vuelve a emitir), la pantalla se actualiza sola en cuanto llegan los datos.
+
+## Paso 1: renombrar la fuente remota
+
+<DeClase fecha="09/11" proyecto="PokeApp2627" nota="bloque 2" />
+
+Con **Refactor > Rename** (y su *Refactoring Preview*), la interfaz `PokemonDataSource` pasa a llamarse `PokemonRemoteDataSource` y su implementación `PokemonRemoteDataSourceImpl`. El IDE cambia a la vez el `AppModule` y la `Factory` que genera Hilt. Después se crea el paquete `features/pokemon/data/local`, junto a `remote`.
+
+## Paso 2: la fuente local en memoria
+
+```kotlin title="data/local/PokemonLocalDataSource.kt"
+interface PokemonLocalDataSource {
+    val pokemons: Flow<List<Pokemon>>
+    suspend fun save(pokemons: List<Pokemon>)
+}
+```
+
+```kotlin title="data/local/PokemonInMemoryDataSource.kt"
+class PokemonInMemoryDataSource @Inject constructor() : PokemonLocalDataSource {
+    private val _pokemons: MutableList<Pokemon> = mutableListOf()
+
+    override val pokemons: Flow<List<Pokemon>> = flow {
+        emit(_pokemons)
+    }
+
+    override suspend fun save(pokemons: List<Pokemon>) {
+        _pokemons.clear()
+        _pokemons.addAll(pokemons)
+    }
+}
+```
+
+Por el camino salieron varios errores que enseñan bien `val`, `var`, `List` y `MutableList`:
+
+- Primero se escribió `save(List<Pokemon>)` en la interfaz, sin nombre de parámetro: en Kotlin cada parámetro lleva nombre y tipo.
+- Con `val _pokemons` y `_pokemons = pokemons` dentro de `save()`: no se puede reasignar una `val`. Se probó con `var`.
+- Al final queda `val` de tipo **`MutableList`**: la referencia no cambia, pero su **contenido sí** (`clear()` y `addAll()`). Es como un `final List` de Java, al que sí puedes añadir elementos.
+- `listOf()` crea una lista **inmutable**; para poder llamar a `clear()` hace falta `mutableListOf()`.
+- La implementación necesita `@Inject constructor()` (import `javax.inject.Inject`) para que Hilt sepa crearla.
+
+## Paso 3: atar las tres interfaces con Hilt
+
+```kotlin title="core/di/AppModule.kt"
+@Module
+@InstallIn(SingletonComponent::class)
+interface AppModule {
+    @Binds @Singleton
+    fun bindsPokemonRemoteDataSource(ds: PokemonRemoteDataSourceImpl): PokemonRemoteDataSource
+
+    @Binds @Singleton
+    fun bindPokemonLocalDataSource(ds: PokemonInMemoryDataSource): PokemonLocalDataSource
+
+    @Binds @Singleton
+    fun bindsPokemonRepository(r: PokemonRepositoryImpl): PokemonRepository
+}
+```
+
+Aquí `@Singleton` importa de verdad: la fuente en memoria guarda la lista en un atributo, así que tiene que haber **una sola** para toda la app. Que los nombres no sigan el mismo patrón (`binds...` y `bind...`) no afecta.
+
+## Paso 4: el repositorio con dos fuentes
+
+<Recorrido
+  titulo="data/repository/PokemonRepositoryImpl.kt (09/11)"
+  lenguaje="kotlin"
+  codigo={`class PokemonRepositoryImpl @Inject constructor(
+    private val _remoteDataSource: PokemonRemoteDataSource,
+    private val _localDataSource: PokemonLocalDataSource,
+) : PokemonRepository {
+
+    override val pokemons: Flow<List<Pokemon>> = _localDataSource.pokemons
+    override fun observePokemon(id: Int): Flow<Pokemon?> = _localDataSource.observePokemon(id)
+
+    init {
+        runBlocking {
+            refresh()
+        }
+    }
+
+    suspend fun refresh() {
+        val remotePokemons = _remoteDataSource.readAllPokemon()
+        _localDataSource.save(remotePokemons)
+    }
+
+    override suspend fun readAllPokemon(): List<Pokemon> = _remoteDataSource.readAllPokemon()
+    override suspend fun readPokemonById(id: Int): Pokemon? = _remoteDataSource.readPokemonById(id)
+}`}
+>
+  <Paso lineas="1-4" titulo="Recibe las dos fuentes">
+    Hilt le pasa la remota y la local. El repositorio solo conoce sus interfaces: no sabe si la local es memoria o Room.
+  </Paso>
+  <Paso lineas="6" titulo="La pantalla lee de la local">
+    `pokemons` ya no sale de la API, sino de `_localDataSource`. Es la fuente de verdad.
+  </Paso>
+  <Paso lineas="7" titulo="Un pokémon concreto">
+    `observePokemon(id)` da un `Flow` con un solo pokémon, para la pantalla de detalle. No se ve dónde se declara (ver abajo).
+  </Paso>
+  <Paso lineas="9-13" titulo="La carga inicial">
+    `init` no es `suspend`, así que no puede llamar a `refresh()` directamente. Se usa `runBlocking`, que funciona pero bloquea el hilo hasta que responde la API.
+  </Paso>
+  <Paso lineas="15-18" titulo="refresh()">
+    Lee todo de la API y lo guarda en la fuente local. Si la local avisa del cambio, la pantalla se actualiza.
+  </Paso>
+  <Paso lineas="20-21" titulo="Lo que sigue yendo a la API">
+    Estas dos funciones aún leen directamente de la fuente remota. El 16/11 siguen igual.
+  </Paso>
+</Recorrido>
+
+- La carga del `init` tiene su propia historia (`withContext`, `runBlocking`, `CoroutineScope(Dispatchers.IO)` y la pantalla en blanco): está en [Corrutinas](/docs/2-dam/kotlin/datos/corrutinas#cargar-datos-al-crear-el-repositorio).
+- Con la fuente en memoria hay una trampa: `flow { emit(_pokemons) }` emite **una sola vez**, cuando alguien lo recoge. Si `refresh()` termina después, nadie se entera. Por eso con `runBlocking` (que garantiza que los datos ya están guardados antes de que se recoja nada) la lista sale, y con `launch` sale en blanco <Dudoso nota="Es la interpretación del resumen de clase; no se ve la explicación del profesor." />.
+
+Al depurar se pusieron *breakpoints* en `emit` y en `save`: en **Threads & Variables** se ve `pokemons` (un `ArrayList` de 20) y en la pila `save` ← `refresh` ← `invokeSuspend`, con `SafeCollector` y `AbstractFlow.collect` del `Flow`.
+
+<NoSeVio titulo="observePokemon(id)">
+  `observePokemon(id)` aparece en el repositorio y en el ViewModel de detalle, pero no hay ninguna captura donde se añada a `PokemonLocalDataSource`, a `PokemonInMemoryDataSource` ni a la interfaz `PokemonRepository`. Tal como se ve, el fragmento no compila: falta código que no salió.
+</NoSeVio>
+
+## La pantalla de detalle
+
+La lista ya se explicó en [Flow y stateIn](/docs/2-dam/kotlin/datos/flow-y-statein). El detalle sigue la misma receta, pero necesita saber **qué pokémon** enseñar. Lo lee de la ruta de navegación con `SavedStateHandle`:
+
+```kotlin title="ui/PokemonDetailViewModel.kt"
+@HiltViewModel
+class PokemonDetailViewModel @Inject constructor(
+    private val _repository: PokemonRepository,
+    savedStateHandle: SavedStateHandle,
+) : ViewModel() {
+    private val _route = savedStateHandle.toRoute<Routes.Detail>()
+    private val _id = _route.id
+
+    val state: StateFlow<PokemonDetailScreenState> = _repository.observePokemon(_id)
+        .map { pokemon ->
+            if (pokemon != null) PokemonDetailScreenState.Loaded(pokemon)
+            else PokemonDetailScreenState.Initial
+        }.stateIn(
+            scope = viewModelScope,
+            initialValue = PokemonDetailScreenState.Initial,
+            started = SharingStarted.WhileSubscribed(5_000L)
+        )
+}
+```
+
+- `@HiltViewModel` no se ve en las capturas <Dudoso nota="Se ha puesto porque es obligatorio: el 18/11 el propio profesor enseña que sin él la app se cae." />.
+- `savedStateHandle.toRoute<Routes.Detail>()` reconstruye la ruta tipada con la que se navegó y de ella sale el `id`. Hilt rellena el `SavedStateHandle` solo. La navegación está en [Navegación con rutas tipadas](/docs/2-dam/kotlin/arquitectura/navegacion).
+- Aquí el `map` usa un `if`/`else` como expresión y una lambda con el parámetro con nombre (`pokemon ->`) en vez de `it`. Primero se escribió con genéricos explícitos, `map<Pokemon?, PokemonDetailScreenState>`, y al final se quitaron: Kotlin deduce el tipo común de las dos ramas.
+- Al principio el ViewModel tenía además un `init` con `_state.value = ...`, pero `_state` estaba comentado y daba error. No se ve si al final se borró.
+
+## Paso 5: la fuente local con Room
+
+<DeClase fecha="16/11" proyecto="PokeApp2627" nota="un fragmento de 3 minutos" />
+
+El 16/11 la fuente local ya es **Room**. El fragmento es muy corto y casi todo el rato se ve el mismo archivo, `PokemonRepositoryImpl.kt`, pero el árbol del proyecto enseña cómo queda:
+
+<Files>
+  <Folder name="features/pokemon/data" defaultOpen>
+    <Folder name="local" defaultOpen>
+      <File name="PokemonEntity.kt" />
+      <File name="PokemonDao" />
+      <File name="PokemonInMemoryDataSource" />
+      <File name="PokemonLocalDataSource" />
+      <File name="PokemonLocalDBDatasource" />
+    </Folder>
+    <Folder name="remote" defaultOpen>
+      <File name="PokeApi" />
+      <File name="PokemonApiModels.kt" />
+      <File name="PokemonRemoteDataSource" />
+      <File name="PokemonRemoteDataSourceImpl" />
+    </Folder>
+    <Folder name="repository" defaultOpen>
+      <File name="PokemonRepository" />
+      <File name="PokemonRepositoryImpl" />
+    </Folder>
+  </Folder>
+</Files>
+
+- La fuente local tiene ahora **dos implementaciones** de la misma interfaz: `PokemonInMemoryDataSource` y `PokemonLocalDBDatasource` (con Room). La idea de la interfaz es que, para cambiar de una a otra, baste con cambiar el `@Binds`. El `AppModule` del 16/11 no se ve, y el repositorio sí cambió algo (ver la lista de abajo).
+- En el Database Inspector sale la base `pokemon-db` con la tabla `pokemon` llena (bulbasaur, ivysaur, venusaur…), con las columnas `id` (`INTEGER NOT NULL`), `name` (`TEXT NOT NULL`) e `imageUrl` (`TEXT`, admite `NULL`). Ver [Room 3](/docs/2-dam/kotlin/datos/room#ver-la-base-de-datos-database-inspector).
+- Ojo con los nombres: aquí son `PokemonDao`, `PokemonLocalDBDatasource` y `pokemon-db` (con guion). En el proyecto Room del 13/11 eran `PokeDao` y `pokemon_db`. Son proyectos distintos, no una contradicción.
+
+Lo que se lee del repositorio:
+
+- El constructor recibe `_localDataSource` y, aunque en la primera captura no se ve, también `_remoteDataSource`, porque `refresh()` lo usa <Dudoso />.
+- `pokemons` y `observePokemon(id)` siguen saliendo de `_localDataSource`, pero el nombre de las funciones que los alimentan está cortado en las capturas <Dudoso nota="Seguramente algo como observeAll(), pero no se lee." />.
+- `refresh()` lee de la API y guarda en Room con `save(...)`. No se ve si lleva `override`.
+- El `init { runBlocking { refresh() } }` aparece **comentado**.
+- `readAllPokemon()` y `readPokemonById()` siguen leyendo directamente de la API, no de Room.
+
+En el emulador, la app sale primero **en blanco** y luego enseña la lista (Bulbasaur… Kakuna). La explicación más probable es que, cuando la tabla se llena, el `Flow` de Room vuelve a emitir y la pantalla se repinta <Dudoso nota="Es una deducción del resumen de clase: el código del DAO y de PokemonLocalDBDatasource no se ve." />.
+
+El recorrido de abajo es cómo funciona eso si la fuente local con Room expone un `Flow` del DAO, que es lo que sugiere la app pero no sale en las capturas:
+
+<Flujo
+  titulo="Room, Flow y la pantalla"
+  nodos={["Pantalla", "ViewModel", "Repositorio", "Room", "API"]}
+>
+  <Mensaje de="Pantalla" a="ViewModel" titulo="collectAsStateWithLifecycle()">
+    La pantalla empieza a recoger `state`. Mientras no llegue nada, enseña el `initialValue` de `stateIn`.
+  </Mensaje>
+  <Mensaje de="ViewModel" a="Repositorio" titulo="pokemons">
+    `stateIn` recoge el `Flow` del repositorio, que es el de la fuente local.
+  </Mensaje>
+  <Mensaje de="Repositorio" a="Room" titulo="Flow de la tabla pokemon">
+    El repositorio pasa la petición a `PokemonLocalDBDatasource`, que observa la tabla a través del DAO.
+  </Mensaje>
+  <Mensaje de="Room" a="Pantalla" tipo="respuesta" titulo="Lista vacía">
+    La primera vez la tabla está vacía: la pantalla sale en blanco.
+  </Mensaje>
+  <Mensaje de="Repositorio" a="API" titulo="refresh()">
+    `refresh()` pide los pokémon a la API a través de la fuente remota.
+  </Mensaje>
+  <Mensaje de="API" a="Repositorio" tipo="respuesta" titulo="`List<Pokemon>`">
+    Llegan los 20 pokémon, ya pasados al modelo.
+  </Mensaje>
+  <Mensaje de="Repositorio" a="Room" titulo="save(...)">
+    Se guardan en la tabla `pokemon`.
+  </Mensaje>
+  <Mensaje de="Room" a="Room" titulo="La tabla cambia">
+    Room detecta que la tabla ha cambiado y el `Flow` vuelve a emitir, esta vez con los 20.
+  </Mensaje>
+  <Mensaje de="Room" a="Pantalla" tipo="respuesta" titulo="Lista llena">
+    El valor nuevo sube por el repositorio y el `stateIn` del ViewModel, y Compose pinta la lista. Nadie ha tenido que avisar a la pantalla a mano.
+  </Mensaje>
+</Flujo>
+
+<NoSeVio titulo="La PokeApp con Room">
+  En las capturas del 16/11 no se ve el código de `PokemonLocalDBDatasource`, ni el de `PokemonDao` (las consultas que devuelven `Flow`), ni desde dónde se llama a `refresh()` ahora que el `init` está comentado. Tampoco se ve `readAllPokemon()` ni `readPokemonById()` leyendo de Room.
+</NoSeVio>
+
+## Cómo se suele terminar <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Esto no se vio en clase: es la forma más estándar de rematar lo que se empezó el 09/11 y el 16/11. Los nombres (`observeAll`, `upsert`…) son inventados, no del profesor. La versión completa, con dos tablas relacionadas, manejo de errores y estado `Error`, está en [Room como fuente de verdad](/docs/2-dam/kotlin/para-el-proyecto/offline-first).
+</NoDadoEnClase>
+
+**1. El DAO devuelve `Flow`.** Las consultas que devuelven `Flow` **no** llevan `suspend`: el `Flow` ya avisa cada vez que cambia la tabla. Las que escriben, sí.
+
+```kotlin title="PokemonDao.kt"
+@Dao
+interface PokemonDao {
+    @Query("SELECT * FROM pokemon")
+    fun observeAll(): Flow<List<PokemonEntity>>
+
+    @Query("SELECT * FROM pokemon WHERE id = :id")
+    fun observeById(id: Int): Flow<PokemonEntity?>
+
+    @Upsert
+    suspend fun upsert(pokemons: List<PokemonEntity>)
+}
+```
+
+`@Upsert` inserta si la fila no existe y la actualiza si ya existe, así que `refresh()` se puede llamar muchas veces sin errores de clave duplicada.
+
+**2. La fuente local pasa entidades a modelo y al revés.**
+
+```kotlin title="PokemonLocalDBDatasource.kt"
+fun PokemonEntity.toModel() = Pokemon(id = id, name = name, pokemonImageUrl = imageUrl)
+fun Pokemon.toEntity() = PokemonEntity(id = id, name = name, imageUrl = pokemonImageUrl)
+
+class PokemonLocalDBDatasource @Inject constructor(
+    private val _dao: PokemonDao
+) : PokemonLocalDataSource {
+    override val pokemons: Flow<List<Pokemon>> =
+        _dao.observeAll().map { lista -> lista.map { it.toModel() } }
+
+    override fun observePokemon(id: Int): Flow<Pokemon?> =
+        _dao.observeById(id).map { it?.toModel() }
+
+    override suspend fun save(pokemons: List<Pokemon>) {
+        _dao.upsert(pokemons.map { it.toEntity() })
+    }
+}
+```
+
+Para esto `PokemonLocalDataSource` declara también `fun observePokemon(id: Int): Flow<Pokemon?>`, y el modelo `Pokemon` tiene `pokemonImageUrl: String?`.
+
+**3. `refresh()` lo lanza el ViewModel**, con `viewModelScope.launch`, en vez del `runBlocking` del repositorio (ver [Corrutinas](/docs/2-dam/kotlin/datos/corrutinas#cargar-datos-al-crear-el-repositorio)). Para eso `refresh()` pasa a la interfaz `PokemonRepository`.
+
+## Practica
+
+<Quiz titulo="Test: offline-first">
+  <Pregunta enunciado="En el repositorio offline-first, ¿de dónde lee la pantalla?" explicacion="De la fuente local, que es la fuente de verdad. La remota solo se usa en `refresh()` para actualizarla.">
+    <Opcion>De la API, siempre</Opcion>
+    <Opcion correcta>De la fuente local</Opcion>
+    <Opcion>De las dos, alternando</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué hace `refresh()`?" explicacion="Lee de la fuente remota y guarda el resultado en la local.">
+    <Opcion correcta>Descarga de la API y guarda en la fuente local</Opcion>
+    <Opcion>Borra la base de datos</Opcion>
+    <Opcion>Vuelve a pintar la pantalla</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Una `val _pokemons: MutableList<Pokemon>` no se puede reasignar, pero sí se le pueden añadir y quitar elementos." respuesta={true} explicacion="`val` impide cambiar la referencia; `MutableList` permite cambiar el contenido con `clear()` y `addAll()`." />
+  <Pregunta enunciado="Según la interpretación del resumen de clase, ¿por qué con la fuente en memoria la lista salía en blanco si `refresh()` se lanzaba con `launch`?" explicacion="Según el resumen de clase (es una deducción): `flow { emit(_pokemons) }` emite una vez al recogerlo; si los datos llegan después, ya no vuelve a emitir.">
+    <Opcion>Porque `launch` no ejecuta el código</Opcion>
+    <Opcion correcta>Porque `flow { emit(_pokemons) }` emite una sola vez y los datos llegaban después</Opcion>
+    <Opcion>Porque faltaba el permiso de INTERNET</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cómo lee el `PokemonDetailViewModel` el id del pokémon?" explicacion="Hilt le pasa un `SavedStateHandle`, y `toRoute<Routes.Detail>()` reconstruye la ruta tipada con la que se navegó.">
+    <Opcion>Con un parámetro `id: Int` en el constructor</Opcion>
+    <Opcion correcta>Con `savedStateHandle.toRoute<Routes.Detail>()`</Opcion>
+    <Opcion>Leyéndolo de Room</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Si las dos fuentes locales cumplen la misma interfaz `PokemonLocalDataSource`, para pasar de la de memoria a la de Room hay que reescribir el repositorio." respuesta={false} explicacion="El repositorio solo conoce la interfaz `PokemonLocalDataSource`. Basta con cambiar el `@Binds` para que apunte a la otra implementación." />
+  <Pregunta enunciado="¿Por qué con Room la lista aparece sola después de `refresh()`?" explicacion="Una consulta de Room que devuelve `Flow` vuelve a emitir cada vez que cambia la tabla.">
+    <Opcion>Porque `refresh()` llama a la pantalla</Opcion>
+    <Opcion correcta>Porque el `Flow` de Room vuelve a emitir cuando cambia la tabla</Opcion>
+    <Opcion>Porque `runBlocking` repinta la pantalla</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: offline-first">
+  <Tarjeta frente="Offline-first">La app enseña lo que tiene guardado en el móvil y lo actualiza desde la red cuando puede. Sin internet, sigue funcionando.</Tarjeta>
+  <Tarjeta frente="Fuente de verdad">La fuente de la que lee siempre la pantalla. En offline-first, la local.</Tarjeta>
+  <Tarjeta frente="`refresh()` en clase">`val remotePokemons = _remoteDataSource.readAllPokemon()` y `_localDataSource.save(remotePokemons)`.</Tarjeta>
+  <Tarjeta frente="`savedStateHandle.toRoute<T>()`">Reconstruye en el ViewModel la ruta tipada con la que se navegó, para leer sus argumentos.</Tarjeta>
+  <Tarjeta frente="Nombres de la PokeApp con Room (16/11)">`PokemonLocalDBDatasource`, `PokemonDao`, `PokemonEntity` y la base `pokemon-db`.</Tarjeta>
+  <Tarjeta frente="Consulta de Room que devuelve `Flow`">No lleva `suspend`. Vuelve a emitir cada vez que cambia la tabla.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Cambiar de fuente local" dificultad="facil">
+  Tienes `PokemonInMemoryDataSource` y `PokemonLocalDBDatasource`, las dos implementando `PokemonLocalDataSource`. ¿Qué tienes que cambiar en el `AppModule` del 09/11 para que la app use la de Room? ¿Hay que tocar el repositorio?
+
+  <Pista>Fíjate en qué recibe el constructor de `PokemonRepositoryImpl`: ¿una clase o una interfaz?</Pista>
+
+  <Solucion>
+
+  Solo el `@Binds` de la fuente local:
+
+```kotlin
+@Binds @Singleton
+fun bindPokemonLocalDataSource(ds: PokemonLocalDBDatasource): PokemonLocalDataSource
+```
+
+  El repositorio **no se toca**: recibe un `PokemonLocalDataSource` (la interfaz) y le da igual qué implementación le pase Hilt. Es justo para lo que sirven las interfaces entre capas.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Una fuente en memoria que sí avisa" dificultad="dificil">
+  La `PokemonInMemoryDataSource` de clase usa `flow { emit(_pokemons) }`, que emite una sola vez. Reescríbela para que **vuelva a emitir** cada vez que se llama a `save()`, de modo que la lista se actualice aunque `refresh()` termine después de que la pantalla empiece a recoger.
+
+  <Pista>Necesitas un `Flow` que guarde un valor actual y emita cuando cambia: un `MutableStateFlow`.</Pista>
+  <Pista>Un `StateFlow` no emite si el valor nuevo es igual al anterior. Asigna una lista **nueva**, no la misma lista cambiada por dentro.</Pista>
+
+  <Solucion>
+
+```kotlin
+class PokemonInMemoryDataSource @Inject constructor() : PokemonLocalDataSource {
+    private val _pokemons = MutableStateFlow<List<Pokemon>>(emptyList())
+
+    override val pokemons: Flow<List<Pokemon>> = _pokemons.asStateFlow()
+
+    override suspend fun save(pokemons: List<Pokemon>) {
+        _pokemons.value = pokemons.toList()
+    }
+}
+```
+
+  Cada `save()` pone una lista nueva en el `MutableStateFlow` y este emite. Si se hiciera `clear()` + `addAll()` sobre una misma `MutableList` y se volviera a asignar esa lista, el `StateFlow` no emitiría, porque el valor "nuevo" sería el mismo objeto. Esto no es de clase: es un ejercicio para entender el problema de la pantalla en blanco.
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Offline-first">La app lee siempre de la base local y la actualiza desde la API cuando puede.</Termino>
+  <Termino nombre="Fuente de verdad">La única fuente de la que lee la pantalla: la local.</Termino>
+  <Termino nombre="LocalDataSource">Interfaz de la fuente local. En clase, primero en memoria y luego con Room.</Termino>
+  <Termino nombre="refresh()">Función del repositorio que copia los datos de la API a la fuente local.</Termino>
+  <Termino nombre="SavedStateHandle">Objeto que Hilt pasa al ViewModel con los argumentos de navegación.</Termino>
+</Glosario>
+
+<MarcarCompletado />

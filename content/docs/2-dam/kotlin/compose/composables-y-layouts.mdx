@@ -1,0 +1,454 @@
+---
+title: Composables y layouts
+description: "Qué es una función @Composable y cómo se previsualiza con @Preview; Text, Button, Icon e Image; pintar según una condición; y cómo se colocan los elementos con Column, Row y Box, Arrangement y Alignment."
+icon: LayoutTemplate
+---
+
+import { ColumnRowBox } from '@/components/temas/compose/column-row-box';
+
+**Jetpack Compose** es la forma moderna de hacer interfaces en Android. En vez de dibujar la pantalla en un XML y luego buscar cada vista desde el código (como se hacía antes, o como en Swing con Java), **describes la pantalla con funciones de Kotlin**. Cada función pinta un trozo y se puede combinar con otras, como piezas de Lego.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué es una función `@Composable` y sus reglas.
+  - Ver cómo queda una pantalla sin abrir el emulador, con `@Preview`.
+  - Los componentes básicos: `Text`, `Button`, `Icon` e `Image`.
+  - Pintar algo solo si se cumple una condición.
+  - Colocar los elementos con `Column`, `Row` y `Box`, y repartirlos con `Arrangement` y `Alignment`.
+  - La convención `modifier: Modifier = Modifier`.
+</Callout>
+
+## Interfaz declarativa
+
+Con Compose **no cambias la interfaz a mano**: dices cómo tiene que verse **según los datos** que tienes, y cuando los datos cambian, Compose vuelve a ejecutar la función y actualiza lo que haga falta. A eso se le llama <Concepto termino="Recomposición" definicion="Cuando Compose vuelve a ejecutar un composable porque ha cambiado algo que lee, para actualizar lo que se ve.">recomponer</Concepto>.
+
+<Comparar titulo="Enseñar un mensaje de error">
+  <Lado titulo="Imperativo (vistas clásicas)">
+
+```kotlin
+// Hay que buscar la vista y cambiarla cada vez
+val error = findViewById<TextView>(R.id.error)
+if (hayError) {
+    error.text = mensaje
+    error.visibility = View.VISIBLE
+} else {
+    error.visibility = View.GONE
+}
+```
+
+  </Lado>
+  <Lado titulo="Declarativo (Compose)">
+
+```kotlin
+// Describes qué se ve según el estado
+if (hayError) {
+    Text(mensaje)
+}
+```
+
+Cuando `hayError` cambie, Compose vuelve a ejecutar la función y el texto aparece o desaparece solo.
+
+  </Lado>
+</Comparar>
+
+Cómo se consigue que Compose "se entere" de que algo ha cambiado es el tema de [Estado y recomposición](/docs/2-dam/kotlin/compose/estado-y-recomposicion). Aquí nos centramos en **cómo se describe** la pantalla.
+
+## Funciones `@Composable`
+
+<DeClase fecha="07/10" proyecto="TipCalculator" nota="y en todas las clases siguientes" />
+
+Un composable es una función normal de Kotlin con la anotación **`@Composable`** encima:
+
+```kotlin title="Saludo.kt"
+@Composable
+fun Saludo(nombre: String, modifier: Modifier = Modifier) {
+    Text(text = "Hola, $nombre", modifier = modifier)
+}
+```
+
+Sus reglas:
+
+- **Se llama con mayúscula**, como una clase (`Saludo`, `TaskCard`, `TaskListScreen`), porque se lee como "un trozo de pantalla".
+- **No devuelve nada** (`Unit`): no devuelve una vista, la *emite*. Llamar a `Text(...)` dentro es lo que pone el texto en pantalla.
+- **Solo se puede llamar desde otra función `@Composable`**. Si no, sale el error que vio la clase el 23/10:
+
+<Callout type="error" title="@Composable invocations can only happen from the context of a @Composable function">
+  Has llamado a un composable desde un sitio que no lo es: un `onClick`, una función normal o, como pasó en clase, directamente dentro de una `LazyColumn` sin `item { }` (lo verás en [Listas](/docs/2-dam/kotlin/compose/listas#lazylistscope-y-el-error-de-composable)).
+</Callout>
+
+- Puede llevar `if`, `for`, `when`... como cualquier función. Lo que se ejecute es lo que se pinta.
+
+## `@Preview`: ver la pantalla sin el emulador
+
+<DeClase fecha="07/10" proyecto="TipCalculator" />
+
+**`@Preview`** encima de un composable **sin parámetros** hace que Android Studio lo dibuje en el panel de diseño (vista *Split* o *Design*) sin abrir el emulador. Eso sí, tiene que compilar el proyecto: si hay un error de compilación, la previsualización no se actualiza. En clase siempre se envolvía en el tema de la app, para que salga con sus colores:
+
+```kotlin title="TipCalculatorScreen.kt"
+@Composable
+@Preview
+fun TipCalculatorScreenPreview() {
+    TipCalculatorTheme {
+        TipCalculatorScreen()
+    }
+}
+```
+
+- La previsualización no ejecuta la app de verdad: no hay red, ni base de datos, ni Hilt. Por eso conviene que cada pantalla tenga una versión **sin estado** que reciba los datos por parámetros, y previsualizar esa con datos de ejemplo. Es una de las ventajas de la [pantalla con estado y sin estado](/docs/2-dam/kotlin/compose/estado-y-recomposicion#state-hoisting-pantalla-con-estado-y-sin-estado).
+- Puedes tener varios `@Preview` en el mismo archivo (por ejemplo, la lista vacía y la lista con datos). En la plantilla de Android Studio sale con `@Preview(showBackground = true)`, que pinta un fondo blanco detrás.
+
+## Componentes básicos
+
+### `Text`
+
+```kotlin
+Text("Hola")
+Text(text = "Bulbasaur", style = MaterialTheme.typography.headlineLarge)
+Text(stringResource(id = R.string.tipLabel))
+```
+
+`text` es el texto y `style`, el estilo de la tipografía del tema (el 09/11 se usó `headlineLarge` en la fila de cada pokémon). Los textos de verdad, mejor con `stringResource` (ver [El proyecto y Gradle](/docs/2-dam/kotlin/compose/proyecto-y-gradle#recursos-iconos-y-textos)).
+
+### `Button`
+
+```kotlin title="TipCalculatorScreen.kt"
+Button(
+    enabled = viewModel.state.isCaculateEnabled,
+    modifier = Modifier.fillMaxWidth(),
+    onClick = viewModel::calculateSplit
+) {
+    Icon(painterResource(id = R.drawable.icon_calculate_24), contentDescription = "Calculate")
+    Text("Calcular")
+}
+```
+
+<DeClase fecha="07/10" proyecto="TipCalculator" />
+
+- **`onClick`** es lo que hace al pulsarlo: una lambda o una referencia a función (`viewModel::calculateSplit`).
+- **Lo que va entre llaves al final** es lo que se ve **dentro** del botón. Es una *trailing lambda* (ver [clases y funciones](/docs/2-dam/kotlin/compose/kotlin-clases-y-funciones#it-y-la-lambda-fuera-de-los-paréntesis)). Dentro de un `Button` los hijos se colocan en fila, por eso el icono y el texto salen uno al lado del otro.
+- **`enabled = false`** lo desactiva (sale en gris y no responde).
+- <Dudoso nota="Casi todas las capturas leen `isCaculateEnabled` y una `isCalculateEnabled`.">`isCaculateEnabled`</Dudoso> se ha dejado como se leyó.
+
+### `Icon` e `Image`
+
+```kotlin
+Icon(
+    painterResource(id = R.drawable.add_24px),
+    contentDescription = "Create"
+)
+
+Image(
+    painter = painterResource(R.drawable.logo),
+    contentDescription = "Logo"
+)
+```
+
+- **`Icon`** pinta un icono (normalmente de 24 dp) con el color del contenido que lo rodea. **`Image`** <NoDadoEnClase inline /> pinta una imagen con sus colores. En clase solo se usó `Icon`; el ejemplo de `Image` es de la chuleta de Compose.
+- **`contentDescription`** describe la imagen para la accesibilidad (lo lee TalkBack). Si es decorativa, `null`.
+- Un icono también puede ser un `ImageVector` (dibujado en código), como los `settings` y `arrow_back` del 18/11. Lo verás en [Material 3](/docs/2-dam/kotlin/compose/material-3#iconos).
+- El nombre del icono de añadir de la ToDoApp se lee <Dudoso nota="Otra captura lee `add_24dp`.">`add_24px`</Dudoso>.
+
+### Imágenes de internet con Coil
+
+<DeClase fecha="09/11" proyecto="PokeApp2627" />
+
+`Image` solo carga recursos de la app. Para una URL (la imagen de cada pokémon) se usó **`AsyncImage`** de la librería **Coil**, que la descarga en segundo plano:
+
+```kotlin
+imageUrl?.let {
+    AsyncImage(
+        modifier = Modifier.size(40.dp).clip(CircleShape),
+        model = imageUrl,
+        contentDescription = name
+    )
+}
+```
+
+`model` es la URL. El `?.let` hace que solo se pinte si hay URL. La fila completa está en [Listas](/docs/2-dam/kotlin/compose/listas#la-fila-de-cada-pokémon).
+
+<NoSeVio titulo="La dependencia de Coil">
+  No se ve qué dependencia de Coil se añadió ni su versión (09/11). Solo se ve el uso de `AsyncImage`.
+</NoSeVio>
+
+## Pintar según una condición
+
+<DeClase fecha="07/10, 09/10, 23/10" proyecto="TipCalculator y ToDoApp" />
+
+Como un composable es una función, para que algo salga **solo a veces** basta un `if` (o un `?.let`, o un `when`):
+
+```kotlin
+if (splitResult.isNotBlank())
+    Text(stringResource(id = R.string.splitLabel, splitResult))
+
+id?.let {
+    Text("Tarea $id")
+}
+
+if (isLoading) {
+    CircularProgressIndicator()
+}
+```
+
+No hay `visibility` ni nada parecido: si la condición es falsa, ese `Text` simplemente no se emite.
+
+<Callout type="info" title="Un resto de la versión anterior">
+  En la TipCalculator del 07/10, el `if (splitResult.isNotBlank())` <Dudoso nota="Sigue usando la variable local antigua aunque el estado ya se había pasado al ViewModel." /> seguía leyendo la variable local `splitResult`, que ya estaba comentada. La clase acabó antes de arreglarlo.
+</Callout>
+
+## `Column`, `Row` y `Box`
+
+Para colocar varios elementos se usan tres contenedores:
+
+| Contenedor | Coloca a sus hijos | Ejemplo |
+| --- | --- | --- |
+| `Column` | Uno **debajo** de otro (vertical) | Un formulario: campo, campo, botón. |
+| `Row` | Uno **al lado** de otro (horizontal) | Un texto y su `Switch`. |
+| `Box` <NoDadoEnClase inline /> | Uno **encima** de otro, como capas | Un texto sobre una imagen, un indicador de carga sobre la lista. |
+
+En clase salieron `Column` y `Row` (con `Arrangement` y `Alignment`, el 07/10). `Box` no se usó: está aquí porque es el tercer contenedor básico.
+
+Y dos parámetros para repartirlos:
+
+- **`Arrangement`**: cómo se reparten en el **eje principal** (vertical en `Column`, horizontal en `Row`): al principio, centrados, al final, o con el espacio repartido (`SpaceBetween`, `SpaceAround`, `SpaceEvenly`).
+- **`Alignment`**: dónde se colocan en el **otro eje**. En `Box` se usa `contentAlignment`, que junta los dos (`Alignment.Center`, `Alignment.BottomEnd`...).
+
+Pruébalo:
+
+<ColumnRowBox />
+
+Lo que enseña la demo, en resumen:
+
+- En `Column` los parámetros son `verticalArrangement` (`Arrangement.Top`, `Center`, `Bottom`, `SpaceBetween`, `SpaceAround`, `SpaceEvenly`) y `horizontalAlignment` (`Alignment.Start`, `CenterHorizontally`, `End`).
+- En `Row` son `horizontalArrangement` (`Arrangement.Start`, `Center`, `End` y los tres `Space...`) y `verticalAlignment` (`Alignment.Top`, `CenterVertically`, `Bottom`).
+- `SpaceBetween` pega el primero y el último a los bordes; `SpaceAround` deja medio hueco en los extremos; `SpaceEvenly` deja todos los huecos iguales.
+- En `Box`, `contentAlignment` coloca a todos los hijos en el mismo sitio, y **el último se pinta encima**.
+- Para que se note el reparto, el contenedor tiene que ser más grande que sus hijos: por eso lleva `Modifier.fillMaxSize()`.
+
+### Un ejemplo de clase
+
+<DeClase fecha="07/10" proyecto="TipCalculator" nota="la fila del interruptor de la propina" />
+
+```kotlin title="TipCalculatorScreen.kt"
+Row(
+    modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 8.dp),
+    horizontalArrangement = Arrangement.SpaceBetween,
+    verticalAlignment = Alignment.CenterVertically
+) {
+    Text(stringResource(id = R.string.tipLabel))
+    Switch(
+        checked = viewModel.state.tip,
+        onCheckedChange = viewModel::changeTip
+    )
+}
+```
+
+La fila ocupa todo el ancho, el texto queda a la izquierda y el `Switch` a la derecha (`SpaceBetween`), y los dos centrados en vertical. Es el patrón típico de una fila de ajustes.
+
+### Componer composables
+
+Una pantalla es un árbol de composables. Este es la tarjeta de cada tarea de la ToDoApp:
+
+<Recorrido
+  titulo="TaskListScreen.kt (TaskCard)"
+  lenguaje="kotlin"
+  codigo={`@Composable
+fun TaskCard(toDetail: () -> Unit, title: String, description: String, isCompleted: Boolean) {
+    Card(modifier = Modifier.clickable(enabled = true, onClick = toDetail)) {
+        Column {
+            Text(title)
+            Text(description)
+            Row {
+                Text("Completada")
+                Switch(checked = isCompleted, onCheckedChange = null)
+            }
+        }
+    }
+}`}
+>
+  <Paso lineas="2" titulo="Recibe datos, no objetos">
+    La tarjeta recibe solo lo que pinta (`title`, `description`, `isCompleted`) y un callback `toDetail`. No sabe nada de la clase `Task`, ni del ViewModel, ni de la navegación.
+  </Paso>
+  <Paso lineas="3" titulo="Una Card que se puede pulsar">
+    `Card` es el contenedor de Material 3 con fondo y esquinas redondeadas. Con `Modifier.clickable` responde al toque y llama a `toDetail`.
+  </Paso>
+  <Paso lineas="4-6" titulo="Column: título y descripción">
+    Dentro de la tarjeta, un `Column` pone los textos uno debajo de otro.
+  </Paso>
+  <Paso lineas="7-10" titulo="Row: texto y Switch">
+    Y debajo, una fila con el texto y un `Switch`. Con `onCheckedChange = null` el `Switch` es de **solo lectura**: enseña el valor, pero no se puede cambiar.
+  </Paso>
+</Recorrido>
+
+<DeClase fecha="09/10, 23/10" proyecto="ToDoApp" rama="dev" />
+
+El árbol queda así:
+
+<Mermaid
+  titulo="Árbol de composables de TaskCard"
+  chart={`flowchart TD
+  A[Card] --> B[Column]
+  B --> C["Text(title)"]
+  B --> D["Text(description)"]
+  B --> E[Row]
+  E --> F["Text(Completada)"]
+  E --> G[Switch]`}
+/>
+
+### Separar los elementos <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  En clase los elementos iban pegados o separados con `padding`. Estas dos formas de dejar hueco entre ellos no salieron.
+</NoDadoEnClase>
+
+```kotlin
+Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Text("Uno")
+    Text("Dos")
+}
+
+Column {
+    Text("Uno")
+    Spacer(modifier = Modifier.height(8.dp))
+    Text("Dos")
+}
+```
+
+`Arrangement.spacedBy(8.dp)` deja 8 dp entre cada par de hijos. `Spacer` es un hueco vacío del tamaño que le digas.
+
+## La convención `modifier: Modifier = Modifier`
+
+Casi todos los composables de clase reciben como **primer parámetro opcional** un `modifier`:
+
+```kotlin
+@Composable
+fun TaskDetailScreen(
+    modifier: Modifier = Modifier,
+    id: Int? = null,
+) { /* ... */ }
+```
+
+Así, quien usa el composable puede ajustarlo desde fuera (darle tamaño, márgenes, hacerlo pulsable) sin tocar su código. `Modifier` a secas es el modificador vacío. Qué es un `Modifier` y por qué importa tanto su orden está en la [página siguiente](/docs/2-dam/kotlin/compose/modifier).
+
+## Practica
+
+<CompletarCodigo
+  titulo="Una fila de ajustes"
+  enunciado="Texto a la izquierda, Switch a la derecha, los dos centrados en vertical."
+  lenguaje="kotlin"
+  codigo={`[[Row]](
+    modifier = Modifier.fillMaxWidth(),
+    horizontalArrangement = Arrangement.[[SpaceBetween]],
+    verticalAlignment = Alignment.[[CenterVertically]]
+) {
+    Text("Modo oscuro")
+    Switch(checked = oscuro, onCheckedChange = onCambio)
+}`}
+/>
+
+<Quiz titulo="Test: composables y layouts" descripcion="7 preguntas">
+  <Pregunta enunciado="¿Desde dónde se puede llamar a una función `@Composable`?" explicacion="Solo desde otra función `@Composable` (o desde `setContent`, que ya es un contexto de Compose). Desde un `onClick` o una función normal da error.">
+    <Opcion>Desde cualquier función de Kotlin.</Opcion>
+    <Opcion correcta>Solo desde otra función `@Composable`.</Opcion>
+    <Opcion>Solo desde la Activity.</Opcion>
+    <Opcion>Desde el `onClick` de un botón.</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Un composable devuelve la vista que pinta, por ejemplo un `TextView`." respuesta={false} explicacion="Devuelve `Unit`. Lo que hace es emitir elementos al árbol de la interfaz al ejecutarse." />
+  <Pregunta enunciado="¿Qué contenedor usarías para poner un texto encima de una imagen?" explicacion="`Box` apila a sus hijos como capas; el último se pinta encima.">
+    <Opcion>`Column`</Opcion>
+    <Opcion>`Row`</Opcion>
+    <Opcion correcta>`Box`</Opcion>
+    <Opcion>`Card`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En una `Column`, ¿qué parámetro centra los hijos en horizontal?" explicacion="En `Column` el eje principal es el vertical (`verticalArrangement`). El otro eje se controla con `horizontalAlignment`, y su centro es `Alignment.CenterHorizontally`.">
+    <Opcion>`verticalArrangement = Arrangement.Center`</Opcion>
+    <Opcion correcta>`horizontalAlignment = Alignment.CenterHorizontally`</Opcion>
+    <Opcion>`horizontalArrangement = Arrangement.Center`</Opcion>
+    <Opcion>`contentAlignment = Alignment.Center`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué hace `Switch(checked = isCompleted, onCheckedChange = null)`?" explicacion="Con `onCheckedChange = null` el interruptor solo enseña el valor: no se puede cambiar. Así se usó en `TaskCard`.">
+    <Opcion>No compila: `onCheckedChange` es obligatorio.</Opcion>
+    <Opcion correcta>Un interruptor de solo lectura que enseña `isCompleted`.</Opcion>
+    <Opcion>Un interruptor que cambia solo cada vez que lo pulsas.</Opcion>
+    <Opcion>Un interruptor desactivado y oculto.</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué se necesita para que `@Preview` dibuje un composable?" explicacion="La función de la preview no lleva parámetros. Conviene envolver el contenido en el tema para que salga con los colores de la app.">
+    <Opcion correcta>Una función `@Composable` con `@Preview` y sin parámetros.</Opcion>
+    <Opcion>Tener el emulador abierto.</Opcion>
+    <Opcion>Que el composable use `hiltViewModel()`.</Opcion>
+    <Opcion>Compilar en modo release.</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿Qué valor de `contentDescription` se pone en una imagen puramente decorativa?" respuesta="null" explicacion="Con `null`, los lectores de pantalla la ignoran." />
+</Quiz>
+
+<Flashcards titulo="Repaso: composables y layouts">
+  <Tarjeta frente="¿Qué es un composable?">Una función con `@Composable` que pinta un trozo de pantalla. Devuelve `Unit` y solo se llama desde otro composable.</Tarjeta>
+  <Tarjeta frente="¿Para qué sirve `@Preview`?">Para ver un composable en Android Studio sin abrir el emulador. La función no lleva parámetros.</Tarjeta>
+  <Tarjeta frente="Lo que va entre llaves al final de `Button`">Es lo que se ve dentro del botón (normalmente un `Text`). `onClick` es lo que hace.</Tarjeta>
+  <Tarjeta frente="`Column`, `Row`, `Box`">Hijos uno debajo de otro; uno al lado de otro; uno encima de otro (capas).</Tarjeta>
+  <Tarjeta frente="`Arrangement` frente a `Alignment`">`Arrangement` reparte en el eje principal; `Alignment` coloca en el otro eje.</Tarjeta>
+  <Tarjeta frente="`contentDescription`">Describe la imagen para la accesibilidad. `null` si es decorativa.</Tarjeta>
+  <Tarjeta frente="¿Cómo se pinta algo solo a veces?">Con un `if`, un `when` o un `?.let` dentro del composable: si no se ejecuta, no se pinta.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Tarjeta de un pokémon" dificultad="facil">
+  Escribe un composable `PokemonCard(nombre: String, numero: Int, modifier: Modifier = Modifier)` que pinte una `Card` con el nombre en grande y, debajo, el texto `"Nº 25"` (con el número que reciba). Añade un `@Preview` que la enseñe con Pikachu.
+
+  <Pista>Dentro de la `Card`, un `Column` con dos `Text`.</Pista>
+  <Pista>Para el texto grande, `style = MaterialTheme.typography.headlineLarge`.</Pista>
+
+  <Solucion>
+
+```kotlin
+@Composable
+fun PokemonCard(nombre: String, numero: Int, modifier: Modifier = Modifier) {
+    Card(modifier = modifier) {
+        Column {
+            Text(text = nombre, style = MaterialTheme.typography.headlineLarge)
+            Text(text = "Nº $numero")
+        }
+    }
+}
+
+@Preview
+@Composable
+fun PokemonCardPreview() {
+    PokemonCard(nombre = "Pikachu", numero = 25)
+}
+```
+
+  En tu proyecto, envuelve la preview en el tema de tu app (`MiAppTheme { ... }`) para que salga con tus colores.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Un aviso que solo sale a veces" dificultad="media">
+  Haz un composable `Aviso(mensaje: String?)` que no pinte nada si `mensaje` es `null` o está vacío, y que si no, pinte un `Row` con un `Icon` (usa `painterResource(R.drawable.ic_aviso)`, decorativo) y el texto, centrados en vertical.
+
+  <Pista>`isNullOrBlank()` comprueba a la vez que sea `null` o esté vacío.</Pista>
+  <Pista>Un `return` al principio de un composable también vale para no pintar nada.</Pista>
+
+  <Solucion>
+
+```kotlin
+@Composable
+fun Aviso(mensaje: String?, modifier: Modifier = Modifier) {
+    if (mensaje.isNullOrBlank()) return
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(painterResource(R.drawable.ic_aviso), contentDescription = null)
+        Text(mensaje)
+    }
+}
+```
+
+  Después del `if`, Kotlin ya sabe que `mensaje` no es `null` (*smart cast*), así que `Text(mensaje)` compila.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

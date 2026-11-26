@@ -1,6 +1,8 @@
 {
   "title": "Acceso a Datos",
   "pages": [
-    "..."
+    "index",
+    "angular",
+    "angular-avanzado"
   ]
 }

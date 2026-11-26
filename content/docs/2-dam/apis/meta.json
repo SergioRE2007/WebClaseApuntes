@@ -1,6 +1,8 @@
 {
   "title": "Infraestructuras de Servicios y APIs",
   "pages": [
-    "..."
+    "index",
+    "backend",
+    "backend-proyecto"
   ]
 }

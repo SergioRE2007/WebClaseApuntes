@@ -1,0 +1,420 @@
+---
+title: Operación de negocio con transacción
+description: Una operación que hace varias cosas relacionadas y que, si falla una, no deja nada a medias, con prisma.$transaction de Prisma 6. Ejemplo completo de confirmar un pedido restando el stock, con visualizador de COMMIT y ROLLBACK.
+icon: Repeat
+---
+
+import { VisualizadorTransaccion } from '@/components/temas/backend-proyecto/visualizador-transaccion';
+
+<NoDadoEnClase titulo="Transacciones con Prisma">
+  En clase no se ha hecho ninguna operación de negocio ni ninguna transacción. Los requisitos (§6) piden al menos una y el H10 la revisa. Es la forma más estándar de hacerlo con Prisma 6; si en la defensa te preguntan, di que lo has buscado tú.
+</NoDadoEnClase>
+
+## Qué piden
+
+Al menos **una operación de negocio** que haga varias acciones relacionadas y que no se pueda reducir a un CRUD: comprobaciones previas, crear o cambiar datos relacionados, actualizar estados, aplicar reglas de negocio y mantener la consistencia. Cuando haya riesgo de dejar los datos a medias, con una **transacción**: o se hace **todo**, o **nada**.
+
+<Concepto termino="Transacción" definicion="Un grupo de operaciones en la base de datos que se hacen todas o ninguna. Si una falla, se deshacen las demás.">Transacción</Concepto> se resume en dos palabras de SQL:
+
+- **`COMMIT`**: todo ha ido bien y se guardan todos los cambios a la vez.
+- **`ROLLBACK`**: algo ha fallado y se deshace todo lo que se había hecho desde el principio (`BEGIN`).
+
+## El ejemplo: confirmar un pedido
+
+<Steps>
+  <Step>
+
+#### Comprobar
+
+  El pedido existe y está `PENDIENTE`.
+
+  </Step>
+  <Step>
+
+#### Restar el stock
+
+  De cada producto del pedido, si hay suficiente.
+
+  </Step>
+  <Step>
+
+#### Cambiar el estado
+
+  El pedido pasa a `CONFIRMADO`.
+
+  </Step>
+</Steps>
+
+Si el tercer producto no tiene stock, hay que **devolver** lo que se restó de los dos primeros. Eso es justo lo que hace una transacción.
+
+<Mermaid
+  titulo="Estados de un pedido"
+  chart={`stateDiagram-v2
+  [*] --> PENDIENTE
+  PENDIENTE --> CONFIRMADO : confirmar (resta el stock)
+  PENDIENTE --> CANCELADO : cancelar
+  CONFIRMADO --> CANCELADO : cancelar (devuelve el stock)`}
+/>
+
+## Pruébalo
+
+Elige un escenario y avanza paso a paso. Con transacción, los cambios se quedan **pendientes** (solo los ve `tx`) hasta el `COMMIT`; si algo falla, el `ROLLBACK` los descarta y la base queda como estaba. Cambia a **sin transacción** con el escenario "Sin stock en la 3.ª línea" y verás el problema: el stock de los dos primeros productos ya se ha restado y guardado, el pedido sigue `PENDIENTE` y el cliente recibe un error.
+
+<VisualizadorTransaccion />
+
+## El código
+
+<Recorrido
+  titulo="src/modules/pedidos/pedidos.service.ts"
+  lenguaje="ts"
+  codigo={`import { prisma } from '../../config/db.js';
+import { HttpError } from '../../utils/httpError.js';
+
+export function confirmarPedido(pedidoId: number) {
+  return prisma.$transaction(async (tx) => {
+    const pedido = await tx.pedido.findUnique({
+      where: { id: pedidoId },
+      include: { lineas: true },
+    });
+    if (!pedido) {
+      throw new HttpError(404, 'Pedido no encontrado');
+    }
+    if (pedido.estado !== 'PENDIENTE') {
+      throw new HttpError(409, 'El pedido ya no está pendiente');
+    }
+
+    for (const linea of pedido.lineas) {
+      const actualizado = await tx.producto.updateMany({
+        where: { id: linea.productoId, stock: { gte: linea.cantidad } },
+        data: { stock: { decrement: linea.cantidad } },
+      });
+      if (actualizado.count === 0) {
+        throw new HttpError(409, \`No hay stock suficiente del producto \${linea.productoId}\`);
+      }
+    }
+
+    return tx.pedido.update({
+      where: { id: pedidoId },
+      data: { estado: 'CONFIRMADO' },
+    });
+  });
+}`}
+>
+  <Paso lineas="2" titulo="HttpError">
+    La clase de [Errores con su código HTTP](/docs/2-dam/apis/backend-proyecto/errores-http): el error lleva el código y el `errorHandler` responde con él.
+  </Paso>
+  <Paso lineas="5" titulo="La transacción interactiva">
+    `prisma.$transaction(async (tx) => { ... })`: todo lo que se hace con `tx` va en la misma transacción. Si el callback termina bien, `COMMIT`. **Si se lanza un error en cualquier punto, `ROLLBACK`** y el error sigue hacia arriba hasta el `errorHandler`.
+  </Paso>
+  <Paso lineas="6-9" titulo="Leer el pedido con sus líneas">
+    Con `tx`, no con `prisma`. El `include` trae las líneas para saber qué productos y cuántos.
+  </Paso>
+  <Paso lineas="10-15" titulo="Comprobaciones previas">
+    Si no existe, `404`. Si ya no está pendiente, `409`. Como todavía no se ha cambiado nada, el `ROLLBACK` no tiene nada que deshacer.
+  </Paso>
+  <Paso lineas="18-21" titulo="Restar solo si llega">
+    `updateMany` con `stock: { gte: linea.cantidad }` resta **solo si hay bastante**. Se comprueba y se resta en la misma sentencia SQL, así que si dos personas compran la última unidad a la vez, solo a una le sale bien. `decrement` resta en la base (`stock = stock - 2`) sin leer el stock en JavaScript.
+  </Paso>
+  <Paso lineas="22-24" titulo="Si no llega, todo atrás">
+    `updateMany` devuelve cuántas filas ha cambiado. Si es `0`, es que no había stock: se lanza el error y Prisma deshace lo que se había restado de las líneas anteriores.
+  </Paso>
+  <Paso lineas="27-30" titulo="El último cambio">
+    El pedido pasa a `CONFIRMADO`. Lo que devuelve el callback es lo que devuelve `$transaction`, y el controlador lo manda en el JSON.
+  </Paso>
+</Recorrido>
+
+Lo importante, resumido:
+
+- **Dentro hay que usar `tx`, no `prisma`.** Lo que se haga con `prisma` va por fuera de la transacción y **no se deshace**.
+- **`updateMany` con la condición en el `where`** comprueba y cambia a la vez, y devuelve `count`. Con `update` también se puede poner la condición en el `where` (junto al `id`), pero si no encuentra la fila lanza `P2025` en vez de devolver `count: 0`; con `updateMany` es más fácil saber que lo que faltaba era stock y dar tu propio mensaje.
+- Una transacción así tiene **5 segundos** de límite por defecto. No metas dentro llamadas a otras APIs, envíos de correo ni nada lento.
+
+<Comparar titulo="Dos fallos típicos dentro de la transacción">
+  <Lado tipo="evitar" titulo="prisma en vez de tx">
+
+```ts
+prisma.$transaction(async (tx) => {
+  const pedido = await tx.pedido.findUnique({ ... });
+  for (const linea of pedido.lineas) {
+    await prisma.producto.updateMany({ ... });
+  }
+  ...
+});
+```
+
+Las restas van por fuera de la transacción: se guardan al momento y el `ROLLBACK` no las deshace.
+
+  </Lado>
+  <Lado tipo="evitar" titulo="Leer, restar en JavaScript y guardar">
+
+```ts
+const producto = await tx.producto.findUnique({
+  where: { id: linea.productoId },
+});
+if (producto.stock < linea.cantidad) throw ...;
+await tx.producto.update({
+  where: { id: linea.productoId },
+  data: { stock: producto.stock - linea.cantidad },
+});
+```
+
+Entre leer y guardar, otra petición puede haber comprado: las dos leen 1, las dos guardan 0 y se venden 2.
+
+  </Lado>
+  <Lado tipo="bien" titulo="tx y updateMany con la condición">
+
+```ts
+const actualizado = await tx.producto.updateMany({
+  where: { id: linea.productoId, stock: { gte: linea.cantidad } },
+  data: { stock: { decrement: linea.cantidad } },
+});
+if (actualizado.count === 0) throw new HttpError(409, '...');
+```
+
+Comprueba y resta en una sola sentencia, dentro de la transacción.
+
+  </Lado>
+</Comparar>
+
+<Callout type="idea" title="Para nota: dos confirmaciones a la vez">
+  Si llegan a la vez dos peticiones para confirmar el **mismo** pedido, las dos pueden leer `PENDIENTE` antes de que la otra termine y restar el stock dos veces. Se evita con el mismo truco que el stock: cambiar el estado **al principio** con `tx.pedido.updateMany({ where: { id: pedidoId, estado: 'PENDIENTE' }, data: { estado: 'CONFIRMADO' } })` y lanzar el error si `count` es 0. Solo una de las dos lo consigue.
+</Callout>
+
+### Las dos formas de $transaction
+
+En el [listado paginado](/docs/2-dam/apis/backend-proyecto/listado-paginado) ya salió `$transaction` con un array. No es lo mismo:
+
+<Comparar columnas>
+  <Lado titulo="Con un array">
+
+```ts
+const [total, items] =
+  await prisma.$transaction([
+    prisma.producto.count(),
+    prisma.producto.findMany(),
+  ]);
+```
+
+Consultas independientes que se lanzan juntas. No puedes usar el resultado de una en la siguiente.
+
+  </Lado>
+  <Lado titulo="Interactiva (callback)">
+
+```ts
+await prisma.$transaction(
+  async (tx) => {
+    const p = await tx.pedido
+      .findUnique(...);
+    if (!p) throw ...;
+    await tx.pedido.update(...);
+  },
+);
+```
+
+Puedes leer, decidir con un `if` y lanzar errores. Es la que hace falta en una operación de negocio.
+
+  </Lado>
+</Comparar>
+
+## La ruta y el controlador
+
+Es una **acción**, no un CRUD, por eso va como `POST` a una subruta con un verbo:
+
+```ts title="src/modules/pedidos/pedidos.routes.ts"
+import { Router } from 'express';
+import { requireAuth } from '../../middleware/auth.js';
+import { confirmarPedidoCtrl } from './pedidos.controller.js';
+
+const router = Router();
+router.post('/:id/confirmar', requireAuth, confirmarPedidoCtrl);
+
+export default router;
+```
+
+```ts title="src/modules/pedidos/pedidos.controller.ts"
+import type { Request, Response } from 'express';
+import { confirmarPedido } from './pedidos.service.js';
+
+export async function confirmarPedidoCtrl(req: Request, res: Response) {
+  const id = Number(req.params.id);
+  if (isNaN(id)) {
+    return res.status(400).json({ error: 'ID inválido' });
+  }
+  res.json(await confirmarPedido(id));
+}
+```
+
+- `requireAuth` es el middleware que comprueba el token: está en [CORS y rutas protegidas](/docs/2-dam/apis/backend-proyecto/cors-y-token).
+- No hay `try/catch`: los `HttpError` que lanza el servicio llegan solos al `errorHandler` (Express 5).
+- En `app.ts`: `app.use('/api/pedidos', pedidosRoutes);`.
+
+## Para la defensa
+
+Te pueden pedir que fuerces un error a mitad de la operación y enseñes que no se guardó nada:
+
+1. Abre `npx prisma studio` y apunta el stock de los productos de un pedido pendiente.
+2. Cambia la cantidad de la **última** línea por más de lo que hay en stock.
+3. Llama a `POST /api/pedidos/:id/confirmar` (con Postman o desde tu web): responde `409`.
+4. Recarga Prisma Studio: el stock de **todos** los productos es el mismo y el pedido sigue `PENDIENTE`.
+
+Para que se vea la diferencia, cambia `tx.producto.updateMany` por `prisma.producto.updateMany`, repite y verás que el stock de las primeras líneas sí ha bajado. Después, vuelve a poner `tx` y deja los datos bien con `npx prisma migrate reset` (o corrigiendo el stock en Prisma Studio). Otra forma de forzar el fallo es poner un `throw new Error('prueba')` justo antes del último `update`: responde `500` y tampoco cambia nada.
+
+## Ideas para tu proyecto
+
+| Proyecto | Operación de negocio | Qué hace dentro |
+| --- | --- | --- |
+| Reservas | Reservar un hueco | Comprobar que está libre, crear la reserva y marcar el hueco como ocupado |
+| Usuarios con perfil | Registrarse | Crear el usuario y su perfil en otra tabla a la vez |
+| Incidencias | Cerrar una incidencia | Cambiar el estado y guardar una fila en el historial |
+| Puntos o saldo | Transferir | Restar a uno (si le llega) y sumar al otro |
+| Biblioteca | Prestar un libro | Comprobar que hay ejemplares, restar uno y crear el préstamo |
+
+## Practica
+
+<CompletarCodigo
+  titulo="Transferir puntos"
+  enunciado="Completa la transferencia para que, si el usuario que da no tiene puntos suficientes, no se cambie nada."
+  lenguaje="typescript"
+  codigo={`return prisma.[[$transaction]](async (tx) => {
+  const restado = await [[tx]].usuario.updateMany({
+    where: { id: deId, puntos: { [[gte]]: cantidad } },
+    data: { puntos: { [[decrement]]: cantidad } },
+  });
+  if (restado.count === [[0]]) {
+    throw new HttpError(409, 'No tiene puntos suficientes');
+  }
+  await tx.usuario.update({
+    where: { id: aId },
+    data: { puntos: { [[increment]]: cantidad } },
+  });
+});`}
+/>
+
+<Quiz titulo="Test: transacciones" descripcion="7 preguntas">
+  <Pregunta enunciado="Dentro de `prisma.$transaction(async (tx) => { ... })` se lanza un error en la tercera operación. ¿Qué pasa con las dos primeras?" explicacion="Se deshacen (ROLLBACK). La transacción garantiza que o se aplica todo o nada.">
+    <Opcion>Se quedan guardadas</Opcion>
+    <Opcion correcta>Se deshacen</Opcion>
+    <Opcion>Se guardan solo si eran lecturas</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Dentro del callback de la transacción da igual usar `tx` o `prisma`." respuesta={false} explicacion="Lo que se hace con `prisma` va por fuera de la transacción: se guarda al momento y el ROLLBACK no lo deshace." />
+  <Pregunta enunciado="¿Por qué se usa `updateMany` con `stock: { gte: linea.cantidad }` en vez de leer el stock y restarlo?" explicacion="Comprueba y resta en la misma sentencia SQL. Si dos peticiones compran a la vez la última unidad, solo una consigue cambiar la fila.">
+    <Opcion>Porque `update` no puede restar</Opcion>
+    <Opcion correcta>Porque comprueba y resta a la vez, sin que otra petición se cuele en medio</Opcion>
+    <Opcion>Porque es la única forma de usar `tx`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="`updateMany` no ha encontrado ninguna fila con stock suficiente. ¿Cuánto vale `actualizado.count`?" respuesta="0" explicacion="`updateMany` devuelve cuántas filas ha cambiado. Con 0, el servicio lanza el error y la transacción se deshace." />
+  <Pregunta enunciado="¿Cuál es el límite de tiempo por defecto de una transacción interactiva de Prisma?" explicacion="5 segundos. Por eso no se meten dentro llamadas a otras APIs ni nada lento.">
+    <Opcion>1 segundo</Opcion>
+    <Opcion correcta>5 segundos</Opcion>
+    <Opcion>1 minuto</Opcion>
+    <Opcion>No tiene límite</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué ruta es la más adecuada para confirmar un pedido?" explicacion="Es una acción de negocio, no un CRUD: `POST` a una subruta con un verbo.">
+    <Opcion>`GET /api/pedidos/1/confirmar`</Opcion>
+    <Opcion>`PUT /api/pedidos/1` con todo el pedido</Opcion>
+    <Opcion correcta>`POST /api/pedidos/1/confirmar`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué diferencia hay entre `$transaction([a, b])` y `$transaction(async (tx) => ...)`?" explicacion="Con un array, las consultas son independientes y no puedes usar el resultado de una en otra. La interactiva permite leer, decidir con `if` y lanzar errores.">
+    <Opcion>Ninguna, son lo mismo</Opcion>
+    <Opcion correcta>La interactiva permite leer, decidir y lanzar errores entre medias; la del array solo lanza consultas independientes</Opcion>
+    <Opcion>La del array no es una transacción</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: transacciones">
+  <Tarjeta frente="¿Qué es una transacción?">Un grupo de operaciones que se hacen todas o ninguna. Si una falla, se deshacen las demás.</Tarjeta>
+  <Tarjeta frente="`COMMIT` y `ROLLBACK`">`COMMIT`: se guarda todo. `ROLLBACK`: se deshace todo lo hecho desde el `BEGIN`.</Tarjeta>
+  <Tarjeta frente="¿Cuándo hace Prisma el ROLLBACK?">Cuando el callback de `$transaction` lanza un error (o su promesa falla).</Tarjeta>
+  <Tarjeta frente="`tx` frente a `prisma` dentro del callback">Con `tx` va dentro de la transacción. Con `prisma`, por fuera: no se deshace.</Tarjeta>
+  <Tarjeta frente="`decrement` e `increment`">Restan o suman en la propia base (`stock = stock - 2`), sin leer el valor antes.</Tarjeta>
+  <Tarjeta frente="Operación de negocio">Varias acciones relacionadas (comprobar, cambiar datos, cambiar estados) que no se reducen a un CRUD. Va como `POST /recurso/:id/verbo`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Cancelar un pedido confirmado" dificultad="media">
+  Escribe `cancelarPedido(pedidoId)`: el pedido tiene que existir y estar `CONFIRMADO`; se **devuelve** al stock la cantidad de cada línea y el pedido pasa a `CANCELADO`. Todo o nada.
+
+  <Pista>Es la misma forma que `confirmarPedido`, pero con `increment` en vez de `decrement`.</Pista>
+  <Pista>Aquí no hace falta comprobar el stock: devolver siempre se puede. Basta con `update` normal, porque el `where` es solo el id.</Pista>
+
+  <Solucion>
+
+```ts title="pedidos.service.ts"
+export function cancelarPedido(pedidoId: number) {
+  return prisma.$transaction(async (tx) => {
+    const pedido = await tx.pedido.findUnique({
+      where: { id: pedidoId },
+      include: { lineas: true },
+    });
+    if (!pedido) {
+      throw new HttpError(404, 'Pedido no encontrado');
+    }
+    if (pedido.estado !== 'CONFIRMADO') {
+      throw new HttpError(409, 'Solo se pueden cancelar pedidos confirmados');
+    }
+
+    for (const linea of pedido.lineas) {
+      await tx.producto.update({
+        where: { id: linea.productoId },
+        data: { stock: { increment: linea.cantidad } },
+      });
+    }
+
+    return tx.pedido.update({
+      where: { id: pedidoId },
+      data: { estado: 'CANCELADO' },
+    });
+  });
+}
+```
+
+Y la ruta: `router.post('/:id/cancelar', requireAuth, cancelarPedidoCtrl)`.
+
+Para nota: si llegan dos cancelaciones a la vez, las dos podrían leer `CONFIRMADO` y devolver el stock dos veces. Se evita con el mismo truco que el stock: cambiar el estado con `tx.pedido.updateMany({ where: { id: pedidoId, estado: 'CONFIRMADO' }, data: { estado: 'CANCELADO' } })` **al principio** y lanzar el error si `count` es 0.
+
+</Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Reservar un hueco" dificultad="dificil">
+  Con el modelo de reservas de [Modelo con relaciones y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed), escribe `reservarHueco(huecoId, usuarioId)`: si el hueco está libre, lo marca como ocupado y crea la reserva; si no existe o ya está ocupado, `409`. Que dos personas no puedan reservar el mismo hueco a la vez.
+
+  <Pista>Usa el truco de `updateMany` con la condición en el `where`: `{ id: huecoId, libre: true }`.</Pista>
+  <Pista>El `usuarioId` no debe venir del `body`: sácalo del token en el controlador (`res.locals.userId`).</Pista>
+
+  <Solucion>
+
+```ts title="huecos.service.ts"
+export function reservarHueco(huecoId: number, usuarioId: number) {
+  return prisma.$transaction(async (tx) => {
+    const ocupado = await tx.hueco.updateMany({
+      where: { id: huecoId, libre: true },
+      data: { libre: false },
+    });
+    if (ocupado.count === 0) {
+      throw new HttpError(409, 'El hueco no existe o ya está reservado');
+    }
+    return tx.reserva.create({ data: { huecoId, usuarioId } });
+  });
+}
+```
+
+```ts title="huecos.controller.ts"
+export async function reservarHuecoCtrl(req: Request, res: Response) {
+  const huecoId = Number(req.params.id);
+  if (isNaN(huecoId)) {
+    return res.status(400).json({ error: 'ID inválido' });
+  }
+  const reserva = await reservarHueco(huecoId, res.locals.userId);
+  res.status(201).json(reserva);
+}
+```
+
+- Si dos peticiones llegan a la vez, solo una consigue cambiar `libre` de `true` a `false`; la otra recibe `count === 0` y un `409`.
+- Si el `create` fallara, el `ROLLBACK` vuelve a dejar el hueco libre.
+- Además, `huecoId` es `@unique` en `Reserva`: aunque algo se colara, la base no dejaría dos reservas del mismo hueco (`P2002`).
+
+</Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

@@ -1,0 +1,369 @@
+---
+title: Errores típicos en Angular
+description: Los errores de Angular que salieron en clase (NG1, TS2339, -992011, -995002, ngtsc 4111, NG8003, ngtsc 2322, CORS…) y los que aparecen al hacer el proyecto, con el mensaje que sale, por qué pasa y cómo se arregla.
+icon: Bug
+---
+
+Cada error con el mensaje que ves (o lo que pasa en pantalla), por qué ocurre y qué hacer. Los que llevan la línea "Visto en clase" salieron en directo; los que llevan la etiqueta de no dado son de hacer el proyecto y no se vieron en clase.
+
+<Callout type="idea" title="Cómo leer un error de Angular">
+  - Los códigos `NG` + número son del compilador o del *runtime* de Angular. Cada uno tiene su página en `angular.dev/errors/NG...` con la explicación y la solución. El 18/11, el enlace del error NG8003 apuntaba a <Dudoso nota="El proyecto es Angular 19.2: no está claro por qué el enlace era de la v22.">`v22.angular.dev`</Dudoso>.
+  - Los que empiezan por `TS` o `ngtsc` son errores de tipos de TypeScript, también en las plantillas.
+  - Lee el error **entero** y la primera línea del *stack trace* que apunte a un fichero tuyo. El panel *Problems* de VS Code y el Angular Language Service (subrayado rojo en el `.html`) suelen avisarte antes de arrancar.
+</Callout>
+
+## Plantillas y componentes
+
+<Accordions type="multiple">
+  <Accordion title="TS-998113: algo de imports no se usa en la plantilla">
+    <DeClase fecha="14/10, 05/11" proyecto="proj-lamp, proj-game" />
+
+    **Qué pasa:** un componente tiene en `imports` algo (normalmente `RouterOutlet`, que pone el CLI) que su plantilla no usa.
+
+    **Qué hacer:** es un **aviso**, no un error: la app funciona. Quita el import que sobra o úsalo.
+  </Accordion>
+  <Accordion title="NG1: una propiedad private usada en la plantilla">
+    <DeClase fecha="27/10" proyecto="angular-http" />
+
+    **Qué pasa:** la plantilla lee una propiedad o un método `private`. La plantilla es "otra clase" para TypeScript y no puede verlo.
+
+    **Qué hacer:** usa `protected` (lo puede leer la plantilla, pero no otros componentes) o déjala pública. En clase: `protected readonly posts = signal<Post[]>([])`.
+  </Accordion>
+  <Accordion title="TS2339: la propiedad no existe (inyección por constructor sin private)">
+    <DeClase fecha="28/10" proyecto="proj-fakestore" />
+
+    **Qué pasa:** `constructor(productService: ProductService) {}` sin modificador. Sin `private` (o `public`, `protected`), el parámetro no se convierte en propiedad y `this.productService` no existe.
+
+    **Qué hacer:** `constructor(private productService: ProductService) {}`, o mejor, `private productService = inject(ProductService)`. El profesor lo comentó así: *"importante el scope de la propiedad en el constructor"*.
+  </Accordion>
+  <Accordion title="-995002: Empty expressions are not allowed">
+    <DeClase fecha="05/11" proyecto="proj-game" />
+
+    **Qué pasa:** un *binding* con la expresión vacía, como `[(ngModel)]=""`.
+
+    **Qué hacer:** enlázalo a algo: `[(ngModel)]="this.game.title"`.
+  </Accordion>
+  <Accordion title="Error de compilación en un pipe: falta importarlo">
+    <DeClase fecha="05/11" proyecto="proj-game" />
+
+    **Qué pasa:** en un componente *standalone*, `{{ game | json }}` falla si `JsonPipe` no está en `imports`.
+
+    **Qué hacer:** añade `JsonPipe` (de `@angular/common`) al `imports` del `@Component`.
+  </Accordion>
+  <Accordion title="Sale el texto de una función en lugar del valor de un signal">
+    <NoDadoEnClase inline />
+
+    **Qué pasa:** has escrito `{{ total }}` en vez de `{{ total() }}`. Un signal es una función y hay que llamarla para leerlo. El compilador suele avisar con el diagnóstico NG8109.
+
+    **Qué hacer:** paréntesis siempre al leer un signal: `{{ total() }}`, `@for (p of productos(); ...)`, `[disabled]="page() === 1"`.
+  </Accordion>
+  <Accordion title="ng g pages/posts no genera nada">
+    <DeClase fecha="27/10" proyecto="angular-http" />
+
+    **Qué pasa:** falta el tipo de lo que quieres generar.
+
+    **Qué hacer:** `ng g c pages/posts` (`c` de *component*; `s` para servicios, `i` para interfaces). La opción para no crear el `.spec.ts` es `--skip-tests`, en plural (el enunciado del 19/11 ponía `--skip-test`).
+  </Accordion>
+</Accordions>
+
+## Formularios
+
+<Accordions type="multiple">
+  <Accordion title="-992011: The directive NgModel appears in imports, but is not standalone">
+    <DeClase fecha="05/11" proyecto="proj-game" />
+
+    **Qué pasa:** se ha puesto `NgModel` suelto en `imports: [FormsModule, NgModel]`. `NgModel` no es *standalone*: tiene que llegar a través de un módulo.
+
+    **Qué hacer:** deja solo `FormsModule`, que ya trae `NgModel` y `NgForm`.
+  </Accordion>
+  <Accordion title="Can't bind to 'ngModel' / 'formControl' since it isn't a known property">
+    <DeClase fecha="12/11" nota="lo cita la guía de la Act 11 como error típico de la migración" />
+
+    **Qué pasa:** la plantilla usa `[(ngModel)]` sin `FormsModule` en `imports`, o `[formControl]` / `[formGroup]` sin `ReactiveFormsModule`.
+
+    **Qué hacer:** importa el módulo que corresponde en el componente.
+  </Accordion>
+  <Accordion title="ngModel dentro de un form sin name">
+    <DeClase fecha="05/11" proyecto="proj-game" nota="se explica la regla; el mensaje exacto no sale en las capturas" />
+
+    **Qué pasa:** *"If ngModel is used within a form tag, either the name attribute must be set or the form control must be defined as 'standalone'"*. Dentro de un `<form>`, cada campo con `ngModel` se registra en el `NgForm` por su `name`.
+
+    **Qué hacer:** añade `name="title"` (en clase todos los campos lo llevan).
+  </Accordion>
+  <Accordion title="ngtsc 4111: Property comes from an index signature">
+    <DeClase fecha="05/11" proyecto="proj-game" />
+
+    **Qué pasa:** `title.errors?.required` con punto. `errors` es un `ValidationErrors` (un objeto con claves libres) y la configuración estricta exige corchetes.
+
+    **Qué hacer:** `title.errors?.['required']`, o `title.hasError('required')`.
+  </Accordion>
+  <Accordion title="Converting circular structure to JSON">
+    <DeClase fecha="05/11" proyecto="proj-game" />
+
+    **Qué pasa:** `{{ gameForm | json }}`. El `NgForm` tiene referencias que apuntan a sí mismo y `JSON.stringify` no puede con ellas.
+
+    **Qué hacer:** pinta los valores, no el formulario: `{{ gameForm.value | json }}` o el modelo, `{{ game | json }}`.
+  </Accordion>
+  <Accordion title="NG8003: No directive found with exportAs 'ngModel'">
+    <DeClase fecha="18/11" proyecto="proj-game" rama="refactor/reactive-form2" />
+
+    **Qué pasa:** después de pasar a formularios reactivos (sin `FormsModule`), queda en la plantilla algún `#platform="ngModel"`.
+
+    **Qué hacer:** quita todas las referencias `#x="ngModel"` y usa el `FormControl` de la clase. Los dos estilos de formulario no se mezclan.
+  </Accordion>
+  <Accordion title="Cannot find control with name: 'genre'">
+    <DeClase fecha="12/11, 18/11" proyecto="proj-game" nota="lo cita la guía de la Act 11; el 18/11 se enseña con genre_ que las dos claves tienen que coincidir" />
+
+    **Qué pasa:** `formControlName="genre"` en el HTML, pero en el `FormGroup` no hay ninguna clave `genre` (por ejemplo, porque se llama `genre_`).
+
+    **Qué hacer:** que la clave del grupo y `formControlName` sean iguales. Lo que cuenta es la clave, no el nombre de la propiedad de la clase.
+  </Accordion>
+  <Accordion title="Cannot find form control with name: 'id' (al editar)">
+    <NoDadoEnClase inline />
+
+    **Qué pasa:** `formGroup.setValue(juego)` con un objeto que tiene una clave que el grupo no tiene (el `id`). `setValue` exige exactamente las mismas claves. En clase se usó `setValue` el 18/11 y no se ve si dio este error.
+
+    **Qué hacer:** `formGroup.patchValue(juego)`, que ignora lo que sobra. Es lo que usa la diapositiva y la clase del 19/11.
+  </Accordion>
+  <Accordion title="El mensaje de error no sale nunca">
+    <NoDadoEnClase inline />
+
+    **Qué pasa:** la clave del error está mal escrita: `hasError('minLength')` en vez de `hasError('minlength')`. No da error de compilación; simplemente nunca es verdad. O la condición no incluye `submitted` y el campo no se ha tocado.
+
+    **Qué hacer:** las claves son `required`, `minlength`, `maxlength`, `min`, `max`, `pattern` y `email`. Añade `|| gameForm.submitted` a la condición o llama a `markAllAsTouched()` al enviar.
+  </Accordion>
+  <Accordion title="Un campo marcado en rojo nada más cargar la página">
+    <DeClase fecha="05/11" proyecto="proj-game" />
+
+    **Qué pasa:** el CSS de clase `#priceId.ng-invalid { border: 2px solid; }` se aplica en cuanto el campo es inválido, antes de que el usuario toque nada.
+
+    **Qué hacer:** combina la clase con `.ng-touched` o `.ng-dirty`: `#priceId.ng-invalid.ng-touched`.
+  </Accordion>
+  <Accordion title="Al editar, un campo no se rellena">
+    <DeClase fecha="18/11" proyecto="proj-game" />
+
+    **Qué pasa:** el control está en el `FormGroup` y tiene su valor, pero el `<input>` no lleva `formControlName`. En clase le pasó al stock.
+
+    **Qué hacer:** revisa que cada campo del HTML tenga su `formControlName`.
+  </Accordion>
+</Accordions>
+
+## Router
+
+<Accordions type="multiple">
+  <Accordion title="Can't bind to 'routerLink' since it isn't a known property of 'a'">
+    <DeClase fecha="27/10, 19/11" proyecto="angular-http, proyecto-rutas" />
+
+    **Qué pasa:** el componente usa `[routerLink]` (o `<router-outlet />`, `routerLinkActive`) sin importar la directiva. Pasa en cada componente: el `AulaComponent` necesita sus propios imports aunque el `AppComponent` ya los tenga.
+
+    **Qué hacer:** `imports: [RouterOutlet, RouterLink, RouterLinkActive]` en el componente que los use.
+  </Accordion>
+  <Accordion title="ngtsc 2322: Type 'string' is not assignable to type '{ exact: boolean; } | IsActiveMatchOptions'">
+    <DeClase fecha="19/11" proyecto="proyecto-rutas" />
+
+    **Qué pasa:** `routerLinkActiveOptions="{exact: true}"` sin corchetes. Llega el **texto**, no un objeto.
+
+    **Qué hacer:** *property binding*: `[routerLinkActiveOptions]="{exact: true}"`.
+  </Accordion>
+  <Accordion title="NG04002: Cannot match any routes">
+    <NoDadoEnClase inline />
+
+    **Qué pasa:** la URL no coincide con ninguna ruta y no hay comodín `**`. La navegación falla y en la consola sale este error.
+
+    **Qué hacer:** revisa que la URL esté bien escrita y, para las que no existan, añade al final `{ path: '**', component: NoEncontradoComponent }`. Ojo: un `path` con barra inicial (`'/inicio'`) no da este error, sino otro al arrancar (*path cannot start with a slash*).
+  </Accordion>
+  <Accordion title="Todas las URL acaban en la página de no encontrado">
+    <NoDadoEnClase inline />
+
+    **Qué pasa:** la ruta `**` está antes que las demás. El router se queda con la primera que coincide y `**` coincide con todo.
+
+    **Qué hacer:** el comodín siempre el último, después de las redirecciones (lo pide el enunciado de la Act 12).
+  </Accordion>
+  <Accordion title="El detalle no cambia al ir de /materiales/1 a /materiales/7">
+    <NoDadoEnClase inline />
+
+    **Qué pasa:** lees el id con `route.snapshot` en `ngOnInit`. Angular reutiliza el componente y `ngOnInit` no se repite. Es lo que enseñaba la solución desplegada de la Act 12.
+
+    **Qué hacer:** suscríbete a `route.paramMap` o usa `withComponentInputBinding()` con un `input()`.
+  </Accordion>
+</Accordions>
+
+## HTTP, API y despliegue
+
+<Accordions type="multiple">
+  <Accordion title="NullInjectorError: No provider for HttpClient">
+    <DeClase fecha="28/10" proyecto="proj-fakestore" nota="es una de las preguntas finales de la Act 8" />
+
+    **Qué pasa:** un servicio inyecta `HttpClient` pero `app.config.ts` no tiene `provideHttpClient()`.
+
+    **Qué hacer:** añade `provideHttpClient()` a los `providers` de `app.config.ts`.
+  </Accordion>
+  <Accordion title="TypeScript elige la sobrecarga de arraybuffer en http.get">
+    <DeClase fecha="27/10" proyecto="angular-http" />
+
+    **Qué pasa:** `HttpClient.get` tiene 15 sobrecargas. Si escribes mal los argumentos (por ejemplo, falta la URL), TypeScript prueba otra y el error habla de `arraybuffer`, que despista.
+
+    **Qué hacer:** revisa los argumentos: `this.http.get<Game[]>(url, opciones)`. Sin el genérico `<Game[]>`, devuelve `Observable<Object>`.
+  </Accordion>
+  <Accordion title="json-server: command not found">
+    <DeClase fecha="28/10" proyecto="proj-game" />
+
+    **Qué pasa:** JSON Server está instalado en el proyecto (`--save-dev`), no en el sistema, y la terminal no busca en `node_modules/.bin`.
+
+    **Qué hacer:** `npx json-server --watch db.json --port 3000` o el script `npm run api`.
+  </Accordion>
+  <Accordion title="environment.apiUrl da error">
+    <DeClase fecha="27/10" proyecto="angular-http" />
+
+    **Qué pasa:** se probó a sacar la URL de la API a `environment.apiUrl` y dio error.
+
+    <NoSeVio>No se ve `environment.ts` ni cuál era el error. En clase la URL se quedó en una propiedad `apiUrl` del servicio.</NoSeVio>
+  </Accordion>
+  <Accordion title="Los filtros no llegan a la API">
+    <NoDadoEnClase inline />
+
+    **Qué pasa:** `params.set('q', texto)` sin guardar el resultado. `HttpParams` es inmutable y `set` devuelve uno nuevo.
+
+    **Qué hacer:** `params = params.set('q', texto)`.
+  </Accordion>
+  <Accordion title="Access to XMLHttpRequest has been blocked by CORS policy">
+    <DeClase fecha="18/11" proyecto="proj-game" />
+
+    **Qué pasa:** el navegador no deja que una página de un origen (`localhost:4200` o tu web en Vercel) lea respuestas de otro (`localhost:3000`) si el servidor no lo permite con una cabecera. En el `HttpErrorResponse`, `status` vale `0`.
+
+    **Qué hacer:** es del **backend**, no de Angular: añade el origen de tu web a la configuración de CORS de tu API.
+  </Accordion>
+  <Accordion title="La web publicada no carga datos (1 de 0)">
+    <DeClase fecha="18/11" proyecto="proj-game" nota="proj-game-r6lu.vercel.app" />
+
+    **Qué pasa:** la web desplegada sigue llamando a `http://localhost:3000`. Una web en Vercel no puede llamar al `localhost` de quien la visita.
+
+    **Qué hacer:** en producción, la URL de la API tiene que ser la de la API desplegada.
+  </Accordion>
+  <Accordion title="Mixed Content: requested an insecure resource">
+    <NoDadoEnClase inline />
+
+    **Qué pasa:** la web va por `https` (Vercel) y la API por `http`. El navegador bloquea la petición.
+
+    **Qué hacer:** la API también tiene que ir por `https`.
+  </Accordion>
+  <Accordion title="En Vercel, al recargar en una ruta sale 404">
+    <DeClase fecha="18/11" proyecto="proj-game" />
+
+    **Qué pasa:** Vercel busca un fichero `/aula/materiales` que no existe: las rutas solo las conoce Angular, dentro de `index.html`.
+
+    **Qué hacer:** `vercel.json` con el *rewrite* `{ "source": "/(.*)", "destination": "/index.html" }`.
+  </Accordion>
+  <Accordion title="Otros fallos del despliegue en Vercel">
+    <DeClase fecha="18/11" nota="tabla de diagnóstico de la guía de la Act 11" />
+
+    | Síntoma | Qué revisar |
+    | --- | --- |
+    | Build Failed | Los *Build Logs* |
+    | Página 404 | *Root Directory* y *Output Directory* (`dist/<proyecto>/browser`) |
+    | 404 al recargar una ruta | Falta el *rewrite* |
+    | No hay Preview | La rama y el `push` |
+    | La Preview pide iniciar sesión | *Deployment Protection* |
+    | Falla el POST | CORS o la API en `localhost` |
+  </Accordion>
+  <Accordion title="VS Code no deja abrir la terminal (Restricted Mode)">
+    <DeClase fecha="28/10" proyecto="proj-game" />
+
+    **Qué pasa:** al abrir una carpeta nueva (por ejemplo, en WSL), VS Code arranca en modo restringido.
+
+    **Qué hacer:** pulsa **Trust Folder & Continue**.
+  </Accordion>
+</Accordions>
+
+## Practica
+
+<Quiz titulo="Test: ¿qué error es?">
+  <Pregunta enunciado="La plantilla lee `posts()` y en la clase es `private posts = signal<Post[]>([])`. ¿Qué error sale?" explicacion="La plantilla no puede leer miembros `private`: error NG1. Se arregla con `protected`.">
+    <Opcion correcta>NG1</Opcion>
+    <Opcion>NG8003</Opcion>
+    <Opcion>TS-998113</Opcion>
+  </Pregunta>
+  <Pregunta enunciado={'Has migrado a reactivos, has quitado `FormsModule` y queda un `#title="ngModel"`. ¿Qué sale?'} explicacion="Sin `FormsModule` nadie exporta `ngModel`: NG8003.">
+    <Opcion>-992011</Opcion>
+    <Opcion correcta>NG8003</Opcion>
+    <Opcion>ngtsc 4111</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="`title.errors?.minlength` da error de compilación. ¿Por qué?" explicacion="`errors` tiene una index signature; en modo estricto hay que usar corchetes (ngtsc 4111).">
+    <Opcion>Porque `minlength` va en mayúsculas</Opcion>
+    <Opcion correcta>Porque `errors` tiene una index signature y hay que usar `['minlength']`</Opcion>
+    <Opcion>Porque falta importar `Validators`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="El error de CORS se arregla en Angular, añadiendo una cabecera a la petición." respuesta={false} explicacion="Es el servidor el que tiene que dar permiso con sus cabeceras. Se arregla en la configuración de CORS del backend." />
+  <Pregunta enunciado="Tu app en Vercel va bien, pero al recargar en `/aula/materiales` sale 404. ¿Qué falta?" explicacion="El *rewrite* de `vercel.json` que manda todas las rutas a `index.html`.">
+    <Opcion>`provideRouter` en `app.config.ts`</Opcion>
+    <Opcion correcta>El *rewrite* de `vercel.json` hacia `index.html`</Opcion>
+    <Opcion>La ruta comodín `**`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="`NullInjectorError: No provider for HttpClient`. ¿Dónde está el fallo?" explicacion="Falta `provideHttpClient()` en los providers de `app.config.ts`.">
+    <Opcion>En el `@Injectable` del servicio</Opcion>
+    <Opcion correcta>En `app.config.ts`: falta `provideHttpClient()`</Opcion>
+    <Opcion>En la URL de la API</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: errores de Angular">
+  <Tarjeta frente="NG1">La plantilla usa algo `private`. Usa `protected`.</Tarjeta>
+  <Tarjeta frente="TS2339 al inyectar por constructor">Falta `private` en el parámetro del constructor, o usa `inject()`.</Tarjeta>
+  <Tarjeta frente="-992011">`NgModel` no es standalone: importa `FormsModule`.</Tarjeta>
+  <Tarjeta frente="ngtsc 4111">Index signature: `errors?.['clave']` con corchetes.</Tarjeta>
+  <Tarjeta frente="NG8003">Queda un `#x="ngModel"` sin `FormsModule` (después de migrar a reactivos).</Tarjeta>
+  <Tarjeta frente="ngtsc 2322 en `routerLinkActiveOptions`">Falta el *property binding*: `[routerLinkActiveOptions]="{exact: true}"`.</Tarjeta>
+  <Tarjeta frente="CORS">Lo arregla el backend, permitiendo el origen de la web. En Angular se ve como `status: 0`.</Tarjeta>
+  <Tarjeta frente="404 al recargar en Vercel">Falta el *rewrite* a `index.html` en `vercel.json`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Caza los errores" dificultad="media">
+  Este componente tiene cinco errores de los de esta página. Encuéntralos y corrígelos.
+
+```ts
+@Component({
+  selector: 'app-crud',
+  imports: [FormsModule, NgModel],
+  templateUrl: './crud.component.html',
+})
+export class CrudComponent {
+  private game: Game = { title: '', genre: '', platform: '', price: 0, stock: 0 };
+}
+```
+
+```html
+<form #gameForm="ngForm">
+  <input [(ngModel)]="game.title" required minlength="3" #title="ngModel" />
+  @if (title.errors?.minlength) { <p>Mínimo 3</p> }
+  <a routerLinkActive="activo" routerLinkActiveOptions="{exact: true}" routerLink="/inicio">Inicio</a>
+</form>
+```
+
+  <Pista>Mira `imports`, la visibilidad de `game`, el input dentro del `form`, cómo se lee el error y el enlace.</Pista>
+
+  <Solucion>
+
+1. `imports: [FormsModule, NgModel]`: `NgModel` no es standalone (-992011). Solo `FormsModule`.
+2. `private game`: la plantilla no puede leerlo (NG1). `protected game` o público.
+3. El input tiene `ngModel` dentro de un `<form>` y no tiene `name`. Añade `name="title"`.
+4. `title.errors?.minlength`: con punto da ngtsc 4111. `title.errors?.['minlength']` o `title.hasError('minlength')`.
+5. `routerLinkActiveOptions` sin corchetes (ngtsc 2322) y, además, faltan `RouterLink` y `RouterLinkActive` en `imports`.
+
+```ts
+imports: [FormsModule, RouterLink, RouterLinkActive],
+// ...
+protected game: Game = { title: '', genre: '', platform: '', price: 0, stock: 0 };
+```
+
+```html
+<input name="title" [(ngModel)]="game.title" required minlength="3" #title="ngModel" />
+@if (title.errors?.['minlength']) { <p>Mínimo 3</p> }
+<a routerLinkActive="activo" [routerLinkActiveOptions]="{exact: true}" routerLink="/inicio">Inicio</a>
+```
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

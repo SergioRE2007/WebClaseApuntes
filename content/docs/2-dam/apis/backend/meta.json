@@ -1,0 +1,17 @@
+{
+  "title": "Backend con Node, Express y Prisma",
+  "icon": "Server",
+  "pages": [
+    "index",
+    "node-npm-typescript",
+    "servidor-express",
+    "postgres-docker-supabase",
+    "prisma",
+    "crud-usuarios",
+    "validacion-zod",
+    "autenticacion",
+    "probar-apis",
+    "logs-rate-limiting-tests",
+    "docker-swagger"
+  ]
+}

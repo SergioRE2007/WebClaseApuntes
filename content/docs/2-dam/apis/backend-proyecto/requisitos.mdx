@@ -1,0 +1,263 @@
+---
+title: Requisitos de backend y base de datos
+description: Lo que piden los requisitos del proyecto intermodular al backend y a PostgreSQL, apartado por apartado, con lo que se dio en clase, lo que se dio a medias y lo que no, y dónde se explica cada cosa.
+icon: ListChecks
+---
+
+import { ChecklistRequisitos } from '@/components/temas/backend-proyecto/checklist-requisitos';
+
+El documento **"Requisitos de Acceso a Datos del Proyecto Intermodular"** tiene 8 apartados. Aunque se llame "de Acceso a Datos", casi todo lo que pide es **backend y base de datos**, que en clase se ha dado en APIs con Node. Aquí tienes cada apartado resumido, de dónde sale cada requisito (§ es el número de apartado del documento) y si se dio en clase.
+
+<Callout type="info" title="Leyenda">
+  **Dado**: se vio entero en clase. **A medias**: se vio una parte (por ejemplo, solo con el modelo `User` del profesor). **No dado**: no salió; está explicado en este bloque y marcado como no dado en clase.
+</Callout>
+
+## §1. La arquitectura que piden
+
+Una **aplicación web completa con persistencia**, por capas: **Angular** para la interfaz, **Node con Express (o Nest)** para el backend, **Prisma (o TypeORM)** como ORM, **PostgreSQL** como base de datos y una **API REST con JSON** entre medias. En clase se eligió Express y Prisma.
+
+<Mermaid
+  titulo="Las capas que pide el §1"
+  chart={`flowchart LR
+  A[Angular] -- HTTP / JSON --> B[API REST: rutas]
+  B --> C[Controladores]
+  C --> D[Servicios: lógica]
+  D --> E[ORM: Prisma]
+  E --> F[(PostgreSQL)]`}
+/>
+
+| Requisito | Estado | Dónde se dio |
+| --- | --- | --- |
+| Separar presentación, lógica y persistencia | Dado | 20/10 y 27/10: `app.ts`, rutas, controlador, servicio y `config/db.ts` |
+| Angular como interfaz principal | Dado en Acceso a Datos | Ver [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado) |
+
+La interfaz "tendrá un peso relevante", pero tiene que estar respaldada por una capa de acceso a datos "suficientemente completa": no vale una web muy bonita sobre un backend de un solo modelo.
+
+## §2. Interfaz Angular
+
+Navegación con Router, componentes reutilizables, listados y detalle, formularios de crear y editar (se valoran los **reactivos**), borrar con confirmación, búsqueda, filtro, orden, paginación y los estados de carga, vacío, error y confirmación. El HTTP, siempre dentro de **servicios** de Angular.
+
+Esta parte **no es de este bloque**: está en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado). Lo que sí toca al backend es que Angular **solo manda los criterios** (búsqueda, filtro, orden y página) y la consulta la hace el backend: eso se explica en [Listado con búsqueda y paginación](/docs/2-dam/apis/backend-proyecto/listado-paginado).
+
+## §3. Modelo de datos y persistencia
+
+Piden un modelo relacional "suficientemente completo":
+
+- Varias entidades persistentes.
+- Claves primarias y externas.
+- Campos obligatorios y opcionales.
+- Restricciones y valores únicos cuando proceda.
+- Relaciones **1 y N**, que se usen de verdad en la aplicación.
+- Prisma o TypeORM con modelos, relaciones, restricciones e integridad.
+- **Migraciones** guardadas en el repositorio.
+- Un **seed** con datos suficientes para probar sin meterlo todo a mano.
+
+| Requisito | Estado | Dónde se dio | Dónde se explica |
+| --- | --- | --- | --- |
+| PostgreSQL | Dado | 20/10: Postgres 16 en `docker-compose.yml`. 03/11: Supabase | [PostgreSQL](/docs/2-dam/apis/backend/postgres-docker-supabase) |
+| Prisma | Dado | 27/10: `schema.prisma` y migración `init`. 03/11: migraciones, *drift* y `db pull` | [Prisma 6](/docs/2-dam/apis/backend/prisma) |
+| Varias entidades relacionadas | A medias | El repositorio del profesor solo tiene `User` (y `Media`, con su clave ajena a `User`, en la v1.1) | [Modelo y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) |
+| Relaciones 1 y N | A medias | Igual: solo `User` → `Media` | [Modelo y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) |
+| Migraciones | Dado | 27/10 y 03/11. Sube la carpeta `prisma/migrations` | [Prisma 6](/docs/2-dam/apis/backend/prisma#migraciones) |
+| Seed de datos | No dado | Nunca (`db seed` solo salió en la ayuda de Prisma) | [Modelo y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) |
+
+## §4. API REST y organización del backend
+
+Una API REST con las operaciones equivalentes a `GET`, `GET` por id, `POST`, `PUT`/`PATCH` y `DELETE`, y una organización **modular**: rutas, controladores, servicios, ORM y base de datos separados. El documento dice expresamente que **no vale** concentrar rutas, lógica y acceso a datos en un único fichero.
+
+| Requisito | Estado | Dónde se dio |
+| --- | --- | --- |
+| API REST | Dado | 20/10 a 03/11 |
+| Organización por módulos | Dado | 27/10: `src/modules/users/` con `users.routes.ts`, `users.controller.ts`, `users.service.ts` y `users.schema.ts` |
+| Operaciones CRUD | Dado | 27/10: `GET /`, `GET /:id`, `PATCH /:id` y `DELETE /:id` de usuarios, y el `POST` del registro. P2025 → 404 y P2002 → 409 |
+
+Lo que te falta es repetir ese módulo para **tus** entidades.
+
+## §5. Operaciones y consultas
+
+El proyecto **no puede quedarse en el CRUD básico**. Con el ORM hay que usar también:
+
+- Consultas por diferentes criterios.
+- Información relacionada entre entidades.
+- Filtros, ordenaciones, búsquedas y paginación.
+- Selección de campos.
+
+Y dos condiciones importantes:
+
+1. **Al menos uno** de los listados principales tiene que tener **búsqueda, filtrado, ordenación y paginación** a la vez.
+2. Esos criterios se **mandan desde Angular al backend** y se convierten en consultas del ORM. Si hay bastantes datos, **no vale** descargarlo todo y filtrar en Angular. La API tiene que dar lo necesario para paginar (el **total**).
+
+| Requisito | Estado | Dónde se dio | Dónde se explica |
+| --- | --- | --- | --- |
+| Consultas relacionales y por criterios | A medias | Solo el `select` que quita `passwordHash` y el `orderBy: { id: 'asc' }` | [Consultas con datos relacionados](/docs/2-dam/apis/backend-proyecto/consultas-relacionadas) |
+| Búsqueda y filtrado | No dado | En el backend, nunca. En Angular (12/11) solo con JSON Server (`_page`, `_limit`) | [Listado paginado](/docs/2-dam/apis/backend-proyecto/listado-paginado) |
+| Ordenación y paginación | No dado | Igual que la fila anterior. Falta devolver el total | [Listado paginado](/docs/2-dam/apis/backend-proyecto/listado-paginado) |
+
+## §6. Operación de negocio y transacción
+
+Al menos **una operación de negocio** con varias acciones relacionadas, que no se reduzca a un CRUD: comprobaciones previas, crear o cambiar datos relacionados, actualizar estados, aplicar reglas de negocio y mantener la consistencia. Si hay riesgo de dejar los datos a medias, con **transacción**: o se hace todo o no se hace nada.
+
+| Requisito | Estado | Dónde se dio | Dónde se explica |
+| --- | --- | --- | --- |
+| Operación de negocio | No dado | Nunca | [Transacciones](/docs/2-dam/apis/backend-proyecto/transacciones) |
+| Uso de transacciones | No dado | Nunca | [Transacciones](/docs/2-dam/apis/backend-proyecto/transacciones) |
+
+## §7. Validación, errores e integridad
+
+- Validar **en Angular y en el backend**. El servidor comprueba campos obligatorios, tipos y formatos, rangos, que existan los datos relacionados, las restricciones del modelo y las reglas de negocio.
+- Códigos HTTP que distingan **bien**, **petición incorrecta**, **no existe**, **conflicto** y **error interno**.
+- Angular captura esos errores y se los explica al usuario.
+- **Integridad**: claves ajenas, únicos, qué pasa al borrar datos relacionados y que no queden operaciones a medias.
+- Cadenas de conexión y credenciales en **variables de entorno**, nunca en el código.
+
+| Requisito | Estado | Dónde se dio | Dónde se explica |
+| --- | --- | --- | --- |
+| Validación en el backend | Dado | 27/10: Zod 4 y el middleware `validate` | Falta validar los *query params* del listado: [Listado paginado](/docs/2-dam/apis/backend-proyecto/listado-paginado) |
+| Gestión de errores | Dado | 20/10: `errorHandler`. 27/10: códigos de Prisma. 03/11: Winston | Si quieres una clase de error propia: [Errores HTTP](/docs/2-dam/apis/backend-proyecto/errores-http) |
+| Integridad (borrados relacionados) | A medias | `onDelete: Cascade` en `Media` | [Modelo y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) |
+| Variables de entorno | Dado | 20/10: `env.ts` y dotenv, con `required()` | [Servidor con Express 5](/docs/2-dam/apis/backend/servidor-express#variables-de-entorno-envts) |
+
+## §8. La tabla de mínimos
+
+Es la tabla que se usa para decidir si la parte de Acceso a Datos está "suficientemente desarrollada". Son 16 requisitos y **hacen falta todos**.
+
+| Requisito | Estado en clase | Qué falta | Dónde |
+| --- | --- | --- | --- |
+| PostgreSQL | Dado | Nada | [PostgreSQL](/docs/2-dam/apis/backend/postgres-docker-supabase) |
+| Prisma o TypeORM | Dado | Nada | [Prisma 6](/docs/2-dam/apis/backend/prisma) |
+| Varias entidades persistentes y relacionadas | A medias | Tu modelo, con varias relaciones y su `onDelete` | [Modelo y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) |
+| Relaciones 1 y N | A medias | Lo mismo | [Modelo y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) |
+| Migraciones | Dado | Subir `prisma/migrations` | [Prisma 6](/docs/2-dam/apis/backend/prisma#migraciones) |
+| Seed de datos | No dado | Todo | [Modelo y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) |
+| Operaciones CRUD | Dado | Repetirlo para tus entidades | [CRUD de usuarios](/docs/2-dam/apis/backend/crud-usuarios) |
+| Consultas relacionales y por criterios | A medias | `include`, `where` y `_count` | [Consultas](/docs/2-dam/apis/backend-proyecto/consultas-relacionadas) |
+| Búsqueda y filtrado | No dado | Todo, con Prisma | [Listado paginado](/docs/2-dam/apis/backend-proyecto/listado-paginado) |
+| Ordenación y paginación | No dado | Todo, y devolver el total | [Listado paginado](/docs/2-dam/apis/backend-proyecto/listado-paginado) |
+| API REST | Dado | Nada | [Servidor con Express 5](/docs/2-dam/apis/backend/servidor-express) y [CRUD de usuarios](/docs/2-dam/apis/backend/crud-usuarios) |
+| Validación en backend | Dado | Validar los *query params* | [Listado paginado](/docs/2-dam/apis/backend-proyecto/listado-paginado) |
+| Gestión de errores | Dado | Nada (opcional: `HttpError`) | [Errores HTTP](/docs/2-dam/apis/backend-proyecto/errores-http) |
+| Operación de negocio | No dado | Todo | [Transacciones](/docs/2-dam/apis/backend-proyecto/transacciones) |
+| Uso de transacciones | No dado | Todo | [Transacciones](/docs/2-dam/apis/backend-proyecto/transacciones) |
+| Consumo de la API desde Angular | A medias | Contra tu API: CORS y el token | [CORS y token](/docs/2-dam/apis/backend-proyecto/cors-y-token) y [Listado con filtros, paginación y token](/docs/2-dam/acceso-a-datos/angular-avanzado/listado-filtros-y-token) |
+
+El último se vio a medias el 27/10 y el 28/10, con servicios de `HttpClient` contra JSONPlaceholder, Fake Store API y JSON Server, pero nunca contra una API propia. El 18/11 salió el error de CORS.
+
+Ve marcando lo que ya tienes. Se guarda solo en tu navegador:
+
+<ChecklistRequisitos
+  items={[
+    { id: 'postgres', texto: 'PostgreSQL', estado: 'dado', enlace: '/docs/2-dam/apis/backend/postgres-docker-supabase' },
+    { id: 'orm', texto: 'Prisma o TypeORM', estado: 'dado', enlace: '/docs/2-dam/apis/backend/prisma' },
+    { id: 'entidades', texto: 'Varias entidades persistentes y relacionadas', estado: 'a-medias', enlace: '/docs/2-dam/apis/backend-proyecto/modelo-y-seed' },
+    { id: 'relaciones', texto: 'Relaciones 1 y N que se usan de verdad', estado: 'a-medias', enlace: '/docs/2-dam/apis/backend-proyecto/modelo-y-seed' },
+    { id: 'migraciones', texto: 'Migraciones subidas al repositorio', estado: 'dado', enlace: '/docs/2-dam/apis/backend/prisma#migraciones' },
+    { id: 'seed', texto: 'Seed de datos', estado: 'no-dado', enlace: '/docs/2-dam/apis/backend-proyecto/modelo-y-seed' },
+    { id: 'crud', texto: 'Operaciones CRUD de tus entidades', estado: 'dado', enlace: '/docs/2-dam/apis/backend/crud-usuarios' },
+    { id: 'consultas', texto: 'Consultas relacionales y por criterios', estado: 'a-medias', enlace: '/docs/2-dam/apis/backend-proyecto/consultas-relacionadas' },
+    { id: 'busqueda', texto: 'Búsqueda y filtrado en el backend', estado: 'no-dado', enlace: '/docs/2-dam/apis/backend-proyecto/listado-paginado' },
+    { id: 'paginacion', texto: 'Ordenación y paginación con el total', estado: 'no-dado', enlace: '/docs/2-dam/apis/backend-proyecto/listado-paginado' },
+    { id: 'rest', texto: 'API REST', estado: 'dado', enlace: '/docs/2-dam/apis/backend/servidor-express' },
+    { id: 'validacion', texto: 'Validación en el backend con Zod (falta la de los query params)', estado: 'dado', enlace: '/docs/2-dam/apis/backend-proyecto/listado-paginado' },
+    { id: 'errores', texto: 'Gestión de errores con códigos HTTP', estado: 'dado', enlace: '/docs/2-dam/apis/backend-proyecto/errores-http' },
+    { id: 'negocio', texto: 'Operación de negocio', estado: 'no-dado', enlace: '/docs/2-dam/apis/backend-proyecto/transacciones' },
+    { id: 'transaccion', texto: 'Uso de transacciones', estado: 'no-dado', enlace: '/docs/2-dam/apis/backend-proyecto/transacciones' },
+    { id: 'angular', texto: 'Consumo de la API desde Angular (CORS y token)', estado: 'a-medias', enlace: '/docs/2-dam/apis/backend-proyecto/cors-y-token' },
+  ]}
+/>
+
+## Lo que te pueden pedir en la defensa
+
+<Callout type="idea" title="Es una previsión">
+  Esto no lo ha dicho el profesor: es lo más probable que te pidan demostrar de cada requisito.
+</Callout>
+
+- **Prisma:** añadir un campo, crear la migración y enseñar el SQL que genera.
+- **Seed:** `npx prisma migrate reset` y ver que la base vuelve con datos.
+- **Listado:** cambiar el filtro en Angular y enseñar la petición en la pestaña Red del navegador (los parámetros viajan en la URL y la respuesta trae solo una página).
+- **Transacción:** forzar un error en mitad de la operación y comprobar que no se guardó nada.
+- **Errores HTTP:** provocar un 400 (dato mal), un 404 (id que no existe) y un 409 (duplicado).
+
+## Comprueba lo que sabes
+
+<Quiz titulo="Test: qué piden los requisitos" descripcion="6 preguntas">
+  <Pregunta enunciado="¿Cuáles de estos requisitos de la tabla de mínimos no se han dado nada en clase?" explicacion="Seed, búsqueda y filtrado, operación de negocio y transacciones no salieron nunca. Las migraciones y la validación con Zod sí se dieron (27/10 y 03/11).">
+    <Opcion correcta>Seed de datos</Opcion>
+    <Opcion correcta>Búsqueda y filtrado</Opcion>
+    <Opcion correcta>Uso de transacciones</Opcion>
+    <Opcion>Migraciones</Opcion>
+    <Opcion>Validación en backend</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Si hay bastantes datos, vale con que el backend devuelva todos los registros y Angular filtre y pagine." respuesta={false} explicacion="El §5 dice que los criterios se mandan al backend y se convierten en consultas del ORM. Descargarlo todo y filtrar en Angular no se considera adecuado." />
+  <Pregunta enunciado="¿Qué tiene que devolver la API, además de los elementos de la página, para que Angular pueda paginar bien?" explicacion="Con el total (y el tamaño de página) Angular sabe cuántas páginas hay y puede desactivar el botón Siguiente en la última.">
+    <Opcion>El SQL que ha ejecutado</Opcion>
+    <Opcion correcta>El total de registros que cumplen el filtro</Opcion>
+    <Opcion>Todos los registros, por si acaso</Opcion>
+    <Opcion>Nada más</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Según el §4, ¿qué organización del backend no se considera adecuada?" explicacion="El documento pide separar rutas, controladores, servicios, ORM y base de datos. Meterlo todo en un fichero es justo lo que dice que no vale.">
+    <Opcion>Un módulo por recurso con routes, controller, service y schema</Opcion>
+    <Opcion correcta>Rutas, lógica y acceso a datos en un único fichero</Opcion>
+    <Opcion>Un único `PrismaClient` en `config/db.ts`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Las migraciones tienen que estar guardadas en el repositorio." respuesta={true} explicacion="El §3 pide que la evolución del esquema se gestione con migraciones y que se conserven en el repositorio: la carpeta `prisma/migrations`." />
+  <Pregunta enunciado="¿Cuándo exige el documento usar una transacción?" explicacion="El §6 la pide cuando una operación hace varias modificaciones relacionadas y, si falla una, los datos quedarían inconsistentes.">
+    <Opcion>En todas las consultas</Opcion>
+    <Opcion>Solo en los `DELETE`</Opcion>
+    <Opcion correcta>Cuando hay varias modificaciones relacionadas y riesgo de dejar los datos a medias</Opcion>
+    <Opcion>Nunca, es opcional</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: requisitos de backend">
+  <Tarjeta frente="¿Qué tiene que incluir el modelo de datos (§3)?">Varias entidades, claves primarias y ajenas, campos obligatorios y opcionales, únicos cuando proceda y relaciones 1 y N que se usen de verdad.</Tarjeta>
+  <Tarjeta frente="Además del CRUD, ¿qué consultas piden (§5)?">Por criterios, con datos relacionados, filtros, orden, selección de campos, búsquedas y paginación.</Tarjeta>
+  <Tarjeta frente="¿Qué listado tiene que tener búsqueda, filtro, orden y paginación?">Al menos uno de los principales. Los criterios van de Angular al backend y los resuelve el ORM.</Tarjeta>
+  <Tarjeta frente="¿Qué es una operación de negocio (§6)?">Una operación con varias acciones relacionadas (comprobar, crear o cambiar datos, actualizar estados) que no se reduce a un CRUD.</Tarjeta>
+  <Tarjeta frente="¿Qué casos tienen que distinguir los códigos HTTP (§7)?">Bien (200, 201, 204), petición incorrecta (400), no existe (404), conflicto (409) y error interno (500).</Tarjeta>
+  <Tarjeta frente="¿Dónde van las cadenas de conexión y las credenciales?">En variables de entorno (`.env`), nunca en el código. En clase, con `config/env.ts` y dotenv.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Tu tabla de requisitos" dificultad="facil">
+  Copia la tabla del §8 y, para tu proyecto, escribe al lado de cada requisito **con qué entidad o qué ruta lo cumples**. Por ejemplo, para "Relaciones 1 y N" escribe qué dos entidades están relacionadas y cuál es la clave ajena.
+
+  <Pista>Empieza por las entidades: ¿qué cosas guarda tu aplicación? Después, ¿qué listado es el principal (el que tendrá búsqueda y paginación)?</Pista>
+  <Pista>Para la operación de negocio, piensa en una acción del usuario que cambie más de una tabla a la vez.</Pista>
+
+  <Solucion>
+
+Un ejemplo para una app de reservas de pistas:
+
+| Requisito | En mi proyecto |
+| --- | --- |
+| Varias entidades | `Usuario`, `Pista`, `Hueco` y `Reserva` |
+| Relaciones 1 y N | Una `Pista` tiene muchos `Hueco` (`pistaId` en `Hueco`) y un `Usuario`, muchas `Reserva` (`usuarioId` en `Reserva`) |
+| Seed | 3 pistas, 20 huecos y 2 usuarios con la contraseña hasheada |
+| Búsqueda, filtro, orden y paginación | `GET /api/pistas?q=&deporte=&orden=precio&page=` |
+| Consultas relacionales | La pista con sus huecos libres (`include` con `where`) |
+| Operación de negocio con transacción | `POST /api/huecos/:id/reservar`: comprueba que está libre, crea la reserva y marca el hueco como ocupado |
+
+</Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="¿CRUD u operación de negocio?" dificultad="media">
+  Di cuáles de estas acciones son una operación de negocio que necesita transacción y cuáles son un CRUD normal:
+
+  1. Cambiar el nombre de una categoría.
+  2. Confirmar un pedido restando el stock de cada producto.
+  3. Borrar un comentario.
+  4. Transferir puntos de un usuario a otro.
+  5. Registrar un usuario creando también su perfil en otra tabla.
+
+  <Pista>Pregúntate: si falla a mitad, ¿quedan los datos inconsistentes?</Pista>
+
+  <Solucion>
+
+- **CRUD normal:** 1 y 3. Son una sola sentencia: si falla, no se ha cambiado nada.
+- **Operación de negocio con transacción:** 2, 4 y 5. Las tres cambian varias filas o tablas. Si en la 2 falta stock del tercer producto, hay que devolver el de los dos primeros. En la 4, si se restan los puntos a uno y falla el sumárselos al otro, se pierden puntos. En la 5, quedaría un usuario sin perfil.
+
+</Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

@@ -1,0 +1,561 @@
+---
+title: "Kotlin desde Java: clases y funciones"
+description: "Clases y propiedades, backing properties, data class y copy(), object, sealed class, when exhaustivo, lambdas, tipos función, referencias con ::, funciones de extensión y delegados con by."
+icon: Braces
+---
+
+Segunda parte del Kotlin que salió en clase. Aquí está todo lo que necesitas para leer el código de los proyectos: cómo se declaran las clases y sus propiedades, los `data class` del estado, las `sealed class` de los estados de pantalla y, sobre todo, las **lambdas**, que en Compose están por todas partes. Si te falta lo básico (`val`, nulables, `if` como expresión), empieza por [Kotlin desde Java: lo básico](/docs/2-dam/kotlin/compose/kotlin-basico).
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Clases con constructor primario, herencia e interfaces sin `new` ni `extends`.
+  - Propiedades con getter propio y la convención `_estado` / `estado` (*backing property*).
+  - `data class` con `copy()`, `object`, `sealed class` y `sealed interface`.
+  - `when` exhaustivo, `is` y el *smart cast*.
+  - Lambdas, tipos función como `() -> Unit` y `(Int) -> Unit`, y referencias a función con `::`.
+  - Funciones de extensión (`toModel()`), `let`, `also`, `vararg` y delegados con `by`.
+</Callout>
+
+## Clases, constructores y herencia
+
+En Kotlin el constructor principal va **en la misma cabecera** de la clase. Si pones `val` o `var` delante de un parámetro, además se convierte en una propiedad:
+
+<Comparar columnas titulo="Una clase con dos propiedades">
+  <Lado titulo="Java">
+
+```java
+public class Pokemon {
+    private final int id;
+    private final String name;
+
+    public Pokemon(int id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+    public int getId() { return id; }
+    public String getName() { return name; }
+}
+```
+
+  </Lado>
+  <Lado titulo="Kotlin">
+
+```kotlin
+class Pokemon(
+    val id: Int,
+    val name: String,
+)
+```
+
+  </Lado>
+</Comparar>
+
+- Se crea un objeto sin `new`: `val p = Pokemon(id = 1, name = "bulbasaur")`.
+- Se lee la propiedad directamente: `p.name`. Por debajo Kotlin genera el *getter*, pero no lo escribes.
+- Las clases en Kotlin son **`final` por defecto**: para poder heredar de una tiene que ser `open` o `abstract`.
+
+**Herencia e interfaces** van detrás de dos puntos. Si heredas de una clase, **llamas a su constructor** con paréntesis; si implementas una interfaz, no:
+
+```kotlin title="Herencia.kt"
+class TaskListViewModel @Inject constructor(
+    private val _repository: TaskRepository
+) : ViewModel() {            // ViewModel es una clase: lleva ()
+    // ...
+}
+
+class TaskRepositoryInMemory @Inject constructor() : TaskRepository {   // interfaz: sin ()
+    // ...
+}
+```
+
+<DeClase fecha="09/10" proyecto="ToDoApp" />
+
+- `private val _repository` en el constructor crea una propiedad privada. Es la forma de recibir dependencias que se vio en clase (Hilt las rellena; eso se explica en el [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura/hilt)).
+- **Una interfaz no se puede instanciar.** El 09/10 el profesor escribió `TaskRepository()` como valor por defecto y dio error; hay que usar la implementación, `TaskRepositoryInMemory()`.
+- `@Inject constructor(...)`: cuando la clase lleva una anotación en el constructor, hay que escribir la palabra `constructor`.
+
+## Propiedades y *backing property*
+
+<DeClase fecha="07/10, 16/10, 23/10" proyecto="TipCalculator y ToDoApp" />
+
+Una propiedad puede tener un **getter propio**, que se ejecuta cada vez que se lee:
+
+```kotlin
+val state: TipCalculatorScreenState
+    get() = _state
+```
+
+Con eso se monta un patrón que verás en todos los ViewModel de clase, la <Concepto termino="Backing property" definicion="Una propiedad privada y mutable (`_estado`) que solo cambia la propia clase, y otra pública de solo lectura (`estado`) que la expone hacia fuera.">backing property</Concepto>:
+
+```kotlin title="TipCalculatorViewModel.kt"
+class TipCalculatorViewModel(): ViewModel() {
+    private var _state = TipCalculatorScreenState()
+    val state: TipCalculatorScreenState
+        get() = _state
+}
+```
+
+- **`_state`** (con guion bajo) es `private var`: solo la clase puede cambiarla.
+- **`state`** es `val` y pública: desde fuera se puede leer, pero no asignar.
+- La convención del guion bajo (`_nombre`) para lo privado la usa el profesor también en los parámetros: `_repository`, `_api`, `_localDataSource`.
+
+<Callout type="warn" title="Una propiedad tiene que tener valor">
+  En Kotlin, una propiedad se inicializa al declararla o es `abstract`. El 16/10, al declarar en el ViewModel el `TextFieldState` del formulario sin darle valor, salió el error **Property must be initialized or be abstract**, y se arregló con `= TextFieldState()`.
+</Callout>
+
+## `data class` y `copy()`
+
+<DeClase fecha="07/10" proyecto="TipCalculator" />
+
+Un **`data class`** es una clase para guardar datos. Kotlin le genera solo `equals`, `hashCode`, `toString` y `copy()`, lo que en Java serían decenas de líneas (o un `record`).
+
+```kotlin title="TipCalculatorScreenState.kt"
+data class TipCalculatorScreenState(
+    val guests: String = "0",
+    val amount: String = "0.00",
+    val tip: Boolean = false,
+    val tipAmount: Float = 0.0F,
+    val result: String = "",
+    val isCaculateEnabled: Boolean = false
+)
+```
+
+- <Dudoso nota="Casi todas las capturas leen `isCaculateEnabled` y solo una `isCalculateEnabled`. Puede ser una errata del profesor o de la lectura.">`isCaculateEnabled`</Dudoso> se ha dejado como se leyó.
+- Todos los campos tienen **valor por defecto**, así que `TipCalculatorScreenState()` crea el estado inicial sin pasar nada.
+
+**`copy()`** crea un objeto nuevo igual que el original, cambiando solo lo que le digas con argumentos con nombre. Así se cambia un estado que es todo `val`:
+
+```kotlin title="TipCalculatorViewModel.kt"
+fun changeTip(isEnabled: Boolean) {
+    _state = _state.copy(
+        tip = isEnabled,
+        tipAmount = if (!isEnabled) 0.0f else _state.tipAmount
+    )
+}
+```
+
+En clase se hizo en dos pasos, y conviene entender por qué:
+
+<Steps>
+  <Step>
+
+#### Primero, campos `var` mutados a mano
+
+  El ViewModel tenía `val state = TipCalculatorScreenState()` y hacía `state.tip = isEnabled`. Solo compilaba porque `tip` era `var` en el `data class`.
+
+  </Step>
+  <Step>
+
+#### Después, todo `val` y `copy()`
+
+  Los campos pasaron a `val`, `state.tip = ...` dejó de compilar y apareció el patrón `private var _state` + `copy()`. El objeto de estado ya no cambia nunca: se sustituye entero por uno nuevo. Es la base del **estado inmutable** que usa Compose.
+
+  </Step>
+</Steps>
+
+<Callout type="error" title="Ojo: este ViewModel no repinta la pantalla">
+  `_state` es una variable normal, así que Compose no se entera cuando cambia y no vuelve a pintar. El propio profesor dejó un `TODO Corregir esto para que vaya perfecto`. Por qué pasa y cómo se arregla está en [Estado y recomposición](/docs/2-dam/kotlin/compose/estado-y-recomposicion#práctica-rara-un-estado-que-compose-no-ve).
+</Callout>
+
+## `object`
+
+Un **`object`** es una clase de la que solo existe **una instancia**, creada por Kotlin (el patrón *singleton* de Java, sin escribirlo). Se usa por su nombre, sin paréntesis:
+
+```kotlin
+object Configuracion {
+    val version = 1
+}
+
+println(Configuracion.version)
+```
+
+En clase salieron sobre todo como opciones de una `sealed class` que no llevan datos (`object Loading`) y como rutas de navegación sin argumentos (`object TaskList`).
+
+<Callout type="info" title="Modifier y el Companion">
+  Una clase puede tener un `companion object`: lo más parecido a los miembros `static` de Java. Cuando escribes `Modifier` como valor (`modifier: Modifier = Modifier`), estás usando el *companion* de la interfaz `Modifier`. Por eso `Modifier.Companion`, que salía en la ToDoApp, es lo mismo que `Modifier`.
+</Callout>
+
+## `sealed class` y `sealed interface`
+
+<DeClase fecha="23/10, 09/11" proyecto="ToDoApp y PokeApp2627" />
+
+Una **`sealed class`** (o `sealed interface`) es un tipo con una **lista cerrada de subtipos**, todos declarados en el mismo paquete. Es perfecta para los estados de una pantalla: cargando, con datos o con error, y nada más.
+
+<Tabs items={['sealed class', 'sealed interface']}>
+  <Tab value="sealed class">
+
+```kotlin title="TaskListScreenState.kt"
+sealed class TaskListScreenState {
+    object Initial : TaskListScreenState()
+    object Loading : TaskListScreenState()
+    class Success(val tasks: List<Task>) : TaskListScreenState()
+    class Error(val message: String) : TaskListScreenState()
+}
+```
+
+Con `sealed class`, cada opción **llama al constructor del padre**: `: TaskListScreenState()`.
+
+  </Tab>
+  <Tab value="sealed interface">
+
+```kotlin title="TaskCreateScreenState.kt"
+sealed interface TaskCreateScreenState {
+    object Initial : TaskCreateScreenState
+    object Creating : TaskCreateScreenState
+    object Created : TaskCreateScreenState
+    object Error : TaskCreateScreenState
+}
+```
+
+Con `sealed interface` no hay constructor que llamar: **sin paréntesis**.
+
+  </Tab>
+</Tabs>
+
+¿Cuándo `object` y cuándo `class`? Lo explicó el profesor el 23/10:
+
+- **`object`** si el estado **no lleva datos** (`Loading`): todos los "cargando" son iguales, basta una instancia.
+- **`class`** si **lleva datos** (`Success(val tasks: ...)`): cada éxito tiene su propia lista. Al crearlo se llama con paréntesis: `TaskListScreenState.Success(tasks)`. En cambio `Loading()` es un error, porque es un `object` (al profesor le pasó y lo corrigió).
+
+### `when` exhaustivo, `is` y el *smart cast*
+
+<Recorrido
+  titulo="TaskListScreen.kt (la versión con estado)"
+  lenguaje="kotlin"
+  codigo={`val state by viewModel.state.collectAsStateWithLifecycle()
+when (state) {
+    is TaskListScreenState.Success -> {
+        val tasks = (state as TaskListScreenState.Success).tasks
+        TaskListScreen(isLoading = false, tasks = tasks)
+    }
+    is TaskListScreenState.Error -> TODO()
+    TaskListScreenState.Loading -> TaskListScreen(isLoading = true)
+    TaskListScreenState.Initial -> TaskListScreen(isLoading = true)
+}`}
+>
+  <Paso lineas="2" titulo="Un when sobre un tipo sellado">
+    Como `TaskListScreenState` es `sealed`, el compilador conoce todas sus opciones y obliga a cubrirlas. Si falta alguna, el IDE propone **Add remaining branches**. Es lo que pasó en clase el 23/10.
+  </Paso>
+  <Paso lineas="3, 7" titulo="Las class van con is">
+    `Success` y `Error` son `class`: cada una puede tener muchas instancias, así que se pregunta por el **tipo** con `is`. Sin `is`, `TaskListScreenState.Success ->` da el error *does not have a companion object*.
+  </Paso>
+  <Paso lineas="8-9" titulo="Los object, sin is">
+    `Loading` e `Initial` son `object`: hay una sola instancia y se compara con ella directamente (también funcionaría con `is`).
+  </Paso>
+  <Paso lineas="4" titulo="El cast explícito con as">
+    Para leer `.tasks` hay que tratar `state` como `Success`. El profesor usa `as`. En clase no se explicó por qué no basta con el *smart cast*: es porque `state` es una variable **delegada** (`by`), y Kotlin no puede garantizar que dos lecturas seguidas devuelvan lo mismo.
+  </Paso>
+</Recorrido>
+
+Esto es un resumen: se han quitado los argumentos de navegación de cada llamada y la llamada a `viewModel.load()` de la rama `Initial`, para que se lea mejor. En esa rama, una captura lee <Dudoso nota="Otra captura lee `isLoading = false`.">`isLoading = true`</Dudoso>. La pantalla completa, con su explicación, está en [Estado y recomposición](/docs/2-dam/kotlin/compose/estado-y-recomposicion#state-hoisting-pantalla-con-estado-y-sin-estado).
+
+El **smart cast** es que Kotlin, después de comprobar el tipo, te deja usar la variable como ese tipo sin hacer el cast tú:
+
+```kotlin
+val s: TaskListScreenState = obtenerEstado()   // una val normal, sin by
+if (s is TaskListScreenState.Success) {
+    println(s.tasks.size)    // smart cast: aquí s ya es Success
+}
+```
+
+Funciona con variables locales `val` normales. No funciona con propiedades delegadas ni con `var` que podrían cambiar entre la comprobación y el uso; en esos casos hay que usar `as` o copiar el valor a una `val` antes.
+
+## Interfaces con propiedades
+
+<DeClase fecha="09/11" proyecto="PokeApp2627" />
+
+En Kotlin una interfaz puede declarar **propiedades**, no solo métodos. La clase que la implementa las sobrescribe con `override val`:
+
+```kotlin title="PokemonLocalDataSource.kt"
+interface PokemonLocalDataSource {
+    val pokemons: Flow<List<Pokemon>>
+    suspend fun save(pokemons: List<Pokemon>)
+}
+
+class PokemonInMemoryDataSource @Inject constructor() : PokemonLocalDataSource {
+    private val _pokemons: MutableList<Pokemon> = mutableListOf()
+    override val pokemons: Flow<List<Pokemon>> = flow { emit(_pokemons) }
+    override suspend fun save(pokemons: List<Pokemon>) {
+        _pokemons.clear()
+        _pokemons.addAll(pokemons)
+    }
+}
+```
+
+Qué es un `Flow` y qué hace `suspend` se explica en el [bloque de datos](/docs/2-dam/kotlin/datos). Aquí importa la sintaxis: `val` en la interfaz, `override val` en la clase.
+
+## Lambdas y tipos función
+
+<DeClase fecha="09/10, 09/11" proyecto="ToDoApp y PokeApp2627" />
+
+Una **lambda** es una función sin nombre que se puede guardar en una variable o pasar como parámetro. En Kotlin se escribe **entre llaves**: los parámetros, una flecha `->` y el cuerpo. La última línea es lo que devuelve.
+
+```kotlin title="Lambdas.kt"
+val doble: (Int) -> Int = { n -> n * 2 }
+val saludar: () -> Unit = { println("Hola") }
+val sumar: (Int, Int) -> Int = { a, b -> a + b }
+
+doble(4)       // 8
+saludar()      // Hola
+```
+
+El tipo de una función se escribe con la flecha: **`(Int) -> Int`** recibe un `Int` y devuelve un `Int`; **`() -> Unit`** no recibe nada y no devuelve nada. En Compose verás estos dos todo el rato, porque son los **callbacks**: la forma en que una pantalla avisa de que ha pasado algo.
+
+```kotlin title="TaskListScreen.kt"
+@Composable
+fun TaskListScreen(
+    modifier: Modifier = Modifier,
+    toCreate: () -> Unit,          // "han pulsado crear"
+    toDetail: (Int) -> Unit,       // "han pulsado la tarea con este id"
+) { /* ... */ }
+```
+
+### `it`, y la lambda fuera de los paréntesis
+
+- Si la lambda tiene **un solo parámetro**, puedes no ponerle nombre: se llama **`it`**. `{ id -> toDetail(id) }` es lo mismo que `{ toDetail(it) }`.
+- Si **el último parámetro** de una función es una lambda, se puede escribir **fuera de los paréntesis** (*trailing lambda*). Y si es el único, los paréntesis desaparecen:
+
+```kotlin
+// Cada pareja de líneas es la misma llamada
+Button(onClick = { guardar() }, content = { Text("Guardar") })
+Button(onClick = { guardar() }) { Text("Guardar") }
+
+Column(content = { Text("A") })
+Column { Text("A") }
+```
+
+Por eso en Compose casi todo acaba en llaves: `Column { ... }`, `Card { ... }`, `Scaffold { innerPadding -> ... }`. Ese último es una lambda con un parámetro con nombre (`innerPadding`).
+
+### Lambdas con receptor
+
+Algunas lambdas tienen un **receptor**: dentro, `this` es un objeto concreto y puedes llamar a sus funciones directamente. Su tipo se escribe `Receptor.() -> Unit`. El 09/10 el profesor enseñó que el último parámetro de `NavHost` es `builder: NavGraphBuilder.() -> Unit`: por eso dentro de sus llaves puedes llamar a `composable<...> { }`, que es una función de `NavGraphBuilder`. Lo mismo pasa con `LazyColumn { }`, cuyo receptor es `LazyListScope` (lo verás en [Listas](/docs/2-dam/kotlin/compose/listas)).
+
+### Referencia a función con `::`
+
+<DeClase fecha="07/10, 16/10" proyecto="TipCalculator y ToDoApp" />
+
+Para pasar una función que ya existe como si fuera una lambda, se usa **`::`**. El 07/10 el profesor probó tres formas de conectar el botón Calcular:
+
+<Comparar titulo="Pasar una función del ViewModel al onClick">
+  <Lado tipo="evitar" titulo="No compila">
+
+```kotlin
+Button(onClick = viewModel.calculateSplit) { ... }
+```
+
+Sin paréntesis ni `::`, Kotlin no entiende que quieres pasar la función.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Referencia a función">
+
+```kotlin
+Button(onClick = viewModel::calculateSplit) { ... }
+```
+
+`viewModel::calculateSplit` es la función **sin llamarla**, del tipo `() -> Unit`. Es la que dejó el profesor.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Lambda">
+
+```kotlin
+Button(onClick = { viewModel.calculateSplit() }) { ... }
+```
+
+Una lambda que, cuando se pulse, llamará a la función. Hace lo mismo.
+
+  </Lado>
+</Comparar>
+
+La referencia solo encaja si los tipos coinciden: `Switch(onCheckedChange = viewModel::changeTip)` funciona porque `onCheckedChange` es `(Boolean) -> Unit` y `changeTip(isEnabled: Boolean)` recibe un `Boolean`.
+
+## Funciones de extensión
+
+<DeClase fecha="26/10" proyecto="PokeApp2627" />
+
+Kotlin deja **añadir funciones a una clase que no es tuya** sin heredar de ella. Se escribe el tipo, un punto y el nombre de la función. Dentro, `this` es el objeto sobre el que se llama:
+
+```kotlin title="PokemonApiModels.kt"
+fun PokemonResult.toModel(): Pokemon = Pokemon(
+    id = this.id,
+    name = this.name,
+    pokemonImageUrl = this.sprites?.frontDefault,
+)
+
+// Se usa como si fuera un método de PokemonResult
+val pokemon: Pokemon = response.body()!!.toModel()
+```
+
+Es el *mapper* que convierte la respuesta de la API (`PokemonResult`) en el modelo de la app (`Pokemon`). Por qué conviene separarlos lo verás en el [bloque de datos](/docs/2-dam/kotlin/datos/retrofit).
+
+Hay extensiones por todas partes en Compose y en la librería estándar:
+
+- **`16.dp`**: `dp` es una *propiedad* de extensión de `Int`. Convierte el número en una medida de Compose.
+- **`10.seconds`**: lo mismo, de `kotlin.time`. El 13/11 se pasó de `delay(timeMillis = 10_000L)` a `10_000L.milliseconds` y luego a `10.seconds`.
+- **`"bulbasaur".replaceFirstChar { ... }`**, **`lista.toList()`**: funciones de extensión de la librería estándar.
+
+## `let`, `also` y `vararg`
+
+**`let`** y **`also`** son funciones de la librería estándar que reciben una lambda. Se diferencian en lo que devuelven:
+
+| Función | Dentro de la lambda | Devuelve | Ejemplo de clase |
+| --- | --- | --- | --- |
+| `x.let { }` | `it` es `x` | **El resultado de la lambda** | `id?.let { Text("Tarea $id") }` (09/10) |
+| `x.also { }` | `it` es `x` | **El propio `x`** | `toMutablePreferences().also { it[uiMode] = mode }` (18/11) |
+
+El ejemplo de `also` es del 18/11, con DataStore: la lambda de `updateData` tenía que **devolver** las preferencias. Con `val mutable = ...; mutable[uiMode] = mode` la lambda no devolvía nada y daba error; con `.also { }` se modifica el objeto y además se devuelve.
+
+**`vararg`** deja pasar un número variable de argumentos, como `String...` en Java:
+
+```kotlin title="PokeDao.kt"
+@Insert
+suspend fun insert(vararg p: PokemonEntity)
+
+// insert(pikachu), insert(pikachu, charmander), ...
+```
+
+<DeClase fecha="13/11" proyecto="Room" />
+
+## Delegados con `by`
+
+La palabra **`by`** hace que una variable **delegue** su lectura y escritura en otro objeto. En clase salió con el estado de Compose:
+
+```kotlin
+var clics by remember { mutableStateOf(0) }
+clics++                     // por debajo: estado.value = estado.value + 1
+
+val state by viewModel.state.collectAsStateWithLifecycle()
+```
+
+Con `by` usas `clics` como un `Int` normal, sin escribir `.value`. Para que funcione, el objeto tiene que saber hacer de delegado (tener `getValue` y, si es `var`, `setValue`), y hay que importar `androidx.compose.runtime.getValue` y `setValue`.
+
+<Callout type="warn" title="= frente a by">
+  El 09/10 el profesor escribió `val controller by rememberNavController()` a propósito y dio error: un `NavHostController` no tiene `getValue`, así que no puede ser delegado. Se escribe con `=`: `val controller = rememberNavController()`. Regla: **`by` solo con estados** (`mutableStateOf`, `collectAsStateWithLifecycle`...); con objetos normales, `=`.
+</Callout>
+
+## Practica
+
+<CompletarCodigo
+  titulo="Estado inmutable con copy()"
+  enunciado="Completa la backing property y el cambio de estado con copy()."
+  lenguaje="kotlin"
+  codigo={`[[data]] class ContadorState(val clics: Int = 0, val activo: Boolean = true)
+
+class ContadorViewModel : ViewModel() {
+    [[private]] var _state = ContadorState()
+    val state: ContadorState
+        [[get()]] = _state
+
+    fun sumar() {
+        _state = _state.[[copy]](clics = _state.clics + 1)
+    }
+}`}
+/>
+
+<Quiz titulo="Test: clases y funciones en Kotlin" descripcion="8 preguntas">
+  <Pregunta enunciado="¿Qué le añade Kotlin a un `data class`?" explicacion="Genera `equals`, `hashCode`, `toString`, `copy()` y las funciones `componentN` para desestructurar. Los getters los tiene cualquier clase con `val`.">
+    <Opcion correcta>`equals`, `hashCode`, `toString` y `copy()`</Opcion>
+    <Opcion>Solo los getters y setters</Opcion>
+    <Opcion>Un constructor vacío obligatorio</Opcion>
+    <Opcion>Que sea un singleton</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En una `sealed class TaskListScreenState`, ¿cuál es la forma correcta de declarar un estado de éxito que lleva la lista?" explicacion="Lleva datos, así que es una `class` con la propiedad, y al heredar de una `sealed class` se llama a su constructor con `()`.">
+    <Opcion>`object Success(val tasks: List<Task>) : TaskListScreenState()`</Opcion>
+    <Opcion correcta>`class Success(val tasks: List<Task>) : TaskListScreenState()`</Opcion>
+    <Opcion>`class Success(val tasks: List<Task>) : TaskListScreenState`</Opcion>
+    <Opcion>`data object Success : TaskListScreenState()`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="En un `when` sobre un tipo sellado, una opción que es `class` se puede comparar sin `is`." respuesta={false} explicacion="Sin `is`, Kotlin busca un valor con ese nombre (el *companion object*) y da error. Las `class` van con `is`; los `object` pueden ir sin él." />
+  <Pregunta enunciado="¿De qué tipo es `viewModel::calculateSplit` si la función es `fun calculateSplit() { }`?" explicacion="Es una referencia a una función que no recibe nada y no devuelve nada: encaja donde se espera `() -> Unit`, como el `onClick` de un `Button`.">
+    <Opcion>`Unit`</Opcion>
+    <Opcion correcta>`() -> Unit`</Opcion>
+    <Opcion>`(Unit) -> Unit`</Opcion>
+    <Opcion>`String`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿Qué palabra usa una lambda de un solo parámetro cuando no le pones nombre?" respuesta="it" explicacion="`{ toDetail(it.id) }` es lo mismo que `{ task -> toDetail(task.id) }`." />
+  <Pregunta enunciado="¿Qué devuelve `lista.also { it.add(4) }`?" explicacion="`also` devuelve siempre el objeto sobre el que se llama, después de ejecutar la lambda. `let` devolvería el resultado de la lambda (aquí, el `Boolean` de `add`).">
+    <Opcion correcta>La propia `lista`, ya con el 4</Opcion>
+    <Opcion>`true`, que es lo que devuelve `add`</Opcion>
+    <Opcion>`Unit`</Opcion>
+    <Opcion>Una copia de la lista sin el 4</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué no compila `val controller by rememberNavController()`?" explicacion="`by` necesita que el objeto sepa hacer de delegado (`getValue`). `NavHostController` no lo tiene: se usa `=`.">
+    <Opcion>Porque `rememberNavController()` es `suspend`.</Opcion>
+    <Opcion correcta>Porque `NavHostController` no tiene `getValue` y no puede ser delegado.</Opcion>
+    <Opcion>Porque `by` solo vale con `var`.</Opcion>
+    <Opcion>Porque falta el tipo de la variable.</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Cuáles son ciertas sobre `fun PokemonResult.toModel(): Pokemon`?" explicacion="Es una función de extensión: no modifica `PokemonResult` ni hereda de él. Se llama como un método y dentro `this` es el `PokemonResult`.">
+    <Opcion correcta>Se llama como `resultado.toModel()`.</Opcion>
+    <Opcion correcta>Dentro, `this` es el `PokemonResult` sobre el que se llama.</Opcion>
+    <Opcion>Hace falta que `PokemonResult` sea `open`.</Opcion>
+    <Opcion>Cambia el código de la clase `PokemonResult`.</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: clases y funciones">
+  <Tarjeta frente="¿Qué hace `val` en un parámetro del constructor?">Convierte el parámetro en una propiedad de la clase: `class Pokemon(val id: Int)` tiene `p.id`.</Tarjeta>
+  <Tarjeta frente="Backing property">`private var _state` (mutable, interna) y `val state get() = _state` (pública, de solo lectura).</Tarjeta>
+  <Tarjeta frente="¿Para qué sirve `copy()`?">Crea un objeto nuevo igual al original cambiando solo los campos que le pasas con nombre. Base del estado inmutable.</Tarjeta>
+  <Tarjeta frente="`object` frente a `class` en un estado sellado">`object` si el estado no lleva datos (`Loading`); `class` si lleva (`Success(val tasks)`).</Tarjeta>
+  <Tarjeta frente="`sealed class` frente a `sealed interface`">En la `class` cada opción llama al constructor del padre (`: Estado()`); en la `interface`, sin paréntesis.</Tarjeta>
+  <Tarjeta frente="Tipo de un callback sin datos">`() -> Unit`. Con un id: `(Int) -> Unit`.</Tarjeta>
+  <Tarjeta frente="*Trailing lambda*">Si el último parámetro es una lambda, va fuera de los paréntesis: `Button(onClick = { }) { Text("OK") }`.</Tarjeta>
+  <Tarjeta frente="`let` frente a `also`">`let` devuelve el resultado de la lambda; `also` devuelve el propio objeto.</Tarjeta>
+  <Tarjeta frente="¿Qué es `16.dp`?">Una propiedad de extensión de `Int` que lo convierte en una medida `Dp` de Compose.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Estados de una pantalla de detalle" dificultad="media">
+  Declara una `sealed interface DetailState` con tres opciones: `Loading` (sin datos), `Loaded`, que lleva un `Pokemon`, y `Error`, que lleva un mensaje. Después escribe una función `fun texto(state: DetailState): String` con un `when` que devuelva `"Cargando..."`, el nombre del pokémon o `"Error: "` más el mensaje.
+
+  <Pista>Con `sealed interface`, las opciones no llevan `()` detrás del padre.</Pista>
+  <Pista>Si `state` es un parámetro (una `val` normal), dentro de la rama `is` funciona el *smart cast* y no hace falta `as`.</Pista>
+
+  <Solucion>
+
+```kotlin
+sealed interface DetailState {
+    object Loading : DetailState
+    class Loaded(val pokemon: Pokemon) : DetailState
+    class Error(val message: String) : DetailState
+}
+
+fun texto(state: DetailState): String = when (state) {
+    DetailState.Loading -> "Cargando..."
+    is DetailState.Loaded -> state.pokemon.name
+    is DetailState.Error -> "Error: ${state.message}"
+}
+```
+
+  No hace falta `else`: el `when` cubre todas las opciones de un tipo sellado. Si mañana añades una cuarta, el compilador te avisará aquí.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Un mapper con extensión" dificultad="facil">
+  Tienes este DTO de una API y este modelo. Escribe una función de extensión `toModel()` que pase de uno a otro: el nombre con la primera letra en mayúscula y la URL `null` si viene vacía.
+
+```kotlin
+data class ProductoDto(val id: Int, val nombre: String, val imagen: String)
+data class Producto(val id: Int, val nombre: String, val imagenUrl: String?)
+```
+
+  <Pista>`replaceFirstChar { it.uppercase() }` pone la primera letra en mayúscula.</Pista>
+  <Pista>`if (imagen.isBlank()) null else imagen` es una expresión.</Pista>
+
+  <Solucion>
+
+```kotlin
+fun ProductoDto.toModel(): Producto = Producto(
+    id = id,
+    nombre = nombre.replaceFirstChar { it.uppercase() },
+    imagenUrl = if (imagen.isBlank()) null else imagen,
+)
+```
+
+  Dentro de la extensión, `id`, `nombre` e `imagen` se refieren a las del `ProductoDto` (es como escribir `this.id`).
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

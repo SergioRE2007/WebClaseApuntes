@@ -1,0 +1,500 @@
+---
+title: Listado con filtros, paginación y token
+description: Lo que piden los requisitos de la web Angular y no se dio en clase. Un listado que manda filtros, orden y página a tu API con HttpParams, con estados de carga, error y vacío, borrar con confirmación, y el token guardado en localStorage con un interceptor.
+icon: ListFilter
+---
+
+<NoDadoEnClase>
+  **Esta página entera no es de clase.** Es la forma más estándar de hacer lo que piden los requisitos de la web Angular y no ha salido en las clases: listado con búsqueda, filtro, orden y paginación contra **vuestra** API, los estados de la pantalla, borrar con confirmación y que la sesión aguante una recarga. El código compila con Angular 19 (plantillas incluidas, en modo estricto). Si en la defensa os preguntan, decid que lo habéis buscado vosotros.
+</NoDadoEnClase>
+
+## Qué piden y qué se dio
+
+| Requisito de la web | Estado | Dónde se dio | Qué falta |
+| --- | --- | --- | --- |
+| Búsqueda, filtro y orden | A medias | 12/11: buscar por id y paginar con JSON Server | Mandar los criterios a vuestra API |
+| Paginación | A medias | 12/11: `_page`, `_limit` y `observe: 'response'` | Lo mismo, con el total que devuelva vuestra API |
+| Estados de carga, vacío y error | A medias | 27/10: las plantillas las generó la IA de Cursor | Los cuatro estados, hechos a mano |
+| Borrar con confirmación | A medias | Solo en la guía: `confirm()` dentro de un `CanDeactivate` | Un botón Borrar que pregunte antes |
+| HTTP solo en servicios | Dado | 27/10 y 28/10 | Nada |
+
+La idea de fondo: **Angular solo manda los criterios y pinta lo que devuelve la API**. Quien busca, filtra, ordena y pagina es el backend (con Prisma), no el navegador. En `proj-game` lo hacía JSON Server; en tu proyecto lo hace tu API de Node.
+
+<Flujo
+  titulo="Buscar 'teclado' en la página 1"
+  nodos={["Plantilla", "ProductosComponent", "ProductService", "API", "Prisma"]}
+>
+  <Mensaje de="Plantilla" a="ProductosComponent" titulo="(keyup.enter) llama a buscar()">
+    El usuario escribe "teclado" y pulsa Intro. `buscar()` vuelve a la página 1 y llama a `cargar()`.
+  </Mensaje>
+  <Mensaje de="ProductosComponent" a="ProductosComponent" titulo="loading.set(true)">
+    La plantilla enseña "Cargando…".
+  </Mensaje>
+  <Mensaje de="ProductosComponent" a="ProductService" titulo="getProductos(filtro)">
+    Le pasa un objeto con `q`, `orden`, `dir`, `page` y `limit`.
+  </Mensaje>
+  <Mensaje de="ProductService" a="API" titulo="GET /api/productos?q=teclado&orden=createdAt&dir=asc&page=1&limit=10">
+    `HttpParams` monta la parte de la URL tras `?`, sin los criterios vacíos (si el buscador estuviera vacío, no iría `q`).
+  </Mensaje>
+  <Mensaje de="API" a="Prisma" titulo="count + findMany">
+    El backend valida los parámetros y hace la consulta con `where`, `orderBy`, `skip` y `take`.
+  </Mensaje>
+  <Mensaje de="API" a="ProductService" tipo="respuesta" titulo="{ items, total, page, limit, totalPages }">
+    La respuesta trae la página y el total, para saber cuántas páginas hay.
+  </Mensaje>
+  <Mensaje de="ProductService" a="ProductosComponent" tipo="respuesta" titulo="next: pagina">
+    El componente guarda los productos, el total y las páginas en sus signals y pone `loading` a `false`.
+  </Mensaje>
+  <Mensaje de="ProductosComponent" a="Plantilla" tipo="respuesta" titulo="Repinta">
+    Se ve la lista, o "No hay productos con esos filtros" si viene vacía.
+  </Mensaje>
+</Flujo>
+
+## Los tipos y el servicio
+
+Los ejemplos usan una tienda con **categorías** y **productos**. Cambia los nombres por los de tu proyecto. La respuesta del backend tiene esta forma (la de [Listado con búsqueda, filtro, orden y paginación](/docs/2-dam/apis/backend-proyecto/listado-paginado), en los apuntes de Node):
+
+```json title="GET /api/productos?page=1&limit=10"
+{
+  "items": [
+    { "id": 1, "nombre": "Ratón inalámbrico", "precio": "24.5", "stock": 30, "categoria": { "id": 1, "nombre": "Periféricos" } }
+  ],
+  "total": 3,
+  "page": 1,
+  "limit": 10,
+  "totalPages": 1
+}
+```
+
+El precio llega como texto (`"24.5"`) porque Prisma manda los `Decimal` así para no perder decimales. Por eso en el modelo de Angular es `string`.
+
+```ts title="src/app/services/product.service.ts"
+import { Injectable, inject } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Observable } from 'rxjs';
+
+export interface Categoria {
+  id: number;
+  nombre: string;
+}
+
+export interface Producto {
+  id: number;
+  nombre: string;
+  precio: string;
+  stock: number;
+  categoria: Categoria;
+}
+
+export interface Pagina<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface FiltroProductos {
+  q?: string;
+  categoriaId?: number;
+  orden?: 'nombre' | 'precio' | 'createdAt';
+  dir?: 'asc' | 'desc';
+  page?: number;
+  limit?: number;
+}
+
+@Injectable({ providedIn: 'root' })
+export class ProductService {
+  private http = inject(HttpClient);
+  private apiUrl = 'http://localhost:3000/api/productos';
+
+  getProductos(filtro: FiltroProductos): Observable<Pagina<Producto>> {
+    let params = new HttpParams();
+    for (const [clave, valor] of Object.entries(filtro)) {
+      if (valor !== undefined && valor !== '') {
+        params = params.set(clave, valor);
+      }
+    }
+    return this.http.get<Pagina<Producto>>(this.apiUrl, { params });
+  }
+
+  deleteProducto(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${id}`);
+  }
+}
+```
+
+- **`Pagina<T>`** es genérica, como una clase genérica de Java: vale para cualquier listado paginado. Tiene la misma forma que devuelve el backend.
+- `apiUrl` va dentro del servicio, como lo hace el profesor en clase.
+- Se saltan los criterios vacíos para no mandar `?q=&categoriaId=`.
+- **`HttpParams`** monta la parte `?q=...&page=...` y codifica los espacios y las tildes. Comparado con lo de `proj-game` (concatenar `?_page=${pag}&_limit=${tamPage}` a mano), es más seguro: un texto con `&` o con espacios no rompe la URL.
+
+<Comparar titulo="HttpParams es inmutable">
+  <Lado tipo="evitar" titulo="Se pierde todo">
+
+```ts
+const params = new HttpParams();
+params.set('q', 'teclado');
+params.set('page', 2);
+// params sigue vacío
+```
+
+`set` **no cambia** el objeto: devuelve uno nuevo, que aquí se tira. La petición sale sin filtros.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Bien">
+
+```ts
+let params = new HttpParams();
+params = params.set('q', 'teclado');
+params = params.set('page', 2);
+// ?q=teclado&page=2
+```
+
+Cada `set` devuelve un `HttpParams` nuevo y se guarda en la misma variable. También se pueden encadenar: `new HttpParams().set('q', 'teclado').set('page', 2)`.
+
+  </Lado>
+</Comparar>
+
+## El componente
+
+<Recorrido
+  titulo="src/app/pages/productos/productos.component.ts"
+  lenguaje="typescript"
+  codigo={`@Component({
+  selector: 'app-productos',
+  imports: [ReactiveFormsModule],
+  templateUrl: './productos.component.html',
+})
+export class ProductosComponent implements OnInit {
+  private productService = inject(ProductService);
+
+  protected buscador = new FormControl('', { nonNullable: true });
+  protected orden = new FormControl<'nombre' | 'precio' | 'createdAt'>('createdAt', { nonNullable: true });
+
+  protected productos = signal<Producto[]>([]);
+  protected total = signal(0);
+  protected page = signal(1);
+  protected totalPages = signal(1);
+  protected loading = signal(false);
+  protected error = signal('');
+
+  ngOnInit(): void {
+    this.cargar();
+  }
+
+  protected cargar(): void {
+    this.loading.set(true);
+    this.error.set('');
+    this.productService
+      .getProductos({
+        q: this.buscador.value,
+        orden: this.orden.value,
+        dir: 'asc',
+        page: this.page(),
+        limit: 10,
+      })
+      .subscribe({
+        next: (pagina) => {
+          this.productos.set(pagina.items);
+          this.total.set(pagina.total);
+          this.totalPages.set(Math.max(1, pagina.totalPages));
+          this.loading.set(false);
+        },
+        error: () => {
+          this.error.set('No se han podido cargar los productos');
+          this.loading.set(false);
+        },
+      });
+  }
+
+  protected buscar(): void {
+    this.page.set(1);
+    this.cargar();
+  }
+
+  protected irAPagina(pagina: number): void {
+    this.page.set(pagina);
+    this.cargar();
+  }
+
+  protected borrar(producto: Producto): void {
+    if (!confirm(\`¿Borrar "\${producto.nombre}"?\`)) return;
+    this.productService.deleteProducto(producto.id).subscribe({
+      next: () => this.cargar(),
+      error: () => this.error.set('No se ha podido borrar'),
+    });
+  }
+}`}
+>
+  <Paso lineas="9-10" titulo="Controles sueltos">
+    Dos `FormControl` sin `FormGroup`, porque aquí no hay formulario que enviar: solo un buscador y un desplegable. Se enlazan con `[formControl]`, que también viene en `ReactiveFormsModule`. El tipo de `orden` limita los valores a los tres campos por los que se puede ordenar.
+  </Paso>
+  <Paso lineas="12-17" titulo="El estado, en signals">
+    La lista, el total, la página actual, las páginas que hay y los dos estados de la pantalla. Todo `protected` para que lo lea la plantilla.
+  </Paso>
+  <Paso lineas="23-25" titulo="Empieza a cargar">
+    `loading` a `true` y se borra el error anterior: la plantilla enseña "Cargando…".
+  </Paso>
+  <Paso lineas="26-33" titulo="Los criterios">
+    Se leen los controles (`.value`) y el signal de la página (`page()`) y se pasan al servicio.
+  </Paso>
+  <Paso lineas="34-45" titulo="next y error">
+    Con datos, se guardan en los signals. Si falla, se guarda el mensaje. En los dos casos se apaga `loading`. `Math.max(1, ...)` evita "Página 1 de 0" cuando no hay resultados.
+  </Paso>
+  <Paso lineas="48-51" titulo="Buscar vuelve a la página 1">
+    Si estás en la página 3 y buscas algo con un solo resultado, la página 3 vendría vacía.
+  </Paso>
+  <Paso lineas="58-64" titulo="Borrar con confirmación">
+    `confirm()` es el cuadro del navegador con Aceptar y Cancelar: devuelve `true` o `false`. Si se acepta, se borra y se recarga la página actual.
+  </Paso>
+</Recorrido>
+
+## La plantilla con los cuatro estados
+
+```html title="src/app/pages/productos/productos.component.html"
+<input [formControl]="buscador" placeholder="Buscar por nombre" (keyup.enter)="buscar()" />
+<select [formControl]="orden" (change)="buscar()">
+  <option value="createdAt">Fecha de alta</option>
+  <option value="nombre">Nombre</option>
+  <option value="precio">Precio</option>
+</select>
+<button (click)="buscar()">Buscar</button>
+
+@if (loading()) {
+  <p>Cargando...</p>
+} @else if (error()) {
+  <p>{{ error() }}</p>
+  <button (click)="cargar()">Reintentar</button>
+} @else {
+  <p>{{ total() }} productos</p>
+  @for (producto of productos(); track producto.id) {
+    <div>
+      {{ producto.nombre }} · {{ producto.precio }} € · {{ producto.categoria.nombre }}
+      <button (click)="borrar(producto)">Borrar</button>
+    </div>
+  } @empty {
+    <p>No hay productos con esos filtros.</p>
+  }
+  <button [disabled]="page() === 1" (click)="irAPagina(page() - 1)">Anterior</button>
+  <span>Página {{ page() }} de {{ totalPages() }}</span>
+  <button [disabled]="page() >= totalPages()" (click)="irAPagina(page() + 1)">Siguiente</button>
+}
+```
+
+| Estado | Cuándo | Qué se ve |
+| --- | --- | --- |
+| Cargando | `loading()` es `true` | "Cargando…" |
+| Error | `error()` tiene texto | El mensaje y un botón Reintentar |
+| Vacío | La lista llega vacía (`@empty` del `@for`) | "No hay productos con esos filtros." |
+| Con datos | El resto | La lista y la paginación |
+
+- `@empty` es la rama del `@for` que se pinta cuando la lista no tiene elementos.
+- `(keyup.enter)` es un evento de Angular que solo salta con la tecla Intro.
+- Todos los signals se leen con paréntesis: `{{ total() }}`, no `{{ total }}`.
+
+Si quieres que busque **mientras se escribe**, sin pulsar el botón, en el constructor:
+
+```ts
+constructor() {
+  this.buscador.valueChanges
+    .pipe(debounceTime(300), takeUntilDestroyed())
+    .subscribe(() => this.buscar());
+}
+```
+
+`debounceTime(300)` espera a que se dejen de pulsar teclas para no hacer una petición por letra. Lo tienes explicado en [RxJS y gestión de errores](/docs/2-dam/acceso-a-datos/angular-avanzado/rxjs-y-errores).
+
+<Callout type="success" title="Para enseñarlo en la defensa">
+  F12 → **Red** (Network). Al cambiar el filtro se ve la petición con los parámetros en la URL (`?q=teclado&orden=precio&dir=asc&page=1&limit=10`) y la respuesta trae solo 10 productos. Así se demuestra que filtra y pagina la API, no Angular.
+</Callout>
+
+Un diálogo de confirmación propio (un modal en vez de `confirm()`) no se ha dado en clase. `confirm()` es lo único que sale en el material, en las guías `10_Formularios.md` y `9_Routing.md`, dentro de un `CanDeactivate`.
+
+En este ejemplo `dir` va fijo a `'asc'`: con "Fecha de alta" salen primero los más antiguos. Si quieres que el usuario elija, añade otro `FormControl` para `dir` igual que el de `orden`.
+
+## Guardar el token aunque se recargue la página
+
+En la guía de HTTP, el token de la sesión vive solo en un signal: al recargar (F5) se pierde y hay que volver a iniciar sesión. Para que no pase, se guarda también en **`localStorage`**, un almacén del navegador que no se borra al recargar:
+
+```ts title="src/app/services/auth.service.ts"
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { HttpInterceptorFn } from '@angular/common/http';
+
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+  private readonly clave = 'token';
+  accessToken = signal(localStorage.getItem(this.clave) ?? '');
+  isLoggedIn = computed(() => this.accessToken() !== '');
+
+  guardarToken(token: string): void {
+    localStorage.setItem(this.clave, token);
+    this.accessToken.set(token);
+  }
+
+  logout(): void {
+    localStorage.removeItem(this.clave);
+    this.accessToken.set('');
+  }
+}
+
+export const authInterceptor: HttpInterceptorFn = (req, next) => {
+  const token = inject(AuthService).accessToken();
+  if (!token) return next(req);
+  return next(req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }));
+};
+```
+
+```ts title="src/app/app.config.ts"
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { authInterceptor } from './services/auth.service';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideZoneChangeDetection({ eventCoalescing: true }),
+    provideRouter(routes),
+    provideHttpClient(withInterceptors([authInterceptor])),
+  ],
+};
+```
+
+- **Al arrancar**, el signal empieza con lo que haya en `localStorage`. Si había sesión, sigue abierta.
+- `isLoggedIn` es un `computed`: siempre está de acuerdo con el token, sin actualizarlo a mano. Es lo que usaría un `authGuard` (lo tienes en [Parámetros, guards y lazy loading](/docs/2-dam/acceso-a-datos/angular-avanzado/rutas-parametros-guards)).
+- Tras el login, el componente llama a `authService.guardarToken(respuesta.token)`.
+- El **interceptor** es el de la guía de HTTP (`8_HTTP.md`): una función por la que pasan **todas** las peticiones de `HttpClient`. Si hay token, añade la cabecera `Authorization: Bearer ...`, que es lo que espera el middleware de tu API.
+- `req.clone(...)`: las peticiones son **inmutables**, como `HttpParams`. No se modifican; se copian con la cabecera nueva.
+- `localStorage` lo puede leer cualquier JavaScript de la página. Para un proyecto de clase vale; en una app real se usan cookies `httpOnly`.
+- La parte del backend (CORS para tu web y el middleware que comprueba el token) está en [CORS y rutas protegidas](/docs/2-dam/apis/backend-proyecto/cors-y-token).
+
+## Lo que está en las guías y no se dio
+
+En las guías de Angular (copia de [guides-angular](https://github.com/hokahey007/guides-angular)) hay bastante más de lo que salió en las clases grabadas. Antes de buscar en internet, mira ahí:
+
+| Qué | Guía | Resumen en estos apuntes |
+| --- | --- | --- |
+| `HttpParams` e interceptores (`HttpInterceptorFn`) | `8_HTTP.md` | Esta página |
+| `:id`, `ActivatedRoute`, *query params*, comodín `**`, `loadChildren`, `withComponentInputBinding` | `9_Routing.md` | [Parámetros, guards y lazy loading](/docs/2-dam/acceso-a-datos/angular-avanzado/rutas-parametros-guards) |
+| Guards (`CanActivate`, `CanDeactivate`) y resolvers (`ResolveFn`) | `9_Routing.md` | [Parámetros, guards y lazy loading](/docs/2-dam/acceso-a-datos/angular-avanzado/rutas-parametros-guards) |
+| `FormBuilder`, `FormArray` y validadores propios (`ValidatorFn`) | `10_Formularios.md` | [Formularios reactivos](/docs/2-dam/acceso-a-datos/angular-avanzado/formularios-reactivos) |
+| `catchError`, `handleError` y el manejador global `ErrorHandler` | `11_Gestion_Errores.md` | [RxJS y gestión de errores](/docs/2-dam/acceso-a-datos/angular-avanzado/rxjs-y-errores) |
+| Pipes y directivas propios (`@Pipe`, `@Directive`) | `4_Pipes_Directivas.md` | No |
+| `computed()` y `toSignal()` | `7_Signals.md` | [Signals](/docs/2-dam/acceso-a-datos/angular-avanzado/signals) |
+| RxJS: `pipe`, `map`, `filter` y `switchMap` | `6_Patrones_Reactivos.md` y `9_Routing.md` | [RxJS y gestión de errores](/docs/2-dam/acceso-a-datos/angular-avanzado/rxjs-y-errores) |
+
+El código de ejemplo de cada guía está en el repositorio público [codebase-angular](https://github.com/hokahey007/codebase-angular).
+
+## Practica
+
+<CompletarCodigo
+  titulo="Montar los parámetros"
+  enunciado="Completa el servicio para que mande solo los criterios que tienen valor."
+  lenguaje="typescript"
+  codigo={`let params = new [[HttpParams]]();
+for (const [clave, valor] of Object.entries(filtro)) {
+  if (valor !== undefined && valor !== '') {
+    [[params]] = params.[[set]](clave, valor);
+  }
+}
+return this.http.get<Pagina<Producto>>(this.apiUrl, { [[params]] });`}
+/>
+
+<Quiz titulo="Test: listado y token">
+  <Pregunta enunciado="En un listado con filtros contra tu API, ¿quién filtra y pagina?" explicacion="Angular manda los criterios en la URL y la API (con Prisma) hace la consulta y devuelve solo la página pedida y el total.">
+    <Opcion>Angular, con `filter` y `slice` sobre la lista completa</Opcion>
+    <Opcion correcta>La API, con los criterios que Angular le manda en la URL</Opcion>
+    <Opcion>El navegador, con `HttpParams`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué pasa con `params.set('q', 'teclado');` si no guardas el resultado?" explicacion="`HttpParams` es inmutable: `set` devuelve un objeto nuevo y el original no cambia.">
+    <Opcion>Se añade `q` a `params`</Opcion>
+    <Opcion correcta>Nada: `set` devuelve un `HttpParams` nuevo y `params` sigue igual</Opcion>
+    <Opcion>Da un error de compilación</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Al pulsar Buscar conviene volver a la página 1." respuesta={true} explicacion="Si estás en la página 3 y el nuevo filtro tiene pocos resultados, la página 3 vendría vacía." />
+  <Pregunta enunciado="¿Qué pinta la rama `@empty` de un `@for`?" explicacion="Lo que se ve cuando la lista no tiene elementos: el estado vacío.">
+    <Opcion>El último elemento</Opcion>
+    <Opcion correcta>Lo que se ve cuando la lista está vacía</Opcion>
+    <Opcion>Lo que se ve mientras carga</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué se guarda el token en `localStorage` además de en un signal?" explicacion="Un signal vive en memoria y se pierde al recargar; `localStorage` sobrevive a la recarga.">
+    <Opcion>Porque los signals no aceptan textos largos</Opcion>
+    <Opcion correcta>Para que la sesión siga abierta después de recargar la página</Opcion>
+    <Opcion>Para que la API pueda leerlo</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué hace `authInterceptor`?" explicacion="Todas las peticiones de `HttpClient` pasan por él; si hay token, las copia con `req.clone` y les añade la cabecera `Authorization: Bearer ...`.">
+    <Opcion>Comprueba el token en el servidor</Opcion>
+    <Opcion correcta>Añade la cabecera `Authorization: Bearer ...` a todas las peticiones si hay token</Opcion>
+    <Opcion>Impide entrar en las rutas sin sesión</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿Con qué función del navegador se pide la confirmación antes de borrar en este ejemplo?" respuesta={["confirm", "confirm()", "window.confirm"]} explicacion="`confirm('...')` enseña Aceptar y Cancelar y devuelve `true` o `false`." />
+</Quiz>
+
+<Flashcards titulo="Repaso: listado y token">
+  <Tarjeta frente="`HttpParams`">Monta los *query params* de una petición y los codifica. Es inmutable: `params = params.set(...)`.</Tarjeta>
+  <Tarjeta frente="`Pagina<T>`">Interfaz genérica con `items`, `total`, `page`, `limit` y `totalPages`: la forma de la respuesta paginada del backend.</Tarjeta>
+  <Tarjeta frente="Los cuatro estados de un listado">Cargando, error (con Reintentar), vacío (`@empty`) y con datos.</Tarjeta>
+  <Tarjeta frente="`[formControl]`">Enlaza un input con un `FormControl` suelto, sin `FormGroup`. Viene en `ReactiveFormsModule`.</Tarjeta>
+  <Tarjeta frente="`confirm()`">Cuadro del navegador con Aceptar y Cancelar. Devuelve `true` o `false`.</Tarjeta>
+  <Tarjeta frente="Interceptor (`HttpInterceptorFn`)">Función por la que pasan todas las peticiones. Se registra con `provideHttpClient(withInterceptors([...]))`.</Tarjeta>
+  <Tarjeta frente="¿Por qué `req.clone`?">Las peticiones son inmutables: para añadir una cabecera se crea una copia.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Filtrar por categoría" dificultad="media">
+  Añade al listado un desplegable de categorías (por ahora, con las categorías escritas a mano en el componente) que filtre los productos. Al cambiar de categoría, vuelve a la página 1. "Todas" no tiene que mandar el parámetro.
+
+  <Pista>El servicio ya acepta `categoriaId` en el filtro y se salta lo que sea `undefined`.</Pista>
+  <Pista>El valor de un `select` llega como texto: conviértelo, y usa `undefined` para "Todas".</Pista>
+
+  <Solucion>
+
+```ts
+protected categorias: Categoria[] = [
+  { id: 1, nombre: 'Periféricos' },
+  { id: 2, nombre: 'Monitores' },
+];
+protected categoria = new FormControl('', { nonNullable: true });
+
+// dentro de cargar(), en el objeto del filtro:
+categoriaId: this.categoria.value ? Number(this.categoria.value) : undefined,
+```
+
+```html
+<select [formControl]="categoria" (change)="buscar()">
+  <option value="">Todas</option>
+  @for (c of categorias; track c.id) {
+    <option [value]="c.id">{{ c.nombre }}</option>
+  }
+</select>
+```
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Cerrar sesión" dificultad="facil">
+  Añade al menú un botón "Cerrar sesión" que solo se vea si hay sesión, borre el token y lleve a `/login`.
+
+  <Pista>`isLoggedIn` es un `computed`: se lee con paréntesis en un `@if`.</Pista>
+
+  <Solucion>
+
+```ts
+protected auth = inject(AuthService);
+private router = inject(Router);
+
+salir(): void {
+  this.auth.logout();
+  this.router.navigate(['/login']);
+}
+```
+
+```html
+@if (auth.isLoggedIn()) {
+  <button type="button" (click)="salir()">Cerrar sesión</button>
+}
+```
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

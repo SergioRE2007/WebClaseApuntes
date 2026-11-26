@@ -1,0 +1,15 @@
+{
+  "title": "Kotlin y Compose",
+  "icon": "Smartphone",
+  "pages": [
+    "index",
+    "kotlin-basico",
+    "kotlin-clases-y-funciones",
+    "proyecto-y-gradle",
+    "composables-y-layouts",
+    "modifier",
+    "estado-y-recomposicion",
+    "material-3",
+    "listas"
+  ]
+}

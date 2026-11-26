@@ -1,6 +1,10 @@
 {
   "title": "Kotlin",
   "pages": [
-    "..."
+    "index",
+    "compose",
+    "arquitectura",
+    "datos",
+    "para-el-proyecto"
   ]
 }

@@ -1,0 +1,14 @@
+{
+  "title": "Arquitectura Android",
+  "icon": "Layers",
+  "pages": [
+    "index",
+    "capas",
+    "viewmodel-y-stateflow",
+    "estados-de-pantalla",
+    "hilt",
+    "hilt-modulos",
+    "navegacion",
+    "todoapp"
+  ]
+}

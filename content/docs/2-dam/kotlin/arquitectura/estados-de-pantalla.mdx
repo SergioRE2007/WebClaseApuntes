@@ -1,0 +1,588 @@
+---
+title: Estados de pantalla
+description: Cómo representar que una pantalla está cargando, tiene datos o ha fallado con una sealed class, cómo la pinta un when exhaustivo y por qué la pantalla se parte en una función con estado y otra sin estado. Clase del 23/10 con la ToDoApp.
+icon: GitBranch
+---
+
+import { EstadosPantalla } from '@/components/temas/arquitectura/estados-pantalla';
+
+Una pantalla que carga datos pasa por varias situaciones: **está cargando**, **ya tiene los datos** o **algo ha fallado**. Podrías guardar eso en varias variables sueltas (`isLoading`, `tasks`, `errorMessage`), pero entonces nada te impide tener a la vez `isLoading = true` y un error. El 23/10 se resolvió con un solo tipo que **solo puede ser una de esas cosas**: una clase sellada.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué es una <Concepto termino="sealed class / sealed interface" definicion="Un tipo con una lista cerrada de subtipos, todos declarados junto a él. El compilador conoce todas las opciones, así que un `when` puede comprobar que las cubres todas.">clase sellada</Concepto> y cuándo usar `object` o `class` dentro.
+  - Cómo publica el ViewModel `Loading` y luego `Success` con `load()`.
+  - Cómo pinta la pantalla cada estado con un `when` exhaustivo.
+  - Por qué la pantalla se parte en dos funciones con el mismo nombre, una con estado y otra sin estado.
+  - Lo que se quedó a medias en clase: la rama `Error` y la carga dentro del `when`.
+</Callout>
+
+## Los estados como clase sellada
+
+<DeClase fecha="23/10" proyecto="ToDoApp" rama="dev" />
+
+En clase se usaron las dos formas que tiene Kotlin, una en cada pantalla:
+
+<Tabs items={['Lista: sealed class', 'Crear: sealed interface']}>
+  <Tab value="Lista: sealed class">
+
+```kotlin title="ui/tasklist/TaskListViewModel.kt"
+sealed class TaskListScreenState {
+    object Initial : TaskListScreenState()
+    object Loading : TaskListScreenState()
+    class Success(val tasks: List<Task>) : TaskListScreenState()
+    class Error(val message: String) : TaskListScreenState()
+}
+```
+
+  </Tab>
+  <Tab value="Crear: sealed interface">
+
+```kotlin title="ui/taskcreate/TaskCreateViewModel.kt"
+sealed interface TaskCreateScreenState {
+    object Initial : TaskCreateScreenState
+    object Creating : TaskCreateScreenState
+    object Created : TaskCreateScreenState
+    object Error : TaskCreateScreenState
+}
+```
+
+  </Tab>
+</Tabs>
+
+| | `sealed class` | `sealed interface` |
+| --- | --- | --- |
+| Cómo hereda cada estado | Llamando al constructor del padre: `: TaskListScreenState()` | Sin paréntesis: `: TaskCreateScreenState` |
+| Puede tener estado o constructor propio | Sí | No |
+| En clase | Pantalla de lista | Pantalla de crear |
+
+Dentro, cada estado es `object` o `class` según lleve datos:
+
+- **`object`** cuando el estado **no lleva datos**: `Loading` es siempre igual. Hay un único `Loading` en toda la app (es un singleton, como un `enum` de Java).
+- **`class`** cuando **lleva datos**: cada `Success` tiene su lista de tareas, y cada `Error`, su mensaje.
+
+Mientras lo escribía, el profesor creó primero `class Loaded()`, lo renombró a `Success(val task: List<Task>)` y acabó en `tasks` (con `task`, la pantalla daba 7 errores al usar `.tasks`). Más tarde añadió `object Initial`. Y al publicar el estado escribió `Loading()` por error: un `object` no se construye, se nombra tal cual.
+
+<Callout title="Si vienes de Java">
+  Java 17 tiene lo mismo con `sealed` y `permits`, y desde Java 21 un `switch` con patrones también comprueba que cubres todos los casos. Si no lo has usado, piensa en una clase abstracta con varias subclases y un `instanceof` por caso: la diferencia es que, con `sealed`, el compilador **sabe** que no hay más subclases. Un `object` de Kotlin se parece a un `enum` de un solo valor.
+</Callout>
+
+## El ViewModel publica los estados
+
+<Recorrido
+  titulo="ui/tasklist/TaskListViewModel.kt (23/10)"
+  lenguaje="kotlin"
+  codigo={`@HiltViewModel
+class TaskListViewModel @Inject constructor(
+    private val _repository: TaskRepository
+) : ViewModel() {
+
+    private val _state = MutableStateFlow<TaskListScreenState>(TaskListScreenState.Loading)
+    val state: StateFlow<TaskListScreenState>
+        get() = _state.asStateFlow()
+
+    init {
+        load()
+    }
+
+    fun load() {
+        viewModelScope.launch {
+            _state.value = TaskListScreenState.Loading
+            val tasks = _repository.readAll()
+            _state.value = TaskListScreenState.Success(tasks)
+        }
+    }
+}`}
+>
+  <Paso lineas="6-8" titulo="Empieza en Loading">
+    El estado inicial es `Loading`. El tipo del `MutableStateFlow` es el de la clase sellada, para poder guardar cualquiera de sus estados.
+  </Paso>
+  <Paso lineas="10-12" titulo="Carga al crearse">
+    El bloque `init` se ejecuta al construir el ViewModel. Al principio la carga estaba escrita dentro del `init`; luego se sacó a `load()` para poder llamarla también desde fuera.
+  </Paso>
+  <Paso lineas="15" titulo="Una corrutina del ViewModel">
+    `readAll()` es `suspend` (el repositorio espera 5 segundos con `delay`), así que tiene que llamarse desde una corrutina. `viewModelScope.launch` la lanza y la cancela sola si el ViewModel desaparece.
+  </Paso>
+  <Paso lineas="16-18" titulo="Loading y después Success">
+    Publica `Loading`, espera las tareas y publica `Success` con ellas. Cada asignación a `_state.value` hace que la pantalla se vuelva a pintar.
+  </Paso>
+</Recorrido>
+
+Al depurar con *breakpoints*, la lista salía vacía y se siguió `create()` en el repositorio hasta `_taskFlow.value = _taskList`. De esa secuencia se <Dudoso nota="El profesor no lo dice en las capturas; se deduce del orden de la depuración.">deduce</Dudoso> por qué la lista no se actualizaba al volver de crear una tarea: `readAll()` solo se llama una vez, en el `init`. Si quieres más contexto, está en [La lista que no se actualiza](/docs/2-dam/kotlin/arquitectura/viewmodel-y-stateflow#la-lista-que-no-se-actualiza).
+
+## La pantalla pinta cada estado con `when`
+
+<DeClase fecha="23/10" proyecto="ToDoApp" />
+
+```kotlin title="ui/tasklist/TaskListScreen.kt (la función con estado)"
+@Composable
+fun TaskListScreen(
+    modifier: Modifier = Modifier,
+    toCreate: () -> Unit,
+    toDetail: (Int) -> Unit,
+    viewModel: TaskListViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    when (state) {
+        is TaskListScreenState.Success -> {
+            val tasks = (state as TaskListScreenState.Success).tasks
+            TaskListScreen(modifier = modifier, toCreate = toCreate, toDetail = toDetail,
+                isLoading = false, tasks = tasks)
+        }
+        is TaskListScreenState.Error -> TODO()
+        TaskListScreenState.Loading -> TaskListScreen(modifier = modifier, toCreate = toCreate,
+            toDetail = toDetail, isLoading = true)
+        TaskListScreenState.Initial -> {
+            viewModel.load()
+            TaskListScreen(modifier = modifier, toCreate = toCreate, toDetail = toDetail,
+                isLoading = true)
+        }
+    }
+}
+```
+
+- <Dudoso nota="Una captura lee `isLoading = true` y otra `false`.">`isLoading = true`</Dudoso> en la rama `Initial`.
+
+Al meter el `when`, salieron tres errores que conviene reconocer:
+
+| Error | Por qué | Arreglo |
+| --- | --- | --- |
+| `Success` "does not have a companion object" | Sin `is`, Kotlin busca **un objeto** llamado `Success`, y `Success` es una `class`. | `is TaskListScreenState.Success ->`. Los `object` se nombran sin `is`. |
+| *Add remaining branches* | Un `when` sobre una clase sellada tiene que cubrir **todos** los casos. | Añadir las ramas que faltan (aunque sea con `TODO()`). |
+| Falta el import de `consumeWindowInsets` | El archivo no tenía la línea `import` de esa función. | Alt+Intro para importarlo. |
+
+### El cast `as`
+
+Para sacar la lista, el profesor usó un cast explícito: `(state as TaskListScreenState.Success).tasks`. Kotlin suele hacer un **smart cast** solo (después de comprobar `is`, deja usar el valor como ese tipo sin cast). Aquí no puede, porque `state` es una variable **delegada** (`by`): cada vez que la lees puede devolver algo distinto. Esto se deduce del código; en las capturas el profesor no lo explica.
+
+<NoDadoEnClase>
+  Una forma de evitar el cast es guardar el estado en una variable dentro del propio `when`: `when (val current = state) { is TaskListScreenState.Success -> current.tasks ... }`. Como `current` es un `val` local, el smart cast sí funciona.
+</NoDadoEnClase>
+
+## Pantalla con estado y pantalla sin estado
+
+<DeClase fecha="23/10" proyecto="ToDoApp" nota="también el 18/11 en ToDoOfflineFirst" />
+
+Fíjate en que dentro del `when` se llama a otra función que **también se llama `TaskListScreen`**. Es una sobrecarga: dos funciones con el mismo nombre y distintos parámetros.
+
+| | Parámetros | Qué hace |
+| --- | --- | --- |
+| La **con estado** (*stateful*) | `viewModel = hiltViewModel()` | Recoge el estado y decide qué pintar según la rama del `when`. |
+| La **sin estado** (*stateless*) | `isLoading`, `tasks` y los callbacks | Solo pinta lo que le pasan. No sabe que existe un ViewModel. |
+
+Separar así es elevar el estado (*state hoisting*): la función que pinta no guarda nada, todo le llega por parámetros. Así se puede reutilizar y previsualizar con datos inventados sin montar el ViewModel ni Hilt.
+
+```kotlin title="ui/tasklist/TaskListScreen.kt (la función sin estado)"
+@Composable
+fun TaskListScreen(
+    modifier: Modifier = Modifier,
+    toCreate: () -> Unit,
+    toDetail: (Int) -> Unit,
+    isLoading: Boolean = true,
+    tasks: List<Task> = listOf(),
+) {
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        floatingActionButton = {
+            FloatingActionButton(onClick = toCreate) {
+                Icon(painterResource(id = R.drawable.add_24px), contentDescription = "Create")
+            }
+        }
+    ) { innerPadding ->
+        val modifier = Modifier
+            .consumeWindowInsets(paddingValues = innerPadding)
+            .padding(paddingValues = innerPadding)
+        LazyColumn(modifier = modifier) {
+            item { if (isLoading) CircularProgressIndicator() }
+            items(items = tasks, key = { it.id }) {
+                TaskCard(
+                    toDetail = { toDetail(it.id) },
+                    title = it.title,
+                    description = it.description,
+                    isCompleted = it.isCompleted,
+                )
+            }
+        }
+    }
+}
+```
+
+- <Dudoso nota="Otra lectura es `add_24dp`.">`add_24px`</Dudoso>: así se lee el icono en casi todas las capturas.
+- <Dudoso nota="El final de la línea sale cortado en varias capturas.">`.padding(paddingValues = innerPadding)`</Dudoso>: la línea sale cortada; es el patrón de la plantilla.
+- El `val modifier` de dentro **tapa** al parámetro `modifier` de la función, y el IDE avisa. Funciona, pero sería más claro llamarlo `contentModifier`.
+- Los valores por defecto `isLoading = true` y `tasks = listOf()` permiten llamar a la función solo con lo que cambia en cada rama.
+
+### `item { }` dentro de `LazyColumn`
+
+El IDE avisó *Parameter 'isLoading' is never used*, así que se añadió `if (isLoading) CircularProgressIndicator()`. Al ponerlo directamente dentro de `LazyColumn { }` salió:
+
+<Terminal titulo="Build Output">
+{`@Composable invocations can only happen from the context of a @Composable function`}
+</Terminal>
+
+El bloque de `LazyColumn` no es un composable: es un `LazyListScope`, donde se declaran **elementos** de la lista. Para pintar algo ahí hay que meterlo en `item { }` (un elemento) o en `items(...) { }` (uno por cada dato).
+
+### La versión del 18/11
+
+En ToDoOfflineFirst se repitió el patrón con otros nombres: `TaskListUiState` con `Initial`, `Loading` y `Loaded`, y la función sin estado con `tasks`, `isLoading`, `isEmpty`, `onDelete` y `onSettings`. La pantalla sin estado pintaba una barra `ApplicationTopBar` con el engranaje de ajustes y un `when` sin argumento (`when { isEmpty -> ...; isLoading -> ... }`).
+
+| Proyecto | Estados |
+| --- | --- |
+| ToDoApp, lista (23/10) | `Initial`, `Loading`, `Success(tasks)`, `Error(message)` |
+| ToDoApp, crear (23/10) | `Initial`, `Creating`, `Created`, `Error` |
+| PokeApp2627, lista (09/11) | `Loading`, `Loaded(pokemons)` |
+| PokeApp2627, detalle (09/11) | `Initial`, `Loaded(pokemon)` |
+| ToDoOfflineFirst, lista (18/11) | `Initial`, `Loading`, `Loaded(tasks)` |
+| ToDoOfflineFirst, ajustes (18/11) | No es sellado: `data class SettingsUiState(val darkMode: Boolean = false)` |
+
+## Pruébalo
+
+La demo reproduce la pantalla de lista con el `when` de clase. Al aparecer ya está cargando, igual que el `init { load() }` del ViewModel. Después pulsa los botones para volver a lanzar `load()`: se publica `Loading`, la pantalla enseña el indicador y, al rato, llega `Success`. El botón "load() que falla" es un supuesto: el `load()` de clase nunca publica `Error`, pero así ves qué haría la rama. Se ilumina la rama del `when` que se ejecuta.
+
+<EstadosPantalla />
+
+Fíjate en tres cosas:
+
+1. La rama `Initial` **nunca se ilumina**. `_state` empieza en `Loading` y el `init` ya llama a `load()`, así que nadie publica `Initial`.
+2. Con `Error`, el código de clase llega a `TODO()` y la app se cierra con `NotImplementedError`. La casilla enseña cómo sería una rama de error hecha, que no se dio en clase.
+3. En el historial se ve que el estado **sustituye** al anterior: la pantalla nunca está en dos estados a la vez.
+
+## La pantalla de crear, como máquina de estados
+
+<DeClase fecha="23/10" proyecto="ToDoApp" />
+
+La pantalla de crear tarea también pasó a depender de un estado. El ViewModel cambia de `Creating` a `Created` alrededor de la llamada al repositorio:
+
+```kotlin title="ui/taskcreate/TaskCreateViewModel.kt (23/10)"
+@HiltViewModel
+class TaskCreateViewModel @Inject constructor(
+    private val _repository: TaskRepository
+) : ViewModel() {
+    private val _screenState = MutableStateFlow<TaskCreateScreenState>(TaskCreateScreenState.Initial)
+    val screenState: StateFlow<TaskCreateScreenState>
+        get() = _screenState.asStateFlow()
+    val titleState = TextFieldState()
+    val descriptionState = TextFieldState()
+
+    fun onCreate() {
+        _screenState.value = TaskCreateScreenState.Creating
+        viewModelScope.launch {
+            _repository.create(
+                title = titleState.text.toString(),
+                description = descriptionState.text.toString(),
+                limitDate = "9999.31.12"
+            )
+            _screenState.value = TaskCreateScreenState.Created
+        }
+    }
+}
+```
+
+Y la pantalla, según las capturas del documento de la ToDoApp, pinta una cosa por estado:
+
+```kotlin title="ui/taskcreate/TaskCreateScreen.kt (fragmento)"
+val state by viewModel.screenState.collectAsStateWithLifecycle()
+
+when (state) {
+    TaskCreateScreenState.Created -> {
+        toList()
+    }
+    TaskCreateScreenState.Creating -> {
+        CircularProgressIndicator()
+    }
+    TaskCreateScreenState.Error -> TODO()
+    TaskCreateScreenState.Initial -> {
+        Column {
+            OutlinedTextField(state = viewModel.titleState)
+            OutlinedTextField(state = viewModel.descriptionState)
+            Button(
+                onClick = {
+                    viewModel.onCreate()
+                    // ... aquí se corta la captura
+```
+
+- <Dudoso nota="La rama `Created` sale tapada por el recuadro de la grabación; `toList()` es lo único que encaja.">`toList()`</Dudoso> en la rama `Created`.
+- La captura se corta dentro del `Button`, así que el resto no se ve. En la versión anterior el botón llamaba a `viewModel.onCreate()` y después a `toList()`, con el texto `stringResource(R.string.save)`; con el estado, la vuelta la dispara `Created`.
+
+| Estado | Qué enseña la pantalla |
+| --- | --- |
+| `Initial` | El formulario: dos campos y el botón. |
+| `Creating` | Un `CircularProgressIndicator` mientras se guarda. |
+| `Created` | Llama a `toList()` para volver a la lista. |
+| `Error` | `TODO()`: sin hacer. |
+
+<Flujo titulo="Crear una tarea" nodos={["Pantalla", "ViewModel", "Repositorio"]}>
+  <Mensaje de="Pantalla" a="ViewModel" titulo="onCreate()">
+    El usuario pulsa el botón. La pantalla solo avisa al ViewModel.
+  </Mensaje>
+  <Mensaje de="ViewModel" a="ViewModel" titulo="Creating">
+    El ViewModel publica `Creating`. La pantalla cambia el formulario por el indicador de carga.
+  </Mensaje>
+  <Mensaje de="ViewModel" a="Repositorio" titulo="create(title, description, limitDate)">
+    Dentro de `viewModelScope.launch`, llama a la función `suspend` del repositorio con el texto de los `TextFieldState`.
+  </Mensaje>
+  <Mensaje de="Repositorio" a="ViewModel" tipo="respuesta" titulo="Task">
+    Tras el `delay`, el repositorio guarda la tarea y la devuelve.
+  </Mensaje>
+  <Mensaje de="ViewModel" a="Pantalla" tipo="respuesta" titulo="Created">
+    El ViewModel publica `Created` y la pantalla llama a `toList()` para volver a la lista.
+  </Mensaje>
+</Flujo>
+
+### Volver cuando termina <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  Llamar a `toList()` directamente en la rama `Created` lo ejecuta **en cada recomposición** mientras el estado siga siendo `Created`. Lo estándar es reaccionar al cambio de estado con `LaunchedEffect(state)`, que ejecuta su bloque una vez cada vez que `state` cambia. En clase no se llega a ver qué hace `toList` en el `NavHost`: `popBackStack()` solo aparece el 18/11 (ver [Navegación](/docs/2-dam/kotlin/arquitectura/navegacion#volver-a-la-pantalla-anterior)).
+</NoDadoEnClase>
+
+```kotlin title="Volver cuando el estado pasa a Created"
+LaunchedEffect(state) {
+    if (state is TaskCreateScreenState.Created) {
+        toList()
+    }
+}
+```
+
+## Lo que se quedó a medias
+
+### Cargar dentro del `when`
+
+<Comparar titulo="Dónde se llama a load()">
+  <Lado tipo="evitar">
+
+```kotlin
+TaskListScreenState.Initial -> {
+    viewModel.load()
+    TaskListScreen(/* ... */ isLoading = true)
+}
+```
+
+`viewModel.load()` se llama **durante la composición**. Un composable se ejecuta muchas veces (cada vez que algo cambia), así que, si esta rama llegara a ejecutarse, cargaría una y otra vez. El profesor no lo comentó, y además esta rama no se ejecuta nunca porque `_state` empieza en `Loading`.
+
+  </Lado>
+  <Lado tipo="bien">
+
+```kotlin
+// En el ViewModel, como ya estaba en clase:
+init {
+    load()
+}
+
+// En la pantalla, la rama solo pinta:
+TaskListScreenState.Initial -> TaskListScreen(/* ... */ isLoading = true)
+```
+
+<NoDadoEnClase inline /> La carga va solo en el `init` del ViewModel, que se ejecuta una vez. Quitar la llamada del `when` no se hizo en clase.
+
+  </Lado>
+</Comparar>
+
+### La rama `Error`
+
+<NoSeVio titulo="Cómo se rellena Error">
+  En ninguna clase se ve cómo llega una pantalla al estado `Error`: el `load()` de clase solo publica `Loading` y `Success`, y las ramas `Error` de las dos pantallas son `TODO()`.
+</NoSeVio>
+
+<NoDadoEnClase titulo="Publicar Error si falla la carga">
+  Si el repositorio puede fallar (por ejemplo, porque lee de una API y no hay conexión), se captura la excepción en `load()` y se publica `Error` con un mensaje. La pantalla pinta el mensaje y, si quieres, un botón para reintentar que vuelve a llamar a `viewModel.load()`.
+</NoDadoEnClase>
+
+```kotlin title="TaskListViewModel.kt (no dado en clase)"
+fun load() {
+    viewModelScope.launch {
+        _state.value = TaskListScreenState.Loading
+        try {
+            val tasks = _repository.readAll()
+            _state.value = TaskListScreenState.Success(tasks)
+        } catch (e: IOException) {
+            _state.value = TaskListScreenState.Error(e.message ?: "No se han podido cargar las tareas")
+        }
+    }
+}
+```
+
+Se captura `IOException` (fallo de red, de `java.io`) y no `Exception` a secas: dentro de una corrutina, una `Exception` genérica también atraparía la `CancellationException` con la que se cancela la corrutina.
+
+## Practica
+
+<CompletarCodigo
+  titulo="Estados de una pantalla"
+  enunciado="Completa la clase sellada y el when que la pinta."
+  lenguaje="kotlin"
+  codigo={`sealed class NoteListScreenState {
+    [[object]] Loading : NoteListScreenState()
+    [[class]] Success(val notes: List<Note>) : NoteListScreenState[[()]]
+}
+
+when (state) {
+    NoteListScreenState.Loading -> CircularProgressIndicator()
+    [[is]] NoteListScreenState.Success -> NoteList(notes = (state [[as]] NoteListScreenState.Success).notes)
+}`}
+/>
+
+<Quiz titulo="Test: estados de pantalla" descripcion="8 preguntas">
+  <Pregunta enunciado="¿Por qué `Loading` es un `object` y `Success` una `class`?" explicacion="`Loading` no lleva datos y siempre es igual, así que basta un único objeto. `Success` lleva la lista de tareas, que cambia cada vez.">
+    <Opcion>Porque los `object` cargan más rápido</Opcion>
+    <Opcion correcta>Porque `Success` lleva datos (la lista) y `Loading` no</Opcion>
+    <Opcion>Porque una `sealed class` solo admite un `object`</Opcion>
+    <Opcion>Es indiferente, se podían escribir los dos como `object`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En el `when (state)` de la lista, ¿qué ramas necesitan `is`?" explicacion="Las `class` (`Success` y `Error`) necesitan `is`, porque se comprueba el tipo. Los `object` (`Loading`, `Initial`) se comparan directamente.">
+    <Opcion correcta>`TaskListScreenState.Success`</Opcion>
+    <Opcion correcta>`TaskListScreenState.Error`</Opcion>
+    <Opcion>`TaskListScreenState.Loading`</Opcion>
+    <Opcion>`TaskListScreenState.Initial`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Si el `when` sobre una clase sellada no cubre todos los casos, el compilador da error." respuesta={true} explicacion="El `when` tiene que ser exhaustivo. En clase salió el aviso *Add remaining branches* hasta que se añadieron todas las ramas." />
+  <Pregunta enunciado="¿Cuál está bien escrito dentro de `sealed interface TaskCreateScreenState`?" explicacion="Una interfaz no tiene constructor, así que se hereda sin paréntesis. Con `sealed class` sí se escribe `()`.">
+    <Opcion correcta>`object Initial : TaskCreateScreenState`</Opcion>
+    <Opcion>`object Initial : TaskCreateScreenState()`</Opcion>
+    <Opcion>`object Initial() : TaskCreateScreenState`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué `CircularProgressIndicator()` dentro de `LazyColumn { }` da error y dentro de `item { }` no?" explicacion="El bloque de `LazyColumn` es un `LazyListScope`, donde se declaran elementos, no un composable. `item { }` sí es un bloque composable.">
+    <Opcion>Porque `LazyColumn` no admite indicadores de carga</Opcion>
+    <Opcion correcta>Porque el bloque de `LazyColumn` es un `LazyListScope`, no un contexto `@Composable`</Opcion>
+    <Opcion>Porque falta un `Modifier`</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿Qué excepción lanza `TODO()` si se llega a ejecutar?" respuesta={["NotImplementedError", "kotlin.NotImplementedError", "`NotImplementedError`"]} explicacion="`NotImplementedError`. Compila porque `TODO()` devuelve `Nothing`, que encaja con cualquier tipo." />
+  <Pregunta enunciado="¿Por qué no conviene llamar a `viewModel.load()` dentro de una rama del `when` del composable?" explicacion="El composable se vuelve a ejecutar en cada recomposición, así que la carga se lanzaría una y otra vez. La carga va en el `init` del ViewModel.">
+    <Opcion correcta>Porque el composable se ejecuta muchas veces y cargaría una y otra vez</Opcion>
+    <Opcion>Porque `load()` es privada</Opcion>
+    <Opcion>Porque no compila: un composable no puede llamar a funciones del ViewModel</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="En el código de clase, ¿por qué no se llega a ejecutar nunca la rama `Initial`?" explicacion="`_state` empieza en `Loading` y `load()` solo publica `Loading` y `Success`. Nadie publica `Initial`.">
+    <Opcion>Porque `Initial` es un `object`</Opcion>
+    <Opcion correcta>Porque `_state` empieza en `Loading` y nadie publica `Initial`</Opcion>
+    <Opcion>Porque el `when` la ignora al ser la última rama</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: estados de pantalla">
+  <Tarjeta frente="¿Qué es una clase sellada?">Un tipo con una lista cerrada de subtipos declarados junto a él. El `when` puede comprobar que los cubres todos.</Tarjeta>
+  <Tarjeta frente="`object` o `class` dentro de una clase sellada">`object` si el estado no lleva datos (`Loading`). `class` si los lleva (`Success(val tasks)`).</Tarjeta>
+  <Tarjeta frente="`sealed class` frente a `sealed interface`">En la `sealed class` los hijos llaman al constructor del padre (`: Estado()`). En la `sealed interface`, sin paréntesis.</Tarjeta>
+  <Tarjeta frente="`is` en un `when`">Para las `class` (`is Estado.Success ->`). Los `object` se ponen sin `is`.</Tarjeta>
+  <Tarjeta frente="Pantalla con estado y sin estado">La con estado tiene el ViewModel y decide qué pintar. La sin estado solo recibe datos y callbacks. En clase, dos funciones con el mismo nombre.</Tarjeta>
+  <Tarjeta frente="`item { }` en `LazyColumn`">El bloque de `LazyColumn` es un `LazyListScope`. Para pintar un composable suelto hay que meterlo en `item { }`.</Tarjeta>
+  <Tarjeta frente="`TODO()`">Marca código pendiente. Compila (devuelve `Nothing`) pero lanza `NotImplementedError` si se ejecuta.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Estados de la lista de notas" dificultad="media">
+  Siguiendo el patrón de la ToDoApp, escribe `NoteListScreenState` con `Loading`, `Success(notes)` y `Error(message)`. Después, dos funciones `NoteListScreen`: la con estado, que recoge `viewModel.state` y elige qué pintar con un `when`, y la sin estado, que recibe `isLoading` y `notes` y pinta una `LazyColumn` con un indicador de carga arriba. En la rama de error basta con un `Text` con el mensaje.
+
+  <Pista>`Loading` no lleva datos: `object`. Los otros dos llevan datos: `class`.</Pista>
+  <Pista>Para sacar los datos de `Success` y `Error`, usa `is` en la rama y el cast `(state as ...)`, como en clase.</Pista>
+  <Pista>El indicador va dentro de `item { }`.</Pista>
+
+  <Solucion>
+
+```kotlin title="NoteListScreen.kt"
+sealed class NoteListScreenState {
+    object Loading : NoteListScreenState()
+    class Success(val notes: List<Note>) : NoteListScreenState()
+    class Error(val message: String) : NoteListScreenState()
+}
+
+@Composable
+fun NoteListScreen(
+    modifier: Modifier = Modifier,
+    viewModel: NoteListViewModel = hiltViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    when (state) {
+        NoteListScreenState.Loading -> NoteListScreen(modifier = modifier, isLoading = true)
+        is NoteListScreenState.Success -> {
+            val notes = (state as NoteListScreenState.Success).notes
+            NoteListScreen(modifier = modifier, isLoading = false, notes = notes)
+        }
+        is NoteListScreenState.Error -> {
+            val message = (state as NoteListScreenState.Error).message
+            Text(text = message, modifier = modifier)
+        }
+    }
+}
+
+@Composable
+fun NoteListScreen(
+    modifier: Modifier = Modifier,
+    isLoading: Boolean = true,
+    notes: List<Note> = listOf(),
+) {
+    LazyColumn(modifier = modifier) {
+        item { if (isLoading) CircularProgressIndicator() }
+        items(items = notes, key = { it.id }) {
+            Text(it.text)
+        }
+    }
+}
+```
+
+Kotlin distingue las dos funciones por los parámetros: la llamada `NoteListScreen(modifier = modifier, isLoading = true)` solo encaja con la segunda, porque la primera no tiene `isLoading`. Al ser un `when` sobre una clase sellada, si mañana añades un estado nuevo el compilador te obligará a pintarlo.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Que la rama Error llegue a usarse" dificultad="media">
+  Esto no se dio en clase. El repositorio de notas lee de una API y `readAll()` puede lanzar `IOException` si no hay conexión. Reescribe `load()` del `NoteListViewModel` para que publique `Error` con un mensaje cuando falle, y añade en la rama de error de la pantalla un botón "Reintentar".
+
+  <Pista>Rodea la llamada al repositorio con `try` y `catch (e: IOException)`.</Pista>
+  <Pista>El botón solo tiene que llamar a `viewModel.load()`: la carga vuelve a publicar `Loading` y luego `Success` o `Error`.</Pista>
+
+  <Solucion>
+
+```kotlin title="NoteListViewModel.kt"
+@HiltViewModel
+class NoteListViewModel @Inject constructor(
+    private val _repository: NoteRepository
+) : ViewModel() {
+    private val _state = MutableStateFlow<NoteListScreenState>(NoteListScreenState.Loading)
+    val state: StateFlow<NoteListScreenState>
+        get() = _state.asStateFlow()
+
+    init {
+        load()
+    }
+
+    fun load() {
+        viewModelScope.launch {
+            _state.value = NoteListScreenState.Loading
+            try {
+                val notes = _repository.readAll()
+                _state.value = NoteListScreenState.Success(notes)
+            } catch (e: IOException) {
+                _state.value = NoteListScreenState.Error(e.message ?: "No se han podido cargar las notas")
+            }
+        }
+    }
+}
+```
+
+```kotlin title="NoteListScreen.kt (rama de error)"
+is NoteListScreenState.Error -> {
+    val message = (state as NoteListScreenState.Error).message
+    Column(modifier = modifier) {
+        Text(text = message)
+        Button(onClick = viewModel::load) {
+            Text("Reintentar")
+        }
+    }
+}
+```
+
+`e.message` es nulable (`String?`), por eso el operador elvis `?:` da un texto por defecto.
+
+  </Solucion>
+</Ejercicio>
+
+## Resumen
+
+<Glosario titulo="Conceptos clave">
+  <Termino nombre="Clase sellada">`sealed class` o `sealed interface`: lista cerrada de estados. El `when` sobre ella es exhaustivo.</Termino>
+  <Termino nombre="Loading / Success / Error">Los estados típicos de una pantalla que carga datos. Solo puede estar en uno a la vez.</Termino>
+  <Termino nombre="when exhaustivo">Un `when` que cubre todos los casos de la clase sellada. Si falta uno, no compila.</Termino>
+  <Termino nombre="State hoisting">Separar la pantalla en una función con estado (con el ViewModel) y otra sin estado (solo parámetros).</Termino>
+  <Termino nombre="LazyListScope">El bloque de `LazyColumn`. Los composables sueltos van dentro de `item { }`.</Termino>
+</Glosario>
+
+<MarcarCompletado />

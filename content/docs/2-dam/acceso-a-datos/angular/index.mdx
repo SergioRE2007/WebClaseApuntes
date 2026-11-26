@@ -1,0 +1,69 @@
+---
+title: "Angular: componentes, plantillas y servicios"
+description: "La primera parte de Angular 19 que se dio en clase del 14/10 al 05/11: proyecto standalone, componentes, data binding, control flow, Flexbox, servicios y HttpClient."
+icon: Component
+---
+
+En Classroom las actividades salen como **"Acceso a Datos"**, pero el contenido de esta parte de la asignatura es **Angular 19**: una web en TypeScript que pide los datos a una API por HTTP. Estos apuntes cubren la primera parte, la que va **del 14/10 al 05/11**, y lo básico que necesitas para seguir con formularios, signals y rutas.
+
+<Callout type="idea" title="Si ya sabes Java">
+  Angular se escribe en **TypeScript**, que se parece mucho a Java: clases, interfaces, genéricos, modificadores `private` y `protected`, decoradores (las anotaciones de Java)… Lo nuevo es la **plantilla HTML** de cada componente y cómo se enlaza con la clase.
+</Callout>
+
+## Qué se vio y cuándo
+
+| Fecha | Proyecto | Qué se hizo |
+| --- | --- | --- |
+| 14/10 | `proj-lamp` (Act Eval 4, "Control de una lámpara") | Estructura de un proyecto standalone, `ng generate`, componente padre e hijo, `@if / @else`, Flexbox y encapsulación de estilos. |
+| 27/10 | `angular-http` | Servicios con `HttpClient` contra JSONPlaceholder, interfaz genérica `CRUD<T, S>`, `ngOnInit` y `subscribe`, `@for ... track`, `protected` y Tailwind CSS 4. |
+| 28/10 | `proj-fakestore` (Act 8) | `inject()` frente a inyección por constructor, `Observable`, property binding con `[src]` y `[alt]`, rangos semver. |
+| 05/11 | `proj-game` (Act 10) | Repaso de eventos y referencias de plantilla, two-way binding con `[(ngModel)]`, class binding, `@let` y el pipe `json`. |
+| 12/11 | `proj-game` | `input()` y `output()` para comunicar padre e hijo. |
+
+<DeClase fecha="14/10, 27/10, 28/10, 05/11, 12/11" nota="del 05/11 y el 12/11 aquí solo va lo de plantillas y comunicación entre componentes" />
+
+## Temas
+
+<Cards>
+  <Card icon="FolderTree" title="Proyecto standalone y Angular CLI" href="/docs/2-dam/acceso-a-datos/angular/proyecto-y-cli" description="ng new, estructura de archivos, ng serve, ng generate, package.json y Tailwind." />
+  <Card icon="Component" title="Componentes: padre, hijo y estilos" href="/docs/2-dam/acceso-a-datos/angular/componentes" description="@Component, composición, :host, encapsulación y ciclo de vida." />
+  <Card icon="ArrowLeftRight" title="Plantillas y data binding" href="/docs/2-dam/acceso-a-datos/angular/plantillas-y-binding" description="Interpolación, propiedades, eventos, two-way y referencias #ref." />
+  <Card icon="GitBranch" title="Control flow" href="/docs/2-dam/acceso-a-datos/angular/control-flow" description="@if, @else, @for con track, @empty, @switch y @let." />
+  <Card icon="LayoutPanelLeft" title="Maquetar con Flexbox" href="/docs/2-dam/acceso-a-datos/angular/flexbox" description="Ejes, flex: grow shrink basis, Flexbox anidado y :host como contenedor." />
+  <Card icon="Workflow" title="Comunicación padre e hijo" href="/docs/2-dam/acceso-a-datos/angular/comunicacion-componentes" description="input(), input.required(), output() y $event." />
+  <Card icon="Syringe" title="Servicios e inyección de dependencias" href="/docs/2-dam/acceso-a-datos/angular/servicios-e-inyeccion" description="@Injectable, providedIn: 'root', inject() y constructor." />
+  <Card icon="Globe" title="Peticiones HTTP con HttpClient" href="/docs/2-dam/acceso-a-datos/angular/httpclient" description="provideHttpClient, CRUD<T, S>, Observable, subscribe y JSONPlaceholder." />
+  <Card icon="Funnel" title="Pipes y directivas" href="/docs/2-dam/acceso-a-datos/angular/pipes-y-directivas" description="El pipe json, los pipes de Angular y qué es una directiva." />
+</Cards>
+
+## Orden de estudio
+
+1. [Proyecto standalone y Angular CLI](/docs/2-dam/acceso-a-datos/angular/proyecto-y-cli)
+2. [Componentes: padre, hijo y estilos](/docs/2-dam/acceso-a-datos/angular/componentes)
+3. [Plantillas y data binding](/docs/2-dam/acceso-a-datos/angular/plantillas-y-binding)
+4. [Control flow](/docs/2-dam/acceso-a-datos/angular/control-flow)
+5. [Maquetar con Flexbox](/docs/2-dam/acceso-a-datos/angular/flexbox)
+6. [Comunicación padre e hijo](/docs/2-dam/acceso-a-datos/angular/comunicacion-componentes)
+7. [Servicios e inyección de dependencias](/docs/2-dam/acceso-a-datos/angular/servicios-e-inyeccion)
+8. [Peticiones HTTP con HttpClient](/docs/2-dam/acceso-a-datos/angular/httpclient)
+9. [Pipes y directivas](/docs/2-dam/acceso-a-datos/angular/pipes-y-directivas)
+
+## Lo que no está aquí
+
+- **Formularios** (template-driven y reactivos), **signals**, **rutas** (Router) y el proyecto **`proj-game`** (CRUD con JSON Server, paginación y despliegue en Vercel) van en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado).
+- El **backend con Node** (Express y Prisma), contra el que acabará hablando vuestra web, va en [Backend con Node](/docs/2-dam/apis/backend).
+
+## Cómo leer estos apuntes
+
+El código sale de las **capturas de los vídeos de clase**. Por eso verás estas marcas:
+
+- <DeClase fecha="14/10" proyecto="proj-lamp" /> dice cuándo se vio algo.
+- <NoDadoEnClase inline /> marca lo que no salió en clase: o está solo en las guías, o es la forma estándar de hacerlo. Si te lo preguntan en la defensa, di que lo has buscado tú.
+- <Dudoso /> marca lo que no se leía bien en las capturas. No se ha corregido.
+- Los huecos que no se llegaron a ver salen como "Esto no se llega a ver en clase", sin rellenar.
+
+<Callout title="Las guías de Angular">
+  En clase se trabajó con las guías del profesor, que son públicas en [github.com/hokahey007/guides-angular](https://github.com/hokahey007/guides-angular) (por ejemplo, la Guía6 de Flexbox o la unidad 5 de servicios). Estos apuntes las resumen y las enlazan, pero no las copian: si quieres el detalle, ve al repositorio original.
+</Callout>
+
+<MarcarCompletado />

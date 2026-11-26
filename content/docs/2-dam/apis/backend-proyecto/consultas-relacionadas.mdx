@@ -1,0 +1,372 @@
+---
+title: Consultas con datos relacionados
+description: Traer datos de varias tablas con Prisma 6 (include), elegir los campos que se devuelven (select), contar relacionados sin traerlos (_count) y filtrar por criterios y por relaciones (where).
+icon: GitMerge
+---
+
+Los requisitos piden "información relacionada entre entidades" y que las relaciones "tengan una repercusión real en la interfaz" (§5). Es decir: no basta con tener `categoriaId` en la tabla, la API tiene que **usar** la relación (enseñar la categoría de cada producto, los productos de una categoría, cuántos hay…).
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Qué consultas de Prisma se vieron en clase.
+  - `include` para traer los relacionados y `select` para elegir campos.
+  - `_count` para contar sin traer.
+  - `where` con criterios y con relaciones (`some`, `none`, `every`).
+  - Devolver `404` cuando no existe.
+</Callout>
+
+## Lo que se vio en clase
+
+<DeClase fecha="27/10" proyecto="node-server-26-27" nota="módulo users, v0.4.0" />
+
+En el servicio de usuarios del profesor salen `findMany` con `select` y `orderBy`, `findUnique` con `where`, y `create`, `update` y `delete`. El `select` está en todas las funciones para **no devolver nunca `passwordHash`**:
+
+```ts title="src/modules/users/users.service.ts (fragmento de clase)"
+export async function findUserById(id: number) {
+  return prisma.user.findUnique({
+    where: { id },
+    select: { id: true, email: true, name: true, createdAt: true }
+  });
+}
+
+export async function listUsers() {
+  return prisma.user.findMany({
+    select: { id: true, email: true, name: true, createdAt: true },
+    orderBy: { id: 'asc' }
+  });
+}
+```
+
+- `findUnique` busca por un campo `@id` o `@unique` y devuelve el objeto o **`null`** si no existe.
+- `select` dice qué columnas vuelven. Lo que no está en el `select` no sale en el JSON.
+- `orderBy` ordena: `'asc'` o `'desc'`.
+
+Todas las consultas que se vieron son sobre `User`, sin relaciones: el módulo `media` (el único con una clave ajena) no se llegó a ver. Así que hasta aquí llegó la clase.
+
+## include: la fila y sus relacionados <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  `include`, `select` dentro de una relación, `_count`, los operadores del `where` (`lte`, `gt`, `OR`…), los filtros por relación (`some`, `none`, `every`) y el controlador con `404` de esta página no se han dado en clase.
+</NoDadoEnClase>
+
+`include` trae la fila **y además** sus relacionados, enteros. Es lo que en SQL harías con un `JOIN`:
+
+```ts title="src/modules/categorias/categorias.service.ts"
+import { prisma } from '../../config/db.js';
+
+export function obtenerCategoriaConProductos(id: number) {
+  return prisma.categoria.findUnique({
+    where: { id },
+    include: { productos: { orderBy: { nombre: 'asc' } } },
+  });
+}
+```
+
+```json title="Respuesta de GET /api/categorias/1"
+{
+  "id": 1,
+  "nombre": "Periféricos",
+  "productos": [
+    { "id": 2, "nombre": "Ratón inalámbrico", "descripcion": null, "precio": "24.5", "stock": 30, "categoriaId": 1, "createdAt": "2026-12-09T10:00:00.000Z" },
+    { "id": 1, "nombre": "Teclado mecánico", "descripcion": null, "precio": "59.9", "stock": 12, "categoriaId": 1, "createdAt": "2026-12-09T10:00:00.000Z" }
+  ]
+}
+```
+
+Dentro del `include` puedes ordenar, filtrar (`where`) o limitar (`take`) los relacionados, como aquí con `orderBy`. Por defecto Prisma 6 lo resuelve con dos consultas (una para la categoría y otra para sus productos), pero el resultado es el mismo que con un `JOIN`.
+
+## select: elegir los campos, también de la relación <NoDadoEnClase inline />
+
+`select` elige qué campos vuelven. Dentro de un `select` también se puede meter una relación con su propio `select`:
+
+```ts title="productos.service.ts"
+export function listarProductosResumen() {
+  return prisma.producto.findMany({
+    select: {
+      id: true,
+      nombre: true,
+      precio: true,
+      categoria: { select: { id: true, nombre: true } },
+    },
+  });
+}
+```
+
+```json title="Cada producto queda así"
+{ "id": 1, "nombre": "Teclado mecánico", "precio": "59.9", "categoria": { "id": 1, "nombre": "Periféricos" } }
+```
+
+<Comparar titulo="include frente a select">
+  <Lado titulo="include">
+
+```ts
+prisma.producto.findUnique({
+  where: { id: 1 },
+  include: { categoria: true },
+});
+```
+
+Devuelve **todos** los campos del producto y **además** la categoría entera. Cómodo, pero manda cosas que quizá no necesitas.
+
+  </Lado>
+  <Lado titulo="select">
+
+```ts
+prisma.producto.findUnique({
+  where: { id: 1 },
+  select: {
+    nombre: true,
+    precio: true,
+    categoria: { select: { nombre: true } },
+  },
+});
+```
+
+Devuelve **solo** lo que pides. Es lo que cumple el requisito de "selección de campos" y lo que usó el profesor para no devolver `passwordHash`.
+
+  </Lado>
+</Comparar>
+
+<Callout type="warn" title="include y select no van juntos en el mismo nivel">
+  `findMany({ include: {...}, select: {...} })` da un error de validación de Prisma. Elige uno: si quieres elegir campos y traer una relación, mete la relación **dentro** del `select`, como en el ejemplo de arriba.
+</Callout>
+
+## _count: contar sin traer <NoDadoEnClase inline />
+
+`_count` cuenta los relacionados sin traerlos. Sirve, por ejemplo, para un menú que enseñe "Periféricos (2)":
+
+```ts title="categorias.service.ts"
+export function contarProductosPorCategoria() {
+  return prisma.categoria.findMany({
+    select: { id: true, nombre: true, _count: { select: { productos: true } } },
+  });
+}
+```
+
+```json title="Respuesta"
+[
+  { "id": 1, "nombre": "Periféricos", "_count": { "productos": 2 } },
+  { "id": 2, "nombre": "Monitores", "_count": { "productos": 1 } }
+]
+```
+
+Sale mucho más barato que traer todos los productos para luego contarlos en Angular.
+
+## where: consultas por criterios <NoDadoEnClase inline />
+
+Los requisitos también piden "consultas por diferentes criterios". El `where` de Prisma admite operadores para cada tipo de campo:
+
+```ts title="productos.service.ts"
+// Baratos y con stock
+prisma.producto.findMany({
+  where: { precio: { lte: 50 }, stock: { gt: 0 } },
+});
+
+// De una categoría, buscando por el nombre de la categoría (relación 1)
+prisma.producto.findMany({
+  where: { categoria: { nombre: 'Periféricos' } },
+});
+
+// Categorías con algún producto agotado (relación N)
+prisma.categoria.findMany({
+  where: { productos: { some: { stock: 0 } } },
+});
+
+// Varios criterios con OR
+prisma.producto.findMany({
+  where: { OR: [{ stock: 0 }, { precio: { gte: 300 } }] },
+});
+```
+
+| Operador | Significa |
+| --- | --- |
+| `equals` (o el valor a secas) | Igual |
+| `not` | Distinto |
+| `lt`, `lte`, `gt`, `gte` | Menor, menor o igual, mayor, mayor o igual |
+| `in`, `notIn` | Está (o no) en una lista: `{ id: { in: [1, 2, 3] } }` |
+| `contains`, `startsWith`, `endsWith` | Texto que contiene, empieza o acaba por (con `mode: 'insensitive'` no distingue mayúsculas) |
+| `AND`, `OR`, `NOT` | Combinar condiciones |
+| `some`, `every`, `none` | En una relación N: algún hijo, todos los hijos o ningún hijo cumple |
+
+## Si no existe: 404 <NoDadoEnClase inline />
+
+`findUnique` devuelve `null` si no encuentra nada, y eso no es un error de Prisma: tienes que comprobarlo tú en el controlador. Siguiendo el estilo de los controladores de clase (comprobar el id con `Number` e `isNaN`). Del `getUserCtrl` de clase solo se vio ese principio; cómo respondía cuando no encontraba el usuario no se llegó a ver, así que este final no es del profesor:
+
+```ts title="categorias.controller.ts"
+import type { Request, Response } from 'express';
+import { obtenerCategoriaConProductos } from './categorias.service.js';
+
+export async function obtenerCategoriaCtrl(req: Request, res: Response) {
+  const id = Number(req.params.id);
+  if (isNaN(id)) {
+    return res.status(400).json({ message: 'ID inválido' });
+  }
+  const categoria = await obtenerCategoriaConProductos(id);
+  if (!categoria) {
+    return res.status(404).json({ message: 'Categoría no encontrada' });
+  }
+  res.json(categoria);
+}
+```
+
+<Callout title="P2025 frente a null">
+  En clase, `updateUserCtrl` traducía el error `P2025` a `404`: lo lanzan `update` y `delete` cuando no encuentran la fila. `findUnique` y `findFirst` **no** lanzan nada: devuelven `null`. Por eso aquí se comprueba con un `if`.
+</Callout>
+
+<Flujo
+  titulo="GET /api/categorias/1 de principio a fin"
+  nodos={["Angular", "Ruta", "Controlador", "Servicio", "Prisma", "Postgres"]}
+>
+  <Mensaje de="Angular" a="Ruta" titulo="GET /api/categorias/1">
+    El servicio de Angular pide la categoría para pintar su página de detalle.
+  </Mensaje>
+  <Mensaje de="Ruta" a="Controlador" titulo="router.get('/:id', ...)">
+    `categorias.routes.ts` manda la petición a `obtenerCategoriaCtrl`.
+  </Mensaje>
+  <Mensaje de="Controlador" a="Controlador" titulo="Number(req.params.id)">
+    Comprueba que el id es un número. Si no, responde `400`.
+  </Mensaje>
+  <Mensaje de="Controlador" a="Servicio" titulo="obtenerCategoriaConProductos(1)">
+    El controlador no habla con Prisma: se lo pide al servicio.
+  </Mensaje>
+  <Mensaje de="Servicio" a="Prisma" titulo="findUnique + include">
+    El servicio monta la consulta con `where` e `include`.
+  </Mensaje>
+  <Mensaje de="Prisma" a="Postgres" titulo="SELECT ...">
+    Prisma genera el SQL: la categoría y sus productos.
+  </Mensaje>
+  <Mensaje de="Postgres" a="Prisma" tipo="respuesta" titulo="Filas">
+    Postgres devuelve las filas de la categoría y de sus productos.
+  </Mensaje>
+  <Mensaje de="Prisma" a="Servicio" tipo="respuesta" titulo="Objeto o null">
+    Prisma junta las filas en un objeto con un array `productos`. Si no hay ninguna categoría con ese id, devuelve `null` (no lanza ningún error).
+  </Mensaje>
+  <Mensaje de="Servicio" a="Controlador" tipo="respuesta" titulo="return">
+    El servicio devuelve el resultado tal cual: decidir el código HTTP es cosa del controlador.
+  </Mensaje>
+  <Mensaje de="Controlador" a="Angular" tipo="respuesta" titulo="200 OK o 404">
+    Si es `null`, `404`. Si no, `res.json(categoria)` con la categoría y sus productos.
+  </Mensaje>
+</Flujo>
+
+## Practica
+
+<CompletarCodigo
+  titulo="Pedido con sus líneas y el nombre de cada producto"
+  enunciado="Completa la consulta para traer el pedido 1 con sus líneas y, de cada línea, solo el nombre y el precio del producto."
+  lenguaje="typescript"
+  codigo={`prisma.pedido.[[findUnique|findUniqueOrThrow|findFirst]]({
+  where: { id: 1 },
+  [[include]]: {
+    lineas: {
+      include: {
+        producto: { [[select]]: { nombre: true, precio: [[true]] } },
+      },
+    },
+  },
+});`}
+/>
+
+<Quiz titulo="Test: consultas relacionadas" descripcion="6 preguntas">
+  <Pregunta enunciado="¿Qué hace `include: { productos: true }` en una consulta de categorías?" explicacion="Trae cada categoría con todos sus campos y, además, el array de sus productos completos.">
+    <Opcion>Devuelve solo los productos</Opcion>
+    <Opcion correcta>Devuelve la categoría y, además, todos sus productos</Opcion>
+    <Opcion>Cuenta los productos</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Quieres enseñar «Monitores (3)» en un menú. ¿Qué usas?" explicacion="`_count` cuenta los relacionados en la base sin traerlos.">
+    <Opcion>`include: { productos: true }` y contar en Angular</Opcion>
+    <Opcion correcta>`_count: { select: { productos: true } }`</Opcion>
+    <Opcion>Un `findMany` de productos sin filtro</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Se pueden poner `include` y `select` a la vez en el mismo nivel de una consulta." respuesta={false} explicacion="Prisma da un error de validación. Para elegir campos y traer una relación, mete la relación dentro del `select`." />
+  <Pregunta enunciado="`prisma.categoria.findUnique({ where: { id: 99 } })` y la categoría 99 no existe. ¿Qué pasa?" explicacion="`findUnique` devuelve `null`. `P2025` lo lanzan `update` y `delete` cuando no encuentran la fila.">
+    <Opcion>Lanza `P2025`</Opcion>
+    <Opcion correcta>Devuelve `null`</Opcion>
+    <Opcion>Devuelve un objeto vacío</Opcion>
+    <Opcion>Lanza `P2002`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Qué consulta devuelve las categorías que no tienen ningún producto?" explicacion="`none` en una relación N: ningún hijo cumple la condición. Con una condición vacía, que no tenga ningún hijo.">
+    <Opcion>`where: { productos: { some: {} } }`</Opcion>
+    <Opcion correcta>`where: { productos: { none: {} } }`</Opcion>
+    <Opcion>`where: { productos: null }`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Por qué el profesor pone `select` en todas las funciones del servicio de usuarios?" explicacion="Para que nunca salga `passwordHash` en las respuestas. Los tests de clase lo comprueban con `not.toHaveProperty('passwordHash')`.">
+    <Opcion>Porque Prisma lo exige</Opcion>
+    <Opcion correcta>Para no devolver nunca `passwordHash`</Opcion>
+    <Opcion>Para que la consulta sea un `JOIN`</Opcion>
+  </Pregunta>
+</Quiz>
+
+<Flashcards titulo="Repaso: consultas relacionadas">
+  <Tarjeta frente="`include`">Trae la fila con todos sus campos y, además, los relacionados que indiques. Equivale a un `JOIN`.</Tarjeta>
+  <Tarjeta frente="`select`">Elige los campos que vuelven. Puede incluir relaciones con su propio `select`.</Tarjeta>
+  <Tarjeta frente="`_count`">Cuenta los relacionados sin traerlos: `_count: { select: { productos: true } }`.</Tarjeta>
+  <Tarjeta frente="`some`, `every`, `none`">Filtros sobre una relación N: algún hijo, todos los hijos o ningún hijo cumple la condición.</Tarjeta>
+  <Tarjeta frente="¿Qué devuelve `findUnique` si no encuentra nada?">`null`. Compruébalo en el controlador y responde `404`.</Tarjeta>
+  <Tarjeta frente="¿Quién lanza `P2025`?">`update` y `delete` cuando la fila no existe. En clase se traducía a `404`.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Página de detalle de un producto" dificultad="facil">
+  Escribe la función de servicio `obtenerProducto(id)` que devuelva el producto con `id`, `nombre`, `descripcion`, `precio`, `stock` y, de su categoría, solo `id` y `nombre`. Después, el controlador `GET /api/productos/:id` con `400` si el id no es un número y `404` si no existe.
+
+  <Pista>`findUnique` con `where` y un `select` que tenga dentro `categoria: { select: {...} }`.</Pista>
+
+  <Solucion>
+
+```ts title="productos.service.ts"
+export function obtenerProducto(id: number) {
+  return prisma.producto.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      nombre: true,
+      descripcion: true,
+      precio: true,
+      stock: true,
+      categoria: { select: { id: true, nombre: true } },
+    },
+  });
+}
+```
+
+```ts title="productos.controller.ts"
+export async function obtenerProductoCtrl(req: Request, res: Response) {
+  const id = Number(req.params.id);
+  if (isNaN(id)) {
+    return res.status(400).json({ message: 'ID inválido' });
+  }
+  const producto = await obtenerProducto(id);
+  if (!producto) {
+    return res.status(404).json({ message: 'Producto no encontrado' });
+  }
+  res.json(producto);
+}
+```
+
+</Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Resumen de pedidos" dificultad="media">
+  Escribe una consulta que devuelva los pedidos `PENDIENTE`, los más nuevos primero, con su `id`, su `createdAt` y el número de líneas que tiene cada uno, sin traer las líneas.
+
+  <Pista>El estado se filtra con `where`, el orden con `orderBy` y el número de líneas con `_count`.</Pista>
+
+  <Solucion>
+
+```ts
+prisma.pedido.findMany({
+  where: { estado: 'PENDIENTE' },
+  orderBy: { createdAt: 'desc' },
+  select: {
+    id: true,
+    createdAt: true,
+    _count: { select: { lineas: true } },
+  },
+});
+```
+
+</Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

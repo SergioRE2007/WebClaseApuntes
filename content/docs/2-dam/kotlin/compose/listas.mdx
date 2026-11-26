@@ -1,0 +1,461 @@
+---
+title: Listas con LazyColumn
+description: "Por qué las listas se hacen con LazyColumn, items con key, item para composables sueltos, el error de LazyListScope, la lista de tareas y la de pokémon de clase, y cómo baja el callback al pulsar una fila."
+icon: List
+---
+
+import { ListaPerezosa } from '@/components/temas/compose/lista-perezosa';
+
+Casi todas las apps tienen una pantalla que es **una lista**: las tareas, los pokémon, los productos. En Compose se hacen con **`LazyColumn`**, y en clase salió desde el 09/10 en todos los proyectos. Aquí tienes cómo funciona, los errores que salieron y las dos listas de clase explicadas.
+
+<Callout type="idea" title="Lo que vas a aprender">
+  - Por qué una lista larga no se hace con `Column`, sino con `LazyColumn`.
+  - `items(lista, key = { it.id })` para las filas e `item { }` para lo demás.
+  - El error de *@Composable invocations* dentro de una `LazyColumn` y por qué sale.
+  - Para qué sirve `key`.
+  - Cómo llega el toque de una fila hasta la navegación (el callback que baja).
+</Callout>
+
+## Por qué `LazyColumn`
+
+Una `Column` **compone todos sus hijos** en cuanto aparece, se vean o no. Con 5 elementos da igual; con 1000 pokémon, la pantalla tarda en abrirse y gasta memoria en filas que nadie está mirando. Además, una `Column` no se desplaza sola: hay que añadirle `Modifier.verticalScroll(rememberScrollState())`, que no salió en clase.
+
+Una **`LazyColumn`** ("perezosa") solo compone las filas que **caben en la pantalla** (y alguna más). Cuando te desplazas, compone las que entran y descarta las que salen. Es lo mismo que hacía el `RecyclerView` de las vistas clásicas, pero sin adaptadores.
+
+<ListaPerezosa />
+
+En el primer experimento de la demo se ve la diferencia: con `LazyColumn` hay compuestas unas pocas filas en cada momento aunque la lista tenga 1000; con `Column`, las 1000 desde el principio. El segundo experimento es sobre `key` y lo explicamos [más abajo](#para-qué-sirve-key).
+
+## `items` e `item`
+
+<DeClase fecha="09/10, 23/10, 09/11" proyecto="ToDoApp y PokeApp2627" />
+
+Dentro de una `LazyColumn` no se escriben los composables directamente: se dice **qué elementos** tiene con dos funciones.
+
+```kotlin title="TaskListScreen.kt"
+LazyColumn(modifier = modifier) {
+    item {
+        if (isLoading) CircularProgressIndicator()
+    }
+    items(items = tasks, key = { it.id }) {
+        TaskCard(
+            toDetail = { toDetail(it.id) },
+            title = it.title,
+            description = it.description,
+            isCompleted = it.isCompleted,
+        )
+    }
+}
+```
+
+- **`items(items = lista) { elemento -> ... }`** crea una fila por cada elemento de la lista. Dentro de la lambda, el elemento es `it` (o el nombre que le pongas: `{ pokemon -> ... }`).
+- **`key = { it.id }`** le da a cada fila un identificador único y estable. Se explica [abajo](#para-qué-sirve-key).
+- **`item { ... }`** añade **una** fila suelta: una cabecera, un indicador de carga, un botón al final...
+- `items` con una lista se importa de **`androidx.compose.foundation.lazy.items`**. Si Android Studio propone otro, o no lo encuentra, revisa el import.
+
+## `LazyListScope` y el error de @Composable
+
+<DeClase fecha="23/10" proyecto="ToDoApp" />
+
+El 23/10, al añadir el indicador de carga, el profesor lo puso primero **fuera** de la `LazyColumn` y luego **dentro, directamente**:
+
+<Comparar titulo="Un composable suelto dentro de la LazyColumn">
+  <Lado tipo="evitar" titulo="No compila">
+
+```kotlin
+LazyColumn(modifier = modifier) {
+    if (isLoading) CircularProgressIndicator()
+    items(items = tasks, key = { it.id }) {
+        TaskCard(/* ... */)
+    }
+}
+```
+
+Error: **@Composable invocations can only happen from the context of a @Composable function**.
+
+  </Lado>
+  <Lado tipo="bien" titulo="Dentro de item">
+
+```kotlin
+LazyColumn(modifier = modifier) {
+    item {
+        if (isLoading) CircularProgressIndicator()
+    }
+    items(items = tasks, key = { it.id }) {
+        TaskCard(/* ... */)
+    }
+}
+```
+
+Así quedó en clase.
+
+  </Lado>
+</Comparar>
+
+¿Por qué? Las llaves de `LazyColumn { }` **no son un composable**: son una lambda con receptor `LazyListScope.() -> Unit` (ver [lambdas con receptor](/docs/2-dam/kotlin/compose/kotlin-clases-y-funciones#lambdas-con-receptor)). Ahí dentro solo se **describe** la lista con `item`, `items`... Las lambdas de `item { }` y de `items { }` sí son composables, y ahí es donde se pintan las cosas.
+
+## Para qué sirve `key`
+
+Sin `key`, Compose identifica cada fila **por su posición** (la 0, la 1...). Si a una fila le guardas algo con `remember` (si está desplegada, si se ha marcado como favorita...) y se borra o se inserta un elemento antes, ese estado se queda en la **posición**, no en el elemento, y "salta" a otra fila. Con `key = { it.id }`, el estado va con el elemento.
+
+Es el segundo experimento de la demo de arriba: marca a Bulbasaur como favorito, bórralo y mira qué pasa con y sin `key`.
+
+- La clave tiene que ser **única** en la lista (dos filas con la misma clave hacen que la app se cierre) y **estable** (el `id`, no la posición ni el nombre si se puede repetir).
+- Además, con `key`, Compose puede animar y reutilizar bien las filas cuando la lista cambia.
+- En clase siempre se usó con el `id`: `key = { it.id }` en la ToDoApp y `key = { pokemon -> pokemon.id }` en la PokeApp.
+- Aun así, lo importante (si una tarea está completada, si un producto es favorito) no debería vivir en un `remember` de la fila, sino en el modelo o en el ViewModel. `key` es para que lo que sí guarde la fila no se mezcle.
+
+## La lista de tareas de clase
+
+<DeClase fecha="23/10" proyecto="ToDoApp" rama="dev" />
+
+Esta es la versión **sin estado** de la `TaskListScreen` (la con estado está explicada en [Estado y recomposición](/docs/2-dam/kotlin/compose/estado-y-recomposicion#state-hoisting-pantalla-con-estado-y-sin-estado)):
+
+<Recorrido
+  titulo="TaskListScreen.kt (versión sin estado, 23/10)"
+  lenguaje="kotlin"
+  codigo={`@Composable
+fun TaskListScreen(
+    modifier: Modifier = Modifier,
+    toCreate: () -> Unit,
+    toDetail: (Int) -> Unit,
+    isLoading: Boolean = true,
+    tasks: List<Task> = listOf(),
+) {
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        floatingActionButton = {
+            FloatingActionButton(onClick = toCreate) {
+                Icon(painterResource(id = R.drawable.add_24px), contentDescription = "Create")
+            }
+        }
+    ) { innerPadding ->
+        val modifier = Modifier
+            .consumeWindowInsets(paddingValues = innerPadding)
+            .padding(paddingValues = innerPadding)
+        LazyColumn(modifier = modifier) {
+            item { if (isLoading) CircularProgressIndicator() }
+            items(items = tasks, key = { it.id }) {
+                TaskCard(
+                    toDetail = { toDetail(it.id) },
+                    title = it.title,
+                    description = it.description,
+                    isCompleted = it.isCompleted,
+                )
+            }
+        }
+    }
+}`}
+>
+  <Paso lineas="2-8" titulo="Solo recibe datos y callbacks">
+    `isLoading` y `tasks` con valor por defecto, y dos callbacks. No hay ViewModel: por eso se puede previsualizar con una lista de ejemplo.
+  </Paso>
+  <Paso lineas="9-16" titulo="Scaffold con el botón de crear">
+    El FAB llama a `toCreate`. La pantalla no sabe a dónde lleva: lo decide el `NavHost`.
+  </Paso>
+  <Paso lineas="17-19" titulo="El innerPadding">
+    El contenido respeta el hueco de las barras (ver [Material 3](/docs/2-dam/kotlin/compose/material-3#scaffold)). Ojo: ese `val modifier` tapa al parámetro `modifier` dentro de la lambda.
+  </Paso>
+  <Paso lineas="21" titulo="La fila de carga">
+    Un `item` suelto con el indicador de carga, solo si `isLoading`.
+  </Paso>
+  <Paso lineas="22-29" titulo="Una TaskCard por tarea">
+    `items` con `key = { it.id }`. Dentro, `it` es cada `Task`. A la tarjeta no se le pasa la tarea entera, solo lo que pinta.
+  </Paso>
+  <Paso lineas="24" titulo="El callback se adapta">
+    La pantalla tiene `toDetail: (Int) -> Unit`, pero la tarjeta espera `() -> Unit`. Se le pasa una lambda nueva, `{ toDetail(it.id) }`, que ya sabe qué id mandar.
+  </Paso>
+</Recorrido>
+
+- El icono se lee <Dudoso nota="Otra captura lee `add_24dp`.">`add_24px`</Dudoso> y el final de las líneas de `consumeWindowInsets(...).padding(...)` sale cortado en varias capturas <Dudoso />.
+- La primera versión (09/10) pintaba `items = repository.readAll()` y luego `viewModel.readAll()`, una lista normal que no se actualizaba. Desde el 23/10 recibe `tasks` del estado.
+
+## La fila de cada pokémon
+
+<DeClase fecha="09/11" proyecto="PokeApp2627" />
+
+En la PokeApp, la lista sin estado comprueba si hay algo que pintar y cada fila es un `PokemonListItem`:
+
+```kotlin title="PokemonListScreen.kt"
+@Composable
+fun PokemonListScreen(
+    modifier: Modifier = Modifier,
+    list: List<Pokemon> = listOf(),
+    isLoading: Boolean = false,
+    toDetail: (Int) -> Unit,
+) {
+    if (isLoading) { CircularProgressIndicator() }
+    if (list.isNotEmpty()) {
+        LazyColumn {
+            items(items = list, key = { pokemon -> pokemon.id }) { pokemon ->
+                PokemonListItem(
+                    modifier = Modifier.fillMaxWidth().height(60.dp),
+                    name = pokemon.name,
+                    imageUrl = pokemon.pokemonImageUrl,
+                    toDetail = { toDetail(pokemon.id) }
+                )
+            }
+        }
+    }
+}
+```
+
+Aquí el elemento de la lambda tiene nombre (`pokemon ->`) en vez de `it`, y la clave también (`key = { pokemon -> pokemon.id }`). Es lo mismo.
+
+<Recorrido
+  titulo="PokemonListItem (09/11)"
+  lenguaje="kotlin"
+  codigo={`@Composable
+fun PokemonListItem(
+    modifier: Modifier = Modifier,
+    name: String,
+    imageUrl: String?,
+    toDetail: () -> Unit = {}
+) {
+    Row(
+        modifier = modifier.clickable(onClick = toDetail),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        imageUrl?.let {
+            AsyncImage(
+                modifier = Modifier.size(40.dp).clip(CircleShape)
+                    .padding(start = 10.dp, top = 10.dp, end = 12.dp),
+                model = imageUrl,
+                contentDescription = name
+            )
+        }
+        Text(
+            text = name.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() },
+            style = MaterialTheme.typography.headlineLarge,
+        )
+    }
+}`}
+>
+  <Paso lineas="5" titulo="La imagen puede no estar">
+    `imageUrl` es `String?`: en el DTO de la API, `sprites` es nulable, y el mapper `toModel()` deja la URL a `null` si no viene.
+  </Paso>
+  <Paso lineas="9" titulo="El modifier de fuera, más clickable">
+    Usa el `modifier` que le pasa la lista (ancho completo y 60 dp de alto) y le añade `clickable`. Toda la fila responde al toque.
+  </Paso>
+  <Paso lineas="10" titulo="Centrado en vertical">
+    La imagen y el nombre, alineados en el centro de la fila.
+  </Paso>
+  <Paso lineas="12-19" titulo="Imagen solo si hay URL">
+    `?.let` hace que `AsyncImage` (de Coil) solo se pinte si hay URL. Se recorta en círculo con `clip(CircleShape)`.
+  </Paso>
+  <Paso lineas="20-23" titulo="El nombre con mayúscula">
+    La API da los nombres en minúscula (`bulbasaur`). `replaceFirstChar` cambia la primera letra: si es minúscula, la pasa a mayúscula con `titlecase()`.
+  </Paso>
+</Recorrido>
+
+- El `bottom` del `padding` de `AsyncImage` no se lee en las capturas <Dudoso nota="El final de la línea del padding es ilegible." />. Fíjate en el orden: el padding va **después** del `size` y del `clip` (ver [Modifier](/docs/2-dam/kotlin/compose/modifier#el-orden-importa)).
+
+## Pulsar una fila: el callback que baja
+
+<DeClase fecha="09/10" proyecto="ToDoApp" />
+
+Ninguna pantalla conoce el `navController`. Cuando tocas una tarea, el aviso **sube** por callbacks hasta el `NavHost`, que es el único que navega. Míralo paso a paso:
+
+<Flujo
+  titulo="Tocar una tarea de la lista"
+  nodos={["Usuario", "TaskCard", "TaskListScreen", "ToDoNavHost", "NavController"]}
+>
+  <Mensaje de="Usuario" a="TaskCard" titulo="Toca la tarjeta">
+    La `Card` tiene `Modifier.clickable(onClick = toDetail)`, así que el toque llama a su `toDetail`, de tipo `() -> Unit`. La tarjeta no sabe ni su id ni a dónde se va.
+  </Mensaje>
+  <Mensaje de="TaskCard" a="TaskListScreen" titulo="{ toDetail(it.id) }">
+    Ese `toDetail` es la lambda que le dio la lista en `items`: `{ toDetail(it.id) }`. Al ejecutarse, llama al `toDetail` de la pantalla con el id de **esa** tarea.
+  </Mensaje>
+  <Mensaje de="TaskListScreen" a="ToDoNavHost" titulo="toDetail(3)">
+    La pantalla tiene `toDetail: (Int) -> Unit`, que le pasó el `NavHost` al crearla. Tampoco sabe a dónde se va.
+  </Mensaje>
+  <Mensaje de="ToDoNavHost" a="NavController" titulo="navigate(Route.TaskDetail(id = 3))">
+    En el `NavHost`, ese callback es `{ id -> controller.navigate(Route.TaskDetail(id = id)) }`. Aquí, por fin, se decide la pantalla de destino.
+  </Mensaje>
+  <Mensaje de="NavController" a="ToDoNavHost" tipo="respuesta" titulo="Pinta el detalle">
+    El `NavController` cambia de destino y el `NavHost` pinta `composable<Route.TaskDetail>`, que lee el id con `backStackEntry.toRoute()` y llama a `TaskDetailScreen(id = detail.id)`.
+  </Mensaje>
+</Flujo>
+
+El resumen en texto: `TaskCard` recibe `() -> Unit`, la lista lo construye con `{ toDetail(it.id) }`, la pantalla recibe `(Int) -> Unit` y el `NavHost` lo conecta con `controller.navigate(...)`. Así la tarjeta se puede reutilizar en cualquier sitio y la navegación está en un solo lugar. Las rutas tipadas y el `NavHost` se explican en el [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura/navegacion).
+
+## Lista vacía, cargando y con datos
+
+<DeClase fecha="18/11" proyecto="ToDoOfflineFirst" />
+
+El 18/11, la versión sin estado de la lista distinguía tres casos con un `when` sin argumento (cada rama es una condición):
+
+```kotlin
+when {
+    isEmpty -> NoTasksComponent(padding)
+    isLoading -> CircularProgressIndicator()
+    // ... y si no, la LazyColumn con las tareas
+}
+```
+
+<NoSeVio titulo="NoTasksComponent">
+  No se ve el código de `NoTasksComponent` (el aviso de "no hay tareas") ni el resto del `when` (18/11).
+</NoSeVio>
+
+Es buena idea tener siempre los tres estados: **cargando**, **vacío** (con un texto que lo diga, en vez de una pantalla en blanco) y **con datos**.
+
+## Márgenes y separación entre filas <NoDadoEnClase inline />
+
+<NoDadoEnClase>
+  En clase las filas iban pegadas. Estos parámetros de `LazyColumn` no salieron, pero son los estándar para separarlas.
+</NoDadoEnClase>
+
+```kotlin
+LazyColumn(
+    contentPadding = PaddingValues(16.dp),
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+) {
+    items(items = tasks, key = { it.id }) { task ->
+        TaskCard(/* ... */)
+    }
+}
+```
+
+- **`contentPadding`** deja margen alrededor de la lista **dentro** del desplazamiento (la primera fila no queda pegada arriba, pero al desplazarte el contenido sí llega al borde). No es lo mismo que `Modifier.padding`, que recorta la zona visible.
+- **`verticalArrangement = Arrangement.spacedBy(8.dp)`** deja 8 dp entre fila y fila.
+- Para una lista horizontal existe **`LazyRow`**, y para una rejilla, **`LazyVerticalGrid`**. Funcionan igual, con `items` e `item`.
+
+## Practica
+
+<CompletarCodigo
+  titulo="Una lista con cabecera"
+  enunciado="Una cabecera fija y una fila por pokémon, con clave estable."
+  lenguaje="kotlin"
+  codigo={`LazyColumn {
+    [[item]] {
+        Text("Pokédex", style = MaterialTheme.typography.headlineLarge)
+    }
+    [[items]](items = pokemons, key = { it.[[id]] }) { pokemon ->
+        PokemonListItem(
+            name = pokemon.name,
+            imageUrl = pokemon.pokemonImageUrl,
+            toDetail = { toDetail([[pokemon.id]]) }
+        )
+    }
+}`}
+/>
+
+<Quiz titulo="Test: listas" descripcion="7 preguntas">
+  <Pregunta enunciado="¿Qué diferencia hay entre `Column` y `LazyColumn` con una lista de 1000 elementos?" explicacion="`LazyColumn` solo compone las filas visibles (y alguna más) y las va cambiando al desplazarte. `Column` compone las 1000 de golpe.">
+    <Opcion>Ninguna: las dos componen solo lo que se ve.</Opcion>
+    <Opcion correcta>`LazyColumn` solo compone las filas visibles; `Column`, todas.</Opcion>
+    <Opcion>`Column` es más rápida porque no tiene que calcular nada.</Opcion>
+    <Opcion>`LazyColumn` no admite más de 100 elementos.</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="Escribes `CircularProgressIndicator()` directamente entre las llaves de una `LazyColumn`. ¿Qué pasa?" explicacion="Las llaves de `LazyColumn` son un `LazyListScope`, no un composable. Hay que meterlo en `item { }`.">
+    <Opcion>Sale encima de la primera fila.</Opcion>
+    <Opcion correcta>No compila: @Composable invocations can only happen from the context of a @Composable function.</Opcion>
+    <Opcion>Se pinta una vez por cada elemento.</Opcion>
+    <Opcion>Funciona, pero da un aviso.</Opcion>
+  </Pregunta>
+  <Pregunta tipo="vf" enunciado="Sin `key`, el estado que guarda una fila con `remember` va con su posición en la lista." respuesta={true} explicacion="Por eso, si borras el primer elemento, su estado pasa a la fila que ahora ocupa esa posición. Con `key`, va con el elemento." />
+  <Pregunta enunciado="¿Qué es una buena `key` para la lista de tareas?" explicacion="Tiene que ser única y estable: el `id` de la tarea. La posición cambia al borrar, y el título se puede repetir.">
+    <Opcion correcta>`key = { it.id }`</Opcion>
+    <Opcion>`key = { it.title }`</Opcion>
+    <Opcion>La posición en la lista.</Opcion>
+    <Opcion>Un número aleatorio en cada recomposición.</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="La pantalla tiene `toDetail: (Int) -> Unit` y `TaskCard` espera `toDetail: () -> Unit`. ¿Qué se le pasa a la tarjeta dentro de `items`?" explicacion="Una lambda nueva sin parámetros que, al ejecutarse, llama al callback de la pantalla con el id de esa tarea.">
+    <Opcion>`toDetail`</Opcion>
+    <Opcion>`toDetail(it.id)`</Opcion>
+    <Opcion correcta>`{ toDetail(it.id) }`</Opcion>
+    <Opcion>`::toDetail`</Opcion>
+  </Pregunta>
+  <Pregunta enunciado="¿Para qué sirve `item { }` dentro de una `LazyColumn`?" explicacion="Añade una sola fila: una cabecera, un indicador de carga, un botón al final... `items` añade una por elemento de la lista.">
+    <Opcion correcta>Para añadir una fila suelta, como una cabecera o un indicador de carga.</Opcion>
+    <Opcion>Para añadir una fila por elemento de la lista.</Opcion>
+    <Opcion>Para dar una clave a cada fila.</Opcion>
+    <Opcion>Para que la lista se pueda desplazar.</Opcion>
+  </Pregunta>
+  <Pregunta tipo="texto" enunciado="¿De qué paquete se importa la función `items` que recibe una lista? (escribe el paquete completo, con la función)" respuesta={["androidx.compose.foundation.lazy.items"]} explicacion="`androidx.compose.foundation.lazy.items`. Si el IDE no lo importa solo, añádelo a mano." />
+</Quiz>
+
+<Flashcards titulo="Repaso: listas">
+  <Tarjeta frente="¿Por qué `LazyColumn` y no `Column`?">`LazyColumn` solo compone las filas visibles y se desplaza sola. Con listas largas, `Column` es lenta.</Tarjeta>
+  <Tarjeta frente="`items` frente a `item`">`items(lista) { }` añade una fila por elemento; `item { }`, una sola fila suelta.</Tarjeta>
+  <Tarjeta frente="¿Qué son las llaves de `LazyColumn { }`?">Una lambda con receptor `LazyListScope`: ahí se describe la lista. Los composables van dentro de `item` o `items`.</Tarjeta>
+  <Tarjeta frente="¿Para qué sirve `key`?">Para que cada fila se identifique por su elemento y no por su posición. Única y estable: el `id`.</Tarjeta>
+  <Tarjeta frente="El callback que baja">El `NavHost` da `(Int) -> Unit` a la pantalla; la pantalla da `{ toDetail(it.id) }` a cada tarjeta.</Tarjeta>
+  <Tarjeta frente="Los tres estados de una lista">Cargando, vacía (con un aviso) y con datos.</Tarjeta>
+</Flashcards>
+
+## Ejercicios
+
+<Ejercicio titulo="Lista de productos con borrar" dificultad="media">
+  Escribe una pantalla sin estado `ProductosScreen(productos: List<Producto>, onBorrar: (Int) -> Unit, modifier: Modifier = Modifier)`, donde `Producto` tiene `id: Int` y `nombre: String`. Cada fila es un `Row` con el nombre y un `IconButton` de borrar que avisa con el id del producto. Si la lista está vacía, en vez de la lista sale el texto `"No hay productos"`.
+
+  <Pista>Un `if (productos.isEmpty()) ... else ...` decide qué se pinta.</Pista>
+  <Pista>El `IconButton` de cada fila recibe `onClick = { onBorrar(producto.id) }`.</Pista>
+
+  <Solucion>
+
+```kotlin
+@Composable
+fun ProductosScreen(
+    productos: List<Producto>,
+    onBorrar: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (productos.isEmpty()) {
+        Text("No hay productos", modifier = modifier)
+    } else {
+        LazyColumn(modifier = modifier) {
+            items(items = productos, key = { it.id }) { producto ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(producto.nombre)
+                    IconButton(onClick = { onBorrar(producto.id) }) {
+                        Icon(painterResource(R.drawable.ic_borrar), contentDescription = "Borrar ${producto.nombre}")
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+  Con `key = { it.id }`, al borrar un producto las demás filas no se mezclan. El borrado de verdad (en el ViewModel y el repositorio) lo decide quien llama a la pantalla.
+
+  </Solucion>
+</Ejercicio>
+
+<Ejercicio titulo="Cabecera, carga y lista" dificultad="facil">
+  Reescribe la `LazyColumn` de la `TaskListScreen` de clase para que tenga, por este orden: una cabecera con el número de tareas (`"3 tareas"`), el indicador de carga si `isLoading`, y las tareas.
+
+  <Pista>Necesitas dos `item` y un `items`.</Pista>
+
+  <Solucion>
+
+```kotlin
+LazyColumn(modifier = modifier) {
+    item {
+        Text("${tasks.size} tareas")
+    }
+    item {
+        if (isLoading) CircularProgressIndicator()
+    }
+    items(items = tasks, key = { it.id }) {
+        TaskCard(
+            toDetail = { toDetail(it.id) },
+            title = it.title,
+            description = it.description,
+            isCompleted = it.isCompleted,
+        )
+    }
+}
+```
+
+  Los `item` y los `items` salen en la lista en el mismo orden en que los escribes.
+
+  </Solucion>
+</Ejercicio>
+
+<MarcarCompletado />

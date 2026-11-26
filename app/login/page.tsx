@@ -36,7 +36,8 @@ export default async function LoginPage(props: PageProps<'/login'>) {
 
 const ERRORES: Record<string, string> = {
   enlace: 'El enlace no es válido. Pide uno nuevo.',
-  caducado: 'Ese enlace ya se usó o ha caducado. Pide uno nuevo y usa solo el último que te llegue.',
+  caducado:
+    'Ese enlace ya no vale: se usó, caducó o pediste otro después. Tu correo está bien; pide un enlace nuevo y abre solo el último que te llegue.',
   navegador:
-    'No se pudo completar el inicio de sesión. Abre el enlace en el mismo navegador (y dispositivo) donde lo pediste.',
+    'No se pudo completar el inicio de sesión. Tu correo está bien: pide un enlace nuevo y abre solo el último que te llegue.',
 };

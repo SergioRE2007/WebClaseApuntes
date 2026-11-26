@@ -2,7 +2,8 @@
 
 import { z } from 'zod';
 import { rutaSegura } from '@/lib/ruta-segura';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
+import { COOKIE_NEXT } from '@/lib/login-next';
 import { env, isSupabaseConfigured } from '@/lib/env';
 import { createClient } from '@/lib/supabase/server';
 
@@ -27,10 +28,13 @@ export async function enviarEnlace(_prev: LoginState, formData: FormData): Promi
     options: { emailRedirectTo: `${origen}/auth/callback?next=${encodeURIComponent(next)}` },
   });
   if (error) {
-    if (error.status === 429) return { ok: false, mensaje: 'Acabas de pedir un enlace. Espera un minuto y usa el último que te llegó.' };
+    if (error.status === 429)
+      return { ok: false, mensaje: 'Ya te hemos enviado un enlace hace nada. No pidas otro: abre el último correo que te llegó (mira también en spam).' };
     return { ok: false, mensaje: 'No se pudo enviar el enlace. Inténtalo en un minuto.' };
   }
-  return { ok: true, mensaje: 'Te hemos enviado un enlace. Ábrelo en este mismo navegador (revisa también spam).' };
+  // Para /auth/confirm: a qué página volver si el correo se abre en este mismo navegador.
+  (await cookies()).set(COOKIE_NEXT, next, { httpOnly: true, sameSite: 'lax', secure: origen.startsWith('https'), path: '/', maxAge: 60 * 60 });
+  return { ok: true, mensaje: 'Te hemos enviado un enlace. Ábrelo desde el correo (revisa también spam). Si pides varios, usa solo el último.' };
 }
 
 async function origenPeticion() {

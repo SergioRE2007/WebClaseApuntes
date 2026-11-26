@@ -99,13 +99,12 @@ export function PlaygroundZod({ titulo = 'Prueba los schemas de users.schema.ts'
       </div>
 
       <div className="space-y-4 px-4 py-4 sm:px-5">
-        <div role="radiogroup" aria-label="Schema" className="flex flex-wrap gap-1.5">
+        <div role="group" aria-label="Schema" className="flex flex-wrap gap-1.5">
           {NOMBRES.map((n) => (
             <button
               key={n}
               type="button"
-              role="radio"
-              aria-checked={n === nombre}
+              aria-pressed={n === nombre}
               onClick={() => {
                 setNombre(n);
                 setTexto(SCHEMAS[n].ejemplo);
@@ -142,12 +141,12 @@ export function PlaygroundZod({ titulo = 'Prueba los schemas de users.schema.ts'
           </div>
         </div>
 
+        <div aria-live="polite">
         <motion.div
           key={salida.tipo}
           initial={reducir ? false : { opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.18 }}
-          aria-live="polite"
           className={cn('rounded-md border', salida.tipo === 'ok' ? okCaja : malCaja)}
         >
           {salida.tipo === 'json-roto' && (
@@ -187,6 +186,7 @@ export function PlaygroundZod({ titulo = 'Prueba los schemas de users.schema.ts'
             </div>
           )}
         </motion.div>
+        </div>
       </div>
     </section>
   );

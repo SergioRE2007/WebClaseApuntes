@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { motion, MotionConfig, useReducedMotion } from 'motion/react';
 import { Plus, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -54,6 +54,7 @@ export function GrafoSignals({ titulo = 'Qué se recalcula cuando cambia un sign
   const [plano, setPlano] = useState(0);
   const [aviso, setAviso] = useState('Al arrancar, cada computed y el effect se calculan una vez.');
   const reducir = useReducedMotion();
+  const idBusqueda = useId();
   const ultimoCount = useRef(filtrar(BASE, '').length);
 
   const filtrados = filtrar(products, search);
@@ -171,11 +172,11 @@ export function GrafoSignals({ titulo = 'Qué se recalcula cuando cambia un sign
         </div>
         <div className="grid gap-4 px-4 py-4 sm:px-5">
           <div className="flex flex-wrap items-center gap-2">
-            <label className="sr-only" htmlFor="grafo-busqueda">
+            <label className="sr-only" htmlFor={idBusqueda}>
               Texto de búsqueda
             </label>
             <input
-              id="grafo-busqueda"
+              id={idBusqueda}
               value={borrador}
               placeholder="Buscar producto"
               onChange={(e) => setBorrador(e.target.value)}

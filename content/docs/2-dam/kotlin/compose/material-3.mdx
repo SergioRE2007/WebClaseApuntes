@@ -75,7 +75,7 @@ Text(text = name, style = MaterialTheme.typography.headlineLarge)   // 09/11
 </NoSeVio>
 
 <NoDadoEnClase titulo="Pasar el modo oscuro al tema">
-  La forma estándar: en `MainActivity`, se lee el ajuste y se pasa como `darkTheme`. El ViewModel de ajustes y el DataStore son del [bloque de datos](/docs/2-dam/kotlin/datos).
+  La forma estándar: en `MainActivity`, se lee el ajuste y se pasa como `darkTheme`. El ViewModel de ajustes y el DataStore son del [bloque de datos](/docs/2-dam/kotlin/datos/datastore).
 </NoDadoEnClase>
 
 ```kotlin title="MainActivity.kt"
@@ -293,7 +293,7 @@ El 13/11 se miró en la documentación de Material 3 el **Loading indicator** y 
 ## Barra inferior: `NavigationBar` <NoDadoEnClase inline />
 
 <NoDadoEnClase>
-  La barra de navegación inferior no salió en ninguna clase de Android. Aquí tienes cómo se pinta; cómo se conecta con la navegación (`popUpTo`, `saveState`...) es del [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura).
+  La barra de navegación inferior no salió en ninguna clase de Android. Aquí tienes cómo se pinta; cómo se conecta con la navegación (`popUpTo`, `saveState`...) está en [Navegación del proyecto](/docs/2-dam/kotlin/para-el-proyecto/navegacion-del-proyecto).
 </NoDadoEnClase>
 
 Una **`NavigationBar`** lleva un **`NavigationBarItem`** por pestaña, con su icono, su texto y si está seleccionada. Como cualquier componente controlado, **no guarda cuál está seleccionada**: se lo dices tú y te avisa al pulsar.

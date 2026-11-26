@@ -198,6 +198,12 @@ LIMIT ${limit} OFFSET ${resultado.skip};`;
   const campo = 'w-full min-w-0 rounded-md border bg-fd-background px-2.5 py-1.5 text-sm text-fd-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring';
   const etiquetaCampo = 'mb-1 block text-xs font-medium text-fd-muted-foreground';
   const pre = 'overflow-x-auto rounded-md border bg-fd-muted/40 p-3 font-mono text-xs leading-relaxed text-fd-foreground';
+  const foco = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring';
+
+  // Resumen para lectores de pantalla (un solo aria-live, siempre montado)
+  const resumen = valido
+    ? `Página ${page}. 200 OK: ${resultado.total} ${resultado.total === 1 ? 'producto cumple' : 'productos cumplen'} el filtro, ${totalPages} ${totalPages === 1 ? 'página' : 'páginas'}; esta página devuelve ${resultado.pagina.length}.`
+    : `Página ${page}. 400 Bad Request: Zod rechaza ${Object.keys(errores).join(' y ')}.`;
 
   return (
     <section aria-label={titulo} className={bloque}>
@@ -304,9 +310,7 @@ LIMIT ${limit} OFFSET ${resultado.skip};`;
             >
               −
             </button>
-            <output aria-live="polite" className="min-w-8 text-center text-sm font-semibold tabular-nums">
-              {page}
-            </output>
+            <span className="min-w-8 text-center text-sm font-semibold tabular-nums">{page}</span>
             <button
               type="button"
               onClick={() => setPage((p) => p + 1)}
@@ -373,7 +377,12 @@ LIMIT ${limit} OFFSET ${resultado.skip};`;
               ))}
             </div>
           </div>
-          <pre className={pre} aria-label={vista === 'prisma' ? 'Consulta de Prisma' : 'SQL aproximado'}>
+          <pre
+            className={cn(pre, foco)}
+            tabIndex={0}
+            role="region"
+            aria-label={vista === 'prisma' ? 'Consulta de Prisma' : 'SQL aproximado'}
+          >
             {vista === 'prisma' ? codigoPrisma : codigoSql}
           </pre>
         </div>
@@ -456,11 +465,14 @@ LIMIT ${limit} OFFSET ${resultado.skip};`;
               </span>
             )}
           </p>
-          <pre className={cn(pre, 'max-h-80')} aria-live="polite">
+          <pre className={cn(pre, foco, 'max-h-80')} tabIndex={0} role="region" aria-label="JSON de la respuesta">
             {respuesta}
           </pre>
         </div>
       </div>
+      <p className="sr-only" aria-live="polite">
+        {resumen}
+      </p>
     </section>
   );
 }

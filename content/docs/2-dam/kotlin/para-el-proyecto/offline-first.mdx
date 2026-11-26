@@ -19,55 +19,9 @@ Es la idea que se empezó el 09/11 y el 16/11 y no se llegó a ver entera: **la 
 
 <DeClase fecha="09/11" proyecto="PokeApp2627" nota="y el 16/11, un fragmento de 3 minutos ya con Room" />
 
-El 09/11, en la PokeApp, el repositorio pasó a recibir **dos DataSource**: el remoto (Retrofit) y uno local, primero en memoria. El local es la **fuente de verdad** y `refresh()` copia del remoto al local. El ViewModel ya no usa `MutableStateFlow` + `init`: construye su estado con `map` + `stateIn` sobre el `Flow` del repositorio.
+El 09/11, en la PokeApp, el repositorio pasó a recibir **dos DataSource**: el remoto (Retrofit) y uno local, primero en memoria (`PokemonInMemoryDataSource`). El local es la **fuente de verdad** y `refresh()` copia del remoto al local. El ViewModel ya no usa `MutableStateFlow` + `init`: construye su estado con `map` + `stateIn` sobre el `Flow` del repositorio.
 
-```kotlin title="PokemonRepositoryImpl.kt (09/11)"
-interface PokemonLocalDataSource {
-    val pokemons: Flow<List<Pokemon>>
-    suspend fun save(pokemons: List<Pokemon>)
-}
-
-class PokemonInMemoryDataSource @Inject constructor() : PokemonLocalDataSource {
-    private val _pokemons: MutableList<Pokemon> = mutableListOf()
-    override val pokemons: Flow<List<Pokemon>> = flow { emit(_pokemons) }
-    override suspend fun save(pokemons: List<Pokemon>) {
-        _pokemons.clear()
-        _pokemons.addAll(pokemons)
-    }
-}
-
-class PokemonRepositoryImpl @Inject constructor(
-    private val _remoteDataSource: PokemonRemoteDataSource,
-    private val _localDataSource: PokemonLocalDataSource,
-) : PokemonRepository {
-    override val pokemons: Flow<List<Pokemon>> = _localDataSource.pokemons
-    override fun observePokemon(id: Int): Flow<Pokemon?> = _localDataSource.observePokemon(id)
-
-    init {
-        runBlocking { refresh() }
-    }
-
-    suspend fun refresh() {
-        val remotePokemons = _remoteDataSource.readAllPokemon()
-        _localDataSource.save(remotePokemons)
-    }
-}
-```
-
-```kotlin title="PokemonListViewModel.kt (09/11)"
-@HiltViewModel
-class PokemonListViewModel @Inject constructor(
-    private val _repository: PokemonRepository
-) : ViewModel() {
-    val state: StateFlow<PokemonListScreenState> = _repository.pokemons
-        .map<List<Pokemon>, PokemonListScreenState> { PokemonListScreenState.Loaded(pokemons = it) }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000L),
-            initialValue = PokemonListScreenState.Loading
-        )
-}
-```
+El código de clase, paso a paso (la fuente local, el `AppModule`, el repositorio con `refresh()` y el detalle con `observePokemon`), está en [Offline-first: el repositorio con fuente remota y local](/docs/2-dam/kotlin/datos/offline-first). Aquí solo se resume lo que importa para tu proyecto.
 
 Cómo se intentó hacer la carga inicial en el `init` del repositorio:
 
@@ -78,9 +32,7 @@ Cómo se intentó hacer la carga inicial en el `init` del repositorio:
 
 El 16/11 se vio la misma app ya con Room (`PokemonLocalDBDatasource`, `PokemonDao`, `PokemonEntity`) y el **Database Inspector** (View → Tool Windows → App Inspection) con la tabla `pokemon` llena. El `init { runBlocking { refresh() } }` aparece **comentado**. El `runBlocking` del repositorio es una de las [prácticas raras](/docs/2-dam/kotlin/para-el-proyecto/practicas-raras) que no conviene copiar.
 
-Lo de clase, paso a paso, está en [Offline-first: el repositorio con fuente remota y local](/docs/2-dam/kotlin/datos/offline-first).
-
-Notas sobre este código:
+Notas sobre el código de clase:
 
 - <Dudoso nota="Se usa en el repositorio, pero en las capturas no sale declarado ni en el LocalDataSource ni en la interfaz del repositorio.">`observePokemon(id)`</Dudoso> no se ve implementado ni en el LocalDataSource ni en la interfaz del repositorio: tal como está, el fragmento no compila.
 - No se ve la explicación del profesor de por qué `CoroutineScope(Dispatchers.IO).launch` dejaba la pantalla en blanco. <Dudoso nota="Es una deducción de quien hizo los apuntes, no una explicación de clase.">Probablemente es porque `flow { emit(_pokemons) }` emite una sola vez</Dudoso>: si la pantalla lo lee antes de que llegue la red, recibe la lista vacía y no se entera de los cambios.

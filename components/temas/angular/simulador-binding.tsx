@@ -165,7 +165,7 @@ export function SimuladorBinding({ titulo = 'Simulador de data binding' }: { tit
               tabIndex={tipo === p.id ? 0 : -1}
               onClick={() => cambiarTipo(p.id)}
               className={cn(
-                'relative shrink-0 rounded-t-md px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring',
+                'relative min-h-10 shrink-0 rounded-t-md px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fd-ring sm:min-h-0',
                 tipo === p.id ? 'text-fd-foreground' : 'text-fd-muted-foreground hover:text-fd-foreground',
               )}
             >
@@ -317,7 +317,14 @@ export function SimuladorBinding({ titulo = 'Simulador de data binding' }: { tit
                     >
                       {enchufado ? <Lightbulb className="size-6" aria-hidden /> : <LightbulbOff className="size-6" aria-hidden />}
                     </span>
-                    <button type="button" disabled={!enchufado} className={botonPrimario}>
+                    <button
+                      type="button"
+                      disabled={!enchufado}
+                      className={botonPrimario}
+                      onClick={() =>
+                        setAviso('Este botón solo enseña [disabled]: está activo porque enchufado vale true en la clase.')
+                      }
+                    >
                       Encender
                     </button>
                     <span className="sr-only">{enchufado ? 'Botón activo' : 'Botón desactivado'}</span>

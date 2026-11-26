@@ -157,7 +157,7 @@ sql> select * from "Media";
   lenguaje="sql"
   codigo={`select * from [["Media"]];
 select * from [["User"]] where id = 1;
-select * from [[_prisma_migrations]];`}
+select * from [[_prisma_migrations|"_prisma_migrations"]];`}
 />
 
 `_prisma_migrations` va en minúsculas y sin comillas porque Prisma la crea así. Es la tabla donde apunta las migraciones aplicadas: `migration_name`, `checksum`, `started_at`, `finished_at` y `applied_steps_count`. El 03/11 tenía 2 filas, una por migración. Se explica en [Prisma 6](/docs/2-dam/apis/backend/prisma).

@@ -29,6 +29,9 @@ const INICIALES: Tarea[] = [
   { id: 2, titulo: 'Dummy2' },
 ];
 
+/** Tope de tareas para que la demo no crezca sin fin. */
+const MAXIMO = 7;
+
 const LINEA: Record<Modo, string> = {
   misma: '_taskFlow.value = _taskList',
   copia: '_taskFlow.value = _taskList.toList()',
@@ -59,7 +62,10 @@ export function StateFlowIgualdad({ titulo = '¿Emite el StateFlow?' }: { titulo
     reiniciar();
   };
 
+  const lleno = interna.length >= MAXIMO;
+
   const crear = () => {
+    if (lleno) return;
     const n = interna.length + 1;
     const lista = [...interna, { id: n, titulo: `Tarea ${n}` }];
     setInterna(lista);
@@ -110,7 +116,15 @@ export function StateFlowIgualdad({ titulo = '¿Emite el StateFlow?' }: { titulo
         </pre>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={crear} className={botonPrimario} disabled={interna.length >= 7}>
+          <button
+            type="button"
+            onClick={crear}
+            aria-disabled={lleno}
+            className={cn(
+              botonPrimario,
+              'aria-disabled:cursor-not-allowed aria-disabled:bg-fd-muted aria-disabled:text-fd-muted-foreground',
+            )}
+          >
             <Plus className="size-4" aria-hidden />
             create(...)
           </button>
@@ -122,6 +136,11 @@ export function StateFlowIgualdad({ titulo = '¿Emite el StateFlow?' }: { titulo
             Emisiones del StateFlow: {emisiones}
           </span>
         </div>
+        {lleno && (
+          <p className="text-xs text-fd-muted-foreground">
+            La demo llega hasta {MAXIMO} tareas. Pulsa Reiniciar para volver a empezar.
+          </p>
+        )}
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Panel titulo="Dentro del repositorio" subtitulo="_taskList (la lista mutable)" tareas={interna} reducir={!!reducir} />
@@ -140,14 +159,15 @@ export function StateFlowIgualdad({ titulo = '¿Emite el StateFlow?' }: { titulo
               <span className={cn('font-medium', malTexto)}>No emite. </span>
               Al <code>MutableStateFlow</code> le llega el mismo objeto que ya tenía. Compara el valor nuevo con el
               anterior con <code>equals</code> y, como es la misma lista, considera que no ha cambiado. La tarea está en
-              memoria, pero la pantalla no se vuelve a pintar.
+              memoria, pero la pantalla no se vuelve a pintar: <code>_taskList</code> tiene {interna.length} tareas y la
+              pantalla sigue pintando {pintada.length}.
             </p>
           )}
           {ultimo === true && (
             <p className={cn('rounded-md border px-3 py-2 text-sm', okCaja)}>
               <span className={cn('font-medium', okTexto)}>Emite. </span>
               <code>toList()</code> crea una lista nueva con una tarea más. Es distinta de la anterior, así que el
-              StateFlow emite y Compose vuelve a pintar la lista.
+              StateFlow emite y Compose vuelve a pintar la lista, que ya tiene {pintada.length} tareas.
             </p>
           )}
         </div>

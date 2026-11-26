@@ -323,7 +323,7 @@ Prisma pone un código a cada error conocido en `error.code`. Los dos que traduc
 | **P2025** | El registro que había que actualizar o borrar no existe. | **404** `Usuario no encontrado` |
 | **P2002** | Se repite un valor de un campo `@unique`. | **409** `El email ya está en uso` |
 
-<NoDadoEnClase inline /> Otros códigos útiles (como P2003, cuando se intenta borrar algo que todavía tiene datos relacionados) y cómo traducirlos todos en el `errorHandler` están en [Backend para el proyecto](/docs/2-dam/apis/backend-proyecto).
+<NoDadoEnClase inline /> Otros códigos útiles (como P2003, cuando se intenta borrar algo que todavía tiene datos relacionados) y cómo traducirlos todos en el `errorHandler` están en [Errores con su código HTTP](/docs/2-dam/apis/backend-proyecto/errores-http).
 
 Ojo con la diferencia: `findUnique` **devuelve `null`** si no encuentra nada, mientras que `update` y `delete` **lanzan P2025**. Por eso en `getUserCtrl` hay que comprobar el `null` a mano y en `updateUserCtrl` se mira el código del error.
 

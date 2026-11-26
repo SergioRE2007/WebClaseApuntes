@@ -69,7 +69,7 @@ class TaskRepositoryInMemory @Inject constructor() : TaskRepository {   // inter
 
 <DeClase fecha="09/10" proyecto="ToDoApp" />
 
-- `private val _repository` en el constructor crea una propiedad privada. Es la forma de recibir dependencias que se vio en clase (Hilt las rellena; eso se explica en el [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura)).
+- `private val _repository` en el constructor crea una propiedad privada. Es la forma de recibir dependencias que se vio en clase (Hilt las rellena; eso se explica en el [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura/hilt)).
 - **Una interfaz no se puede instanciar.** El 09/10 el profesor escribió `TaskRepository()` como valor por defecto y dio error; hay que usar la implementación, `TaskRepositoryInMemory()`.
 - `@Inject constructor(...)`: cuando la clase lleva una anotación en el constructor, hay que escribir la palabra `constructor`.
 
@@ -384,7 +384,7 @@ fun PokemonResult.toModel(): Pokemon = Pokemon(
 val pokemon: Pokemon = response.body()!!.toModel()
 ```
 
-Es el *mapper* que convierte la respuesta de la API (`PokemonResult`) en el modelo de la app (`Pokemon`). Por qué conviene separarlos lo verás en el [bloque de datos](/docs/2-dam/kotlin/datos).
+Es el *mapper* que convierte la respuesta de la API (`PokemonResult`) en el modelo de la app (`Pokemon`). Por qué conviene separarlos lo verás en el [bloque de datos](/docs/2-dam/kotlin/datos/retrofit).
 
 Hay extensiones por todas partes en Compose y en la librería estándar:
 

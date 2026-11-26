@@ -58,7 +58,7 @@ Con `@else if` se encadenan varios casos. Así eran los estados de la página de
 Son los cuatro estados de una pantalla con datos: **cargando, error, vacío y con datos**. `loading()`, `error()` y `posts()` son *signals* (se leen llamándolos como una función).
 
 <NoSeVio titulo="Cómo cambian loading y error">
-  La IA añadió los signals `loading` y `error` al componente, pero no se ve cómo se actualizan. Los signals se explican en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado).
+  La IA añadió los signals `loading` y `error` al componente, pero no se ve cómo se actualizan. Los signals se explican en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado/signals).
 </NoSeVio>
 
 ## `@for` con `track`
@@ -190,7 +190,7 @@ Guarda una expresión en una **variable de la plantilla** para no repetirla. En 
 - Se puede usar después en bindings (`[class.invalid-control]="invalidStock"`) y en otros bloques (`@if (invalidStock)`).
 - El *tooltip* del editor enseñó el tipo `boolean | null`, que sale de las propiedades del control del formulario.
 - `@let` existe desde Angular 18.1, así que en Angular 19 se puede usar sin problema.
-- El formulario completo (`stock` es una referencia `#stock="ngModel"`) va en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado).
+- El formulario completo (`stock` es una referencia `#stock="ngModel"`) va en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado/crud-padre-hijo).
 
 Un ejemplo más sencillo:
 
@@ -322,6 +322,9 @@ En proyectos y tutoriales anteriores a Angular 17 verás directivas con asterisc
 
 <Ejercicio titulo="Lámpara con @switch" dificultad="facil">
   La lámpara tiene una propiedad `modo: 'apagada' | 'tenue' | 'encendida' = 'apagada'`. Pinta "APAGADA", "TENUE" o "ENCENDIDA" según el modo, y usa `@let` para guardar si está encendida del todo y ponerle la clase `brillo` a un `div`.
+
+  <Pista>Cada valor va en su `@case ('...')`, con el texto entre llaves. El último puede ir en `@default`.</Pista>
+  <Pista>`@let aTope = modo === 'encendida';` guarda un `boolean` que luego usas en `[class.brillo]`.</Pista>
 
   <Solucion>
 

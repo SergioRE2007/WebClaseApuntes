@@ -27,3 +27,10 @@ next-env.d.ts
 .env
 .env*
 !.env.example
+
+# Material de origen de los apuntes (se queda en local, no va a la web)
+TodoTFG-Apuntes/
+Extras para TodoTFG/
+
+# Capturas de las pruebas con Playwright
+.playwright-mcp/

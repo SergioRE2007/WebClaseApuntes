@@ -179,7 +179,7 @@ export class CrudComponent implements OnChanges {
 </Flujo>
 
 <NoSeVio titulo="El .ts del padre">
-  No se ve el código de `AppComponent` en `proj-game`: ni `onActualizaGames`, ni `loadGames`, ni la paginación. El formulario y el resto del proyecto van en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado).
+  No se ve el código de `AppComponent` en `proj-game`: ni `onActualizaGames`, ni `loadGames`, ni la paginación. El formulario y el resto del proyecto van en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado/proj-game).
 </NoSeVio>
 
 ## `ngOnChanges`: reaccionar a un cambio de entrada
@@ -341,6 +341,15 @@ export class LamparaComponent {
 ```
 
 ```ts title="app.component.ts"
+import { Component } from '@angular/core';
+import { LamparaComponent } from './components/lampara/lampara.component';
+
+@Component({
+  selector: 'app-root',
+  imports: [LamparaComponent],
+  templateUrl: './app.component.html',
+  styleUrl: './app.component.css'
+})
 export class AppComponent {
   enchufado = false;
   estadoLampara = false;
@@ -405,6 +414,7 @@ export class DetalleComponent {
 ```
 
 ```ts title="app.component.ts (lo que importa)"
+// En @Component: imports: [DetalleComponent]
 products: Product[] = [];
 seleccionado: Product | undefined;
 ```

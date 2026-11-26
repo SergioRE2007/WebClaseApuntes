@@ -46,10 +46,16 @@ export function SimuladorOfflineFirst() {
   const [cargando, setCargando] = useState(false);
   const [arrancando, setArrancando] = useState(true);
   const [activo, setActivo] = useState<Panel | null>(null);
-  const [registro, setRegistro] = useState<string[]>(['Se abre la app: el ViewModel llama a refresh() en su init.']);
+  const [registro, setRegistro] = useState<{ id: number; texto: string }[]>([
+    { id: 0, texto: 'Se abre la app: el ViewModel llama a refresh() en su init.' },
+  ]);
   const temporizadores = useRef<number[]>([]);
+  const siguienteLinea = useRef(1);
 
-  const apuntar = (linea: string) => setRegistro((r) => [linea, ...r].slice(0, 5));
+  const apuntar = (texto: string) => {
+    const linea = { id: siguienteLinea.current++, texto };
+    setRegistro((r) => [linea, ...r].slice(0, 5));
+  };
   const despues = (ms: number, fn: () => void) => {
     temporizadores.current.push(window.setTimeout(fn, ms));
   };
@@ -205,7 +211,7 @@ export function SimuladorOfflineFirst() {
                 {estado}
               </span>
             </div>
-            <div className="px-3 py-2 text-xs" aria-live="polite">
+            <div className="px-3 py-2 text-xs">
               {estado === 'Loading' && <p className="text-fd-muted-foreground">Cargando…</p>}
               {estado === 'Error' && <p className={malTexto}>{error}. No hay nada guardado que enseñar.</p>}
               {estado === 'Success' && room.length === 0 && (
@@ -231,13 +237,16 @@ export function SimuladorOfflineFirst() {
 
         <div className="border-t px-4 py-3 sm:px-5">
           <p className="mb-1 text-xs font-medium text-fd-muted-foreground">Qué ha pasado (lo último arriba)</p>
-          <ol className="flex flex-col gap-0.5 text-xs" aria-live="polite">
+          <ol className="flex flex-col gap-0.5 text-xs">
             {registro.map((l, i) => (
-              <li key={`${i}-${l}`} className={i === 0 ? 'text-fd-foreground' : 'text-fd-muted-foreground'}>
-                {l}
+              <li key={l.id} className={i === 0 ? 'text-fd-foreground' : 'text-fd-muted-foreground'}>
+                {l.texto}
               </li>
             ))}
           </ol>
+          <p className="sr-only" aria-live="polite">
+            {`${registro[0]?.texto ?? ''} Pantalla en ${estado}${estado === 'Success' ? ` con ${room.length} productos` : ''}.`}
+          </p>
         </div>
       </section>
     </MotionConfig>

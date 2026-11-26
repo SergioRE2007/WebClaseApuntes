@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import { ArrowDown, ArrowUp, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -79,12 +79,24 @@ export function OrdenModifier() {
   const [mods, setMods] = useState<Mod[]>(INICIAL);
   const [clics, setClics] = useState(0);
   const [onda, setOnda] = useState(0);
+  /** Botones de subir/bajar, para no perder el foco cuando uno se desactiva. */
+  const botones = useRef<Record<string, HTMLButtonElement | null>>({});
+  const focoPendiente = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!focoPendiente.current) return;
+    botones.current[focoPendiente.current]?.focus();
+    focoPendiente.current = null;
+  }, [mods]);
 
   const mover = (i: number, d: -1 | 1) => {
     const j = i + d;
     if (j < 0 || j >= mods.length) return;
     const copia = [...mods];
     [copia[i], copia[j]] = [copia[j], copia[i]];
+    // Si llega al principio o al final, su botón se desactiva: el foco pasa al otro.
+    if (j === 0) focoPendiente.current = `${mods[i].id}-bajar`;
+    else if (j === mods.length - 1) focoPendiente.current = `${mods[i].id}-subir`;
     setMods(copia);
   };
 
@@ -203,6 +215,9 @@ export function OrdenModifier() {
                       <code className="truncate font-mono text-[12.5px]">{CODIGO[m.id]}</code>
                     </label>
                     <button
+                      ref={(el) => {
+                        botones.current[`${m.id}-subir`] = el;
+                      }}
                       type="button"
                       onClick={() => mover(i, -1)}
                       disabled={i === 0}
@@ -212,6 +227,9 @@ export function OrdenModifier() {
                       <ArrowUp className="size-3.5" aria-hidden />
                     </button>
                     <button
+                      ref={(el) => {
+                        botones.current[`${m.id}-bajar`] = el;
+                      }}
                       type="button"
                       onClick={() => mover(i, 1)}
                       disabled={i === mods.length - 1}

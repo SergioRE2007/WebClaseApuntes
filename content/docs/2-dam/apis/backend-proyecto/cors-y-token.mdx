@@ -167,7 +167,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     La cabecera llega como `Bearer eyJhbGci...`. Si no está o no empieza por `Bearer `, `401` con "No autorizado", el mismo mensaje que esperan los tests de clase.
   </Paso>
   <Paso lineas="12" titulo="Comprobar la firma">
-    `slice(7)` quita las 7 letras de `"Bearer "`. `jwt.verify` comprueba la firma y la fecha de caducidad; si el token está mal o caducado, **lanza un error**.
+    `slice(7)` quita los 7 caracteres de `"Bearer "` (6 letras y el espacio). `jwt.verify` comprueba la firma y la fecha de caducidad; si el token está mal o caducado, **lanza un error**.
   </Paso>
   <Paso lineas="13-14" titulo="Pasar el id al controlador">
     `res.locals` es un objeto de Express para pasar datos de un middleware al controlador. `next()` deja seguir a la petición.
@@ -247,6 +247,9 @@ En el lado de Angular, el token se añade a cada petición con un interceptor y 
   </Mensaje>
   <Mensaje de="Controlador" a="Prisma" titulo="where: { userId }">
     El controlador usa el id del token, nunca uno que venga en el `body`.
+  </Mensaje>
+  <Mensaje de="Prisma" a="Controlador" tipo="respuesta" titulo="Los pedidos de ese usuario">
+    Como el `where` lleva el id del token, Prisma solo devuelve las filas de ese usuario.
   </Mensaje>
   <Mensaje de="Controlador" a="Angular" tipo="respuesta" titulo="200 OK">
     Solo los datos de ese usuario.
@@ -344,6 +347,8 @@ model Pedido {
 ```
 
 Y en `model User`, añade `pedidos Pedido[]`. Después, `npx prisma migrate dev --name pedidos-usuario`.
+
+Como `userId` es obligatorio, cambia también el seed: crea antes un usuario (con la contraseña hasheada) y pon su id en el pedido, `prisma.pedido.create({ data: { userId: usuario.id, lineas: { create: [...] } } })`, y borra los usuarios después de los pedidos. Si no, el seed de [Modelo y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) deja de compilar. Y si ya tienes pedidos en la base, la migración no puede añadir una columna obligatoria sin valor: en desarrollo, `npx prisma migrate reset`.
 
 ```ts title="pedidos.controller.ts"
 export async function misPedidosCtrl(_req: Request, res: Response) {

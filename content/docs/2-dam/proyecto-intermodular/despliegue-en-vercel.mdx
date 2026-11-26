@@ -9,7 +9,7 @@ import { SimuladorVercel } from '@/components/temas/proyecto/simulador-vercel';
 <DeClase fecha="18/11" proyecto="proj-game" rama="refactor/reactive-form2" nota="Act 11, «Migración ReactiveForms, Git y Vercel»" />
 <DeClase fecha="19/11" proyecto="proyecto-rutas" nota="Vercel CLI" />
 
-La Act 11 de Angular tenía tres partes: pasar el formulario de juegos a **formularios reactivos** en una rama, abrir una **Pull Request de revisión** y publicar una **Preview** en **Vercel**. Los formularios están en [Acceso a Datos](/docs/2-dam/acceso-a-datos) y la rama y la PR en [Git: ramas, tags y Git Graph](/docs/2-dam/proyecto-intermodular/git-ramas-y-tags). Aquí tienes el despliegue, siguiendo la guía de la actividad paso a paso.
+La Act 11 de Angular tenía tres partes: pasar el formulario de juegos a **formularios reactivos** en una rama, abrir una **Pull Request de revisión** y publicar una **Preview** en **Vercel**. Los formularios están en [Acceso a Datos](/docs/2-dam/acceso-a-datos/angular-avanzado/formularios-reactivos) y la rama y la PR en [Git: ramas, tags y Git Graph](/docs/2-dam/proyecto-intermodular/git-ramas-y-tags). Aquí tienes el despliegue, siguiendo la guía de la actividad paso a paso.
 
 <Callout type="idea" title="Lo que vas a aprender">
   - Qué comprobar antes de subir y qué carpeta se publica.
@@ -239,7 +239,7 @@ Permission was denied for this request to access the `loopback` address space.
 </NoDadoEnClase>
 
 1. **Publica la API** con `https` (si la web va por `https` y la API por `http`, el navegador da un error de *Mixed Content*).
-2. **Permite el origen de tu web en el CORS de la API** (por ejemplo, `https://tu-proyecto.vercel.app`, sin `/` al final). Cómo hacerlo en Express está en [APIs: backend del proyecto](/docs/2-dam/apis/backend-proyecto).
+2. **Permite el origen de tu web en el CORS de la API** (por ejemplo, `https://tu-proyecto.vercel.app`, sin `/` al final). Cómo hacerlo en Express está en [APIs: backend del proyecto](/docs/2-dam/apis/backend-proyecto/cors-y-token).
 3. **Saca la URL de la API a los *environments* de Angular**, para usar `localhost` en desarrollo y la URL publicada en el build:
 
 ```bash title="Terminal"

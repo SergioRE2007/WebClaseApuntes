@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { Check, RotateCcw, X, TriangleAlert } from 'lucide-react';
+import { Check, RotateCcw, X, TriangleExclamationPoint } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import {
   avisoCaja,
@@ -198,7 +198,7 @@ export function SimuladorHilt() {
   const [piezas, setPiezas] = useState<Record<Pieza, boolean>>(TODAS);
   const resultado = evaluar(piezas);
   const estilo = ESTILO[resultado.tipo];
-  const Icono = resultado.tipo === 'ok' ? Check : resultado.tipo === 'aviso' ? TriangleAlert : X;
+  const Icono = resultado.tipo === 'ok' ? Check : resultado.tipo === 'aviso' ? TriangleExclamationPoint : X;
 
   return (
     <section aria-label="Simulador de Hilt" className={bloque}>

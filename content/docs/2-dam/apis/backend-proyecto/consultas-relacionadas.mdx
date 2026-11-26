@@ -235,7 +235,13 @@ export async function obtenerCategoriaCtrl(req: Request, res: Response) {
     Prisma genera el SQL: la categoría y sus productos.
   </Mensaje>
   <Mensaje de="Postgres" a="Prisma" tipo="respuesta" titulo="Filas">
-    Prisma junta las filas en un objeto con un array `productos`.
+    Postgres devuelve las filas de la categoría y de sus productos.
+  </Mensaje>
+  <Mensaje de="Prisma" a="Servicio" tipo="respuesta" titulo="Objeto o null">
+    Prisma junta las filas en un objeto con un array `productos`. Si no hay ninguna categoría con ese id, devuelve `null` (no lanza ningún error).
+  </Mensaje>
+  <Mensaje de="Servicio" a="Controlador" tipo="respuesta" titulo="return">
+    El servicio devuelve el resultado tal cual: decidir el código HTTP es cosa del controlador.
   </Mensaje>
   <Mensaje de="Controlador" a="Angular" tipo="respuesta" titulo="200 OK o 404">
     Si es `null`, `404`. Si no, `res.json(categoria)` con la categoría y sus productos.

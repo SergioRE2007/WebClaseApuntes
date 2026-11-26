@@ -187,7 +187,35 @@ Es lo mismo que pasó con nodemon ([Node, npm y TypeScript](/docs/2-dam/apis/bac
 - En la colección `GameService` de Postman, `GET {{url_base}}` sin ruta también dio 404. Después se escribió `/products` por despiste (es la ruta de la Fake Store, que no existe en el `db.json`) y por último `/games`, que dio 200.
 - Varias capturas leen la URL como <Dudoso nota="Con un espacio entre la variable y la ruta. Primero salió 404 y en la captura siguiente 200; no se ve si el profesor corrigió el espacio.">`{{url_base}} /games`</Dudoso>.
 
-En Angular, el 12/11, se pidieron las páginas con `?_page=` y `_limit=` de JSON Server; eso está en [Acceso a Datos](/docs/2-dam/acceso-a-datos).
+En Angular, el 12/11, se pidieron las páginas con `?_page=` y `_limit=` de JSON Server; eso está en [proj-game](/docs/2-dam/acceso-a-datos/angular-avanzado/proj-game).
+
+### De Postman a JSON Server, paso a paso
+
+Juntando las dos herramientas, esto es lo que pasa cuando mandas `GET {{url_base}}/games` desde la colección `GameService`:
+
+<Flujo
+  titulo="GET {{url_base}}/games con el entorno GameServiceEnv"
+  nodos={["Postman", "Entorno", "JSON Server", "db.json"]}
+>
+  <Mensaje de="Postman" a="Entorno" titulo="¿url_base?">
+    Antes de enviar, Postman busca la variable `url_base` en el **entorno activo**, el que está elegido en el desplegable.
+  </Mensaje>
+  <Mensaje de="Entorno" a="Postman" tipo="respuesta" titulo="http://localhost:3000">
+    `GameServiceEnv` le da el valor y la URL queda `http://localhost:3000/games`. Con **No Environment** este paso no ocurre: la URL se queda con `{{url_base}}` literal y sale `getaddrinfo ENOTFOUND {{url_base}}`.
+  </Mensaje>
+  <Mensaje de="Postman" a="JSON Server" titulo="GET /games">
+    La petición llega al puerto 3000, donde escucha `npx json-server --watch db.json --port 3000`.
+  </Mensaje>
+  <Mensaje de="JSON Server" a="db.json" titulo="Clave games">
+    `/games` coincide con la clave de primer nivel `"games"` del `db.json`. Con `/products` (la ruta de la Fake Store) no hay ninguna clave que coincida y responde 404.
+  </Mensaje>
+  <Mensaje de="db.json" a="JSON Server" tipo="respuesta" titulo="El array de juegos">
+    JSON Server lee el array tal cual está en el fichero. Con `--watch`, si cambias el `db.json`, la próxima petición ya ve los datos nuevos.
+  </Mensaje>
+  <Mensaje de="JSON Server" a="Postman" tipo="respuesta" titulo="200 OK + JSON">
+    Postman enseña el código, el tiempo y el cuerpo. En la terminal de JSON Server sale la línea `GET /games 200 4.560 ms - -`.
+  </Mensaje>
+</Flujo>
 
 ## 18/11: comprobar la API antes del frontend
 
@@ -195,11 +223,11 @@ En Angular, el 12/11, se pidieron las páginas con `?_page=` y `_limit=` de JSON
 
 Antes de arrancar Angular, el profesor abrió `http://localhost:3000/games` en el navegador (con la vista *Pretty-print*) para comprobar que la API respondía. Por las clases de Angular, es el JSON Server de `proj-game`, no una API de Express. Cada lado tiene su puerto: **la API en el 3000 y Angular en el 4200**.
 
-Ese mismo día, al publicar la web en Vercel, salió un error de CORS: la web publicada intentaba llamar a `localhost:3000`, que es el ordenador de quien abre la web, no el del profesor. Se cuenta en [Acceso a Datos](/docs/2-dam/acceso-a-datos).
+Ese mismo día, al publicar la web en Vercel, salió un error de CORS: la web publicada intentaba llamar a `localhost:3000`, que es el ordenador de quien abre la web, no el del profesor. Se cuenta en [Despliegue en Vercel](/docs/2-dam/proyecto-intermodular/despliegue-en-vercel).
 
 ## Probar tu propia API <NoDadoEnClase inline />
 
-En clase no se probó con Postman la API de Express, pero se hace igual que con JSON Server: un entorno con `url_base = http://localhost:3000` y peticiones como `GET {{url_base}}/api/users` o `POST {{url_base}}/api/auth/login`. Para mandar un body, en la pestaña **Body** elige **raw** y **JSON**; si no, `express.json()` no lo lee y `req.body` llega vacío.
+En clase no se probó con Postman la API de Express, pero se hace igual que con JSON Server: un entorno con `url_base = http://localhost:3000` y peticiones como `GET {{url_base}}/api/users` o `POST {{url_base}}/api/auth/login`. Para mandar un body, en la pestaña **Body** elige **raw** y **JSON**; si no, Postman no manda la cabecera `Content-Type: application/json`, `express.json()` no lo lee y `req.body` llega `undefined`.
 
 ## Practica
 
@@ -227,14 +255,14 @@ En clase no se probó con Postman la API de Express, pero se hace igual que con 
 
     <Opcion>`http://localhost:3000/db/games/3`</Opcion>
     <Opcion correcta>`http://localhost:3000/games/3`</Opcion>
-    <Opcion>`http://localhost:3000/games?id=3`</Opcion>
+    <Opcion>`http://localhost:3000/3`</Opcion>
   </Pregunta>
   <Pregunta enunciado="`json-server --watch db.json` da `command not found` aunque está instalado. ¿Cómo se arranca?" explicacion="Está instalado en el proyecto: se lanza con `npx json-server ...` o con un script de npm (`npm run api`).">
     <Opcion>Reinstalándolo con `--force`</Opcion>
     <Opcion correcta>Con `npx json-server --watch db.json --port 3000` o con `npm run api`</Opcion>
     <Opcion>Abriendo el `db.json` en el navegador</Opcion>
   </Pregunta>
-  <Pregunta tipo="vf" enunciado="`GET http://localhost:3000/` devuelve la lista de recursos de JSON Server con un 200." respuesta={false} explicacion="En clase dio 404: en la raíz no hay ningún recurso. Los datos están en `/games`." />
+  <Pregunta tipo="vf" enunciado="En el proyecto de clase, `GET http://localhost:3000/` devolvió la lista de recursos de JSON Server con un 200." respuesta={false} explicacion="En clase dio 404 (`GET / 404` en la terminal): la raíz no es ningún recurso del `db.json`. Los datos están en `/games`." />
   <Pregunta enunciado="¿Qué tiene de malo la respuesta de `GET /users` de la Fake Store API?" explicacion="Devuelve el campo `password`. Una API nunca debe devolver contraseñas ni hashes.">
     <Opcion>Que los objetos están anidados</Opcion>
     <Opcion correcta>Que devuelve la contraseña de cada usuario</Opcion>

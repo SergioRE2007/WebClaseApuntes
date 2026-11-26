@@ -278,4 +278,36 @@ Box(
   </Solucion>
 </Ejercicio>
 
+<Ejercicio titulo="El padding que no llega" dificultad="facil">
+  Desde el `NavHost` llamas a `TaskListScreen(modifier = Modifier.padding(16.dp), toCreate = { })`, pero la pantalla sale pegada a los bordes. Esta es la pantalla:
+
+```kotlin
+@Composable
+fun TaskListScreen(
+    modifier: Modifier = Modifier,
+    toCreate: () -> Unit,
+) {
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+    ) { /* ... */ }
+}
+```
+
+  ¿Por qué se pierde el padding? Corrígelo.
+
+  <Pista>Fíjate en si el `Scaffold` usa `Modifier` (mayúscula) o `modifier` (el parámetro).</Pista>
+
+  <Solucion>
+
+```kotlin
+Scaffold(
+    modifier = modifier.fillMaxSize(),
+) { /* ... */ }
+```
+
+  El `Scaffold` empezaba la cadena con `Modifier`, un modificador vacío nuevo, así que lo que llegaba por el parámetro no se usaba en ningún sitio. Empezando por `modifier`, la cadena queda `padding(16.dp)` y luego `fillMaxSize()`: el padding de quien llama va por fuera y la pantalla ocupa el resto. Es el cambio que se hizo en clase entre el 09/10 y el 23/10.
+
+  </Solucion>
+</Ejercicio>
+
 <MarcarCompletado />

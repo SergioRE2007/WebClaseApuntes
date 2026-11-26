@@ -54,11 +54,11 @@ Piden un modelo relacional "suficientemente completo":
 
 | Requisito | Estado | Dónde se dio | Dónde se explica |
 | --- | --- | --- | --- |
-| PostgreSQL | Dado | 20/10: Postgres 16 en `docker-compose.yml`. 03/11: Supabase | [Backend de clase](/docs/2-dam/apis/backend) |
-| Prisma | Dado | 27/10: `schema.prisma` y migración `init`. 03/11: migraciones, *drift* y `db pull` | [Backend de clase](/docs/2-dam/apis/backend) |
+| PostgreSQL | Dado | 20/10: Postgres 16 en `docker-compose.yml`. 03/11: Supabase | [PostgreSQL](/docs/2-dam/apis/backend/postgres-docker-supabase) |
+| Prisma | Dado | 27/10: `schema.prisma` y migración `init`. 03/11: migraciones, *drift* y `db pull` | [Prisma 6](/docs/2-dam/apis/backend/prisma) |
 | Varias entidades relacionadas | A medias | El repositorio del profesor solo tiene `User` (y `Media`, con su clave ajena a `User`, en la v1.1) | [Modelo y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) |
 | Relaciones 1 y N | A medias | Igual: solo `User` → `Media` | [Modelo y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) |
-| Migraciones | Dado | 27/10 y 03/11. Sube la carpeta `prisma/migrations` | [Backend de clase](/docs/2-dam/apis/backend) |
+| Migraciones | Dado | 27/10 y 03/11. Sube la carpeta `prisma/migrations` | [Prisma 6](/docs/2-dam/apis/backend/prisma#migraciones) |
 | Seed de datos | No dado | Nunca (`db seed` solo salió en la ayuda de Prisma) | [Modelo y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) |
 
 ## §4. API REST y organización del backend
@@ -115,7 +115,7 @@ Al menos **una operación de negocio** con varias acciones relacionadas, que no 
 | Validación en el backend | Dado | 27/10: Zod 4 y el middleware `validate` | Falta validar los *query params* del listado: [Listado paginado](/docs/2-dam/apis/backend-proyecto/listado-paginado) |
 | Gestión de errores | Dado | 20/10: `errorHandler`. 27/10: códigos de Prisma. 03/11: Winston | Si quieres una clase de error propia: [Errores HTTP](/docs/2-dam/apis/backend-proyecto/errores-http) |
 | Integridad (borrados relacionados) | A medias | `onDelete: Cascade` en `Media` | [Modelo y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) |
-| Variables de entorno | Dado | 20/10: `env.ts` y dotenv, con `required()` | [Backend de clase](/docs/2-dam/apis/backend) |
+| Variables de entorno | Dado | 20/10: `env.ts` y dotenv, con `required()` | [Servidor con Express 5](/docs/2-dam/apis/backend/servidor-express#variables-de-entorno-envts) |
 
 ## §8. La tabla de mínimos
 
@@ -123,22 +123,22 @@ Es la tabla que se usa para decidir si la parte de Acceso a Datos está "suficie
 
 | Requisito | Estado en clase | Qué falta | Dónde |
 | --- | --- | --- | --- |
-| PostgreSQL | Dado | Nada | [Backend de clase](/docs/2-dam/apis/backend) |
-| Prisma o TypeORM | Dado | Nada | [Backend de clase](/docs/2-dam/apis/backend) |
+| PostgreSQL | Dado | Nada | [PostgreSQL](/docs/2-dam/apis/backend/postgres-docker-supabase) |
+| Prisma o TypeORM | Dado | Nada | [Prisma 6](/docs/2-dam/apis/backend/prisma) |
 | Varias entidades persistentes y relacionadas | A medias | Tu modelo, con varias relaciones y su `onDelete` | [Modelo y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) |
 | Relaciones 1 y N | A medias | Lo mismo | [Modelo y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) |
-| Migraciones | Dado | Subir `prisma/migrations` | [Backend de clase](/docs/2-dam/apis/backend) |
+| Migraciones | Dado | Subir `prisma/migrations` | [Prisma 6](/docs/2-dam/apis/backend/prisma#migraciones) |
 | Seed de datos | No dado | Todo | [Modelo y seed](/docs/2-dam/apis/backend-proyecto/modelo-y-seed) |
-| Operaciones CRUD | Dado | Repetirlo para tus entidades | [Backend de clase](/docs/2-dam/apis/backend) |
+| Operaciones CRUD | Dado | Repetirlo para tus entidades | [CRUD de usuarios](/docs/2-dam/apis/backend/crud-usuarios) |
 | Consultas relacionales y por criterios | A medias | `include`, `where` y `_count` | [Consultas](/docs/2-dam/apis/backend-proyecto/consultas-relacionadas) |
 | Búsqueda y filtrado | No dado | Todo, con Prisma | [Listado paginado](/docs/2-dam/apis/backend-proyecto/listado-paginado) |
 | Ordenación y paginación | No dado | Todo, y devolver el total | [Listado paginado](/docs/2-dam/apis/backend-proyecto/listado-paginado) |
-| API REST | Dado | Nada | [Backend de clase](/docs/2-dam/apis/backend) |
+| API REST | Dado | Nada | [Servidor con Express 5](/docs/2-dam/apis/backend/servidor-express) y [CRUD de usuarios](/docs/2-dam/apis/backend/crud-usuarios) |
 | Validación en backend | Dado | Validar los *query params* | [Listado paginado](/docs/2-dam/apis/backend-proyecto/listado-paginado) |
 | Gestión de errores | Dado | Nada (opcional: `HttpError`) | [Errores HTTP](/docs/2-dam/apis/backend-proyecto/errores-http) |
 | Operación de negocio | No dado | Todo | [Transacciones](/docs/2-dam/apis/backend-proyecto/transacciones) |
 | Uso de transacciones | No dado | Todo | [Transacciones](/docs/2-dam/apis/backend-proyecto/transacciones) |
-| Consumo de la API desde Angular | A medias | Contra tu API: CORS y el token | [CORS y token](/docs/2-dam/apis/backend-proyecto/cors-y-token) y [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado) |
+| Consumo de la API desde Angular | A medias | Contra tu API: CORS y el token | [CORS y token](/docs/2-dam/apis/backend-proyecto/cors-y-token) y [Listado con filtros, paginación y token](/docs/2-dam/acceso-a-datos/angular-avanzado/listado-filtros-y-token) |
 
 El último se vio a medias el 27/10 y el 28/10, con servicios de `HttpClient` contra JSONPlaceholder, Fake Store API y JSON Server, pero nunca contra una API propia. El 18/11 salió el error de CORS.
 
@@ -146,18 +146,18 @@ Ve marcando lo que ya tienes. Se guarda solo en tu navegador:
 
 <ChecklistRequisitos
   items={[
-    { id: 'postgres', texto: 'PostgreSQL', estado: 'dado', enlace: '/docs/2-dam/apis/backend' },
-    { id: 'orm', texto: 'Prisma o TypeORM', estado: 'dado', enlace: '/docs/2-dam/apis/backend' },
+    { id: 'postgres', texto: 'PostgreSQL', estado: 'dado', enlace: '/docs/2-dam/apis/backend/postgres-docker-supabase' },
+    { id: 'orm', texto: 'Prisma o TypeORM', estado: 'dado', enlace: '/docs/2-dam/apis/backend/prisma' },
     { id: 'entidades', texto: 'Varias entidades persistentes y relacionadas', estado: 'a-medias', enlace: '/docs/2-dam/apis/backend-proyecto/modelo-y-seed' },
     { id: 'relaciones', texto: 'Relaciones 1 y N que se usan de verdad', estado: 'a-medias', enlace: '/docs/2-dam/apis/backend-proyecto/modelo-y-seed' },
-    { id: 'migraciones', texto: 'Migraciones subidas al repositorio', estado: 'dado', enlace: '/docs/2-dam/apis/backend' },
+    { id: 'migraciones', texto: 'Migraciones subidas al repositorio', estado: 'dado', enlace: '/docs/2-dam/apis/backend/prisma#migraciones' },
     { id: 'seed', texto: 'Seed de datos', estado: 'no-dado', enlace: '/docs/2-dam/apis/backend-proyecto/modelo-y-seed' },
-    { id: 'crud', texto: 'Operaciones CRUD de tus entidades', estado: 'dado', enlace: '/docs/2-dam/apis/backend' },
+    { id: 'crud', texto: 'Operaciones CRUD de tus entidades', estado: 'dado', enlace: '/docs/2-dam/apis/backend/crud-usuarios' },
     { id: 'consultas', texto: 'Consultas relacionales y por criterios', estado: 'a-medias', enlace: '/docs/2-dam/apis/backend-proyecto/consultas-relacionadas' },
     { id: 'busqueda', texto: 'Búsqueda y filtrado en el backend', estado: 'no-dado', enlace: '/docs/2-dam/apis/backend-proyecto/listado-paginado' },
     { id: 'paginacion', texto: 'Ordenación y paginación con el total', estado: 'no-dado', enlace: '/docs/2-dam/apis/backend-proyecto/listado-paginado' },
-    { id: 'rest', texto: 'API REST', estado: 'dado', enlace: '/docs/2-dam/apis/backend' },
-    { id: 'validacion', texto: 'Validación en el backend (body y query params)', estado: 'dado', enlace: '/docs/2-dam/apis/backend-proyecto/listado-paginado' },
+    { id: 'rest', texto: 'API REST', estado: 'dado', enlace: '/docs/2-dam/apis/backend/servidor-express' },
+    { id: 'validacion', texto: 'Validación en el backend con Zod (falta la de los query params)', estado: 'dado', enlace: '/docs/2-dam/apis/backend-proyecto/listado-paginado' },
     { id: 'errores', texto: 'Gestión de errores con códigos HTTP', estado: 'dado', enlace: '/docs/2-dam/apis/backend-proyecto/errores-http' },
     { id: 'negocio', texto: 'Operación de negocio', estado: 'no-dado', enlace: '/docs/2-dam/apis/backend-proyecto/transacciones' },
     { id: 'transaccion', texto: 'Uso de transacciones', estado: 'no-dado', enlace: '/docs/2-dam/apis/backend-proyecto/transacciones' },

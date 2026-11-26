@@ -284,7 +284,7 @@ Los tests no se compilan con `npm run build`: no tienen que acabar en `dist`.
 Versiones: `jest ^30.2.0`, `ts-jest ^29.4.5` <Dudoso nota="Es lo que se lee, aunque las versiones mayores de jest y ts-jest no coinciden." />, `supertest ^7.1.4`, `@types/jest ^30.0.0` y `@types/supertest ^6.0.3`, todas de desarrollo.
 
 <NoDadoEnClase titulo="En Windows">
-  `NODE_ENV=test comando` es sintaxis de la terminal de Linux y macOS (y de WSL, que es lo que usan las guías de clase). En la PowerShell o el `cmd` de Windows no funciona. Si no usas WSL, el paquete `cross-env` lo resuelve: `"test": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest"`.
+  `NODE_ENV=test comando` es sintaxis de la terminal de Linux y macOS (y de WSL, que es lo que se usa en las clases de Angular). En la PowerShell o el `cmd` de Windows no funciona. Si no usas WSL, el paquete `cross-env` lo resuelve: `"test": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest"`.
 </NoDadoEnClase>
 
 ### Cómo son los tests
@@ -362,7 +362,7 @@ describe('Users Endpoints', () => {
   </Paso>
 </Recorrido>
 
-- El import `'../app'` va sin `.js`, al contrario que el resto del proyecto. Funciona por el `moduleNameMapper`, pero <Dudoso nota="Puede estar mal leído en las capturas.">puede que se haya leído mal</Dudoso>.
+- El import `'../app'` va sin `.js`, al contrario que el resto del proyecto. En Jest funciona porque Jest prueba él solo las extensiones (`.ts` incluida); el `moduleNameMapper` es lo que hace falta para los imports que **sí** llevan `.js`. Pero <Dudoso nota="Puede estar mal leído en las capturas.">puede que se haya leído mal</Dudoso>.
 - Los tests usan el middleware de autenticación de la v0.6.0 (`No autorizado`, `Token inválido`), cuyo código no se vio ([Autenticación](/docs/2-dam/apis/backend/autenticacion)).
 
 Más casos que se ven en los tests:

@@ -513,7 +513,7 @@ El `android:name` depende del paquete donde esté la clase: en la PokeApp2627 er
 </Ejercicio>
 
 <Ejercicio titulo="¿Quién crea cada objeto?" dificultad="media">
-  En la defensa del proyecto te pueden pedir que expliques quién crea cada objeto. Explica, paso a paso, cómo llega `TaskRepositoryInMemory` a `TaskCreateViewModel` en la ToDoApp, desde que se abre la pantalla de crear tarea, sin que nadie escriba `TaskRepositoryInMemory()`. Di también por qué la tarea creada aparece luego en la lista.
+  En la defensa del proyecto te pueden pedir que expliques quién crea cada objeto. Explica, paso a paso, cómo llega `TaskRepositoryInMemory` a `TaskCreateViewModel` en la ToDoApp, desde que se abre la pantalla de crear tarea, sin que nadie escriba `TaskRepositoryInMemory()`. Di también por qué la tarea creada existe luego para la lista.
 
   <Pista>Empieza por el parámetro `viewModel = hiltViewModel()` de `TaskCreateScreen`.</Pista>
   <Pista>Piensa en qué anotación tiene cada clase y en qué dice el módulo.</Pista>
@@ -527,7 +527,9 @@ El `android:name` depende del paquete donde esté la clase: en la PokeApp2627 er
 5. Para crear `TaskRepositoryInMemory` usa su `@Inject constructor()`. Como el `@Binds` lleva `@Singleton`, si ya lo había creado para `TaskListViewModel`, reutiliza **esa misma instancia**.
 6. Hilt llama al constructor de `TaskCreateViewModel` con ese repositorio y la pantalla recibe su ViewModel.
 
-La tarea aparece en la lista porque los dos ViewModels comparten **el mismo** objeto repositorio gracias a `@Singleton`, y por tanto la misma lista en memoria. Todo ese código lo genera Hilt al compilar (las `..._Factory.java`).
+La tarea existe para la lista porque los dos ViewModels comparten **el mismo** objeto repositorio gracias a `@Singleton`, y por tanto la misma lista en memoria. Todo ese código lo genera Hilt al compilar (las `..._Factory.java`).
+
+Compartir el repositorio es necesario, pero no basta para que la pantalla la pinte: en el código de clase la lista no se repintaba con la tarea nueva, porque `readAll()` solo se llamaba en el `init` y el `StateFlow` del repositorio no emitía. Lo tienes en [La lista que no se actualiza](/docs/2-dam/kotlin/arquitectura/viewmodel-y-stateflow#la-lista-que-no-se-actualiza).
 
   </Solucion>
 </Ejercicio>

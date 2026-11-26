@@ -181,7 +181,7 @@ export function PilaNavegacion() {
               tabIndex={-1}
               role="group"
               aria-label={cerrada ? 'Móvil simulado: la app se ha cerrado' : `Móvil simulado: pantalla ${cima}`}
-              className="mx-auto flex h-72 w-full max-w-64 flex-col overflow-hidden rounded-lg border bg-fd-card outline-none"
+              className="mx-auto flex h-72 w-full max-w-64 flex-col overflow-hidden rounded-lg border bg-fd-card outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
             >
               <div className="border-b px-3 py-2 text-xs text-fd-muted-foreground">Pantalla actual</div>
               <AnimatePresence mode="wait" initial={false}>
@@ -279,7 +279,7 @@ export function PilaNavegacion() {
               <p className="mb-2 text-xs font-medium text-fd-muted-foreground">
                 Pila (arriba, la que se ve) · {pila.length} {pila.length === 1 ? 'pantalla' : 'pantallas'}
               </p>
-              <ol className="flex min-h-24 flex-col gap-1.5" aria-live="polite">
+              <ol className="flex min-h-24 flex-col gap-1.5" aria-label="Pila de navegación, de arriba abajo">
                 <AnimatePresence initial={false}>
                   {[...pila].reverse().map((e, i) => (
                     <motion.li
@@ -312,7 +312,14 @@ export function PilaNavegacion() {
                 <code>{codigo}</code>
               </pre>
             </div>
-            {aviso && <p className={cn('rounded-md border px-3 py-2 text-xs', avisoCaja, avisoTexto)}>{aviso}</p>}
+            <div aria-live="polite">
+              <p className="sr-only">
+                {cerrada
+                  ? 'La pila se ha quedado vacía y la app se ha cerrado.'
+                  : `Pantalla actual: ${cima}. La pila tiene ${pila.length} ${pila.length === 1 ? 'pantalla' : 'pantallas'}.`}
+              </p>
+              {aviso && <p className={cn('rounded-md border px-3 py-2 text-xs', avisoCaja, avisoTexto)}>{aviso}</p>}
+            </div>
           </div>
         </div>
       </section>

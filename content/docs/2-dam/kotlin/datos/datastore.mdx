@@ -306,54 +306,11 @@ En la misma clase se hicieron también la barra superior reutilizable `Applicati
   Al final de la clase se abren `MainActivity` y `core/ui/theme/Theme.kt`, con `ToDoOfflineFirstTheme(darkTheme = isSystemInDarkTheme(), dynamicColor = true)`. Parece que lo siguiente era pasarle el `darkMode` guardado, pero las capturas terminan antes. Tal como queda, el `Switch` guarda la preferencia, pero **la app no cambia de tema**.
 </NoSeVio>
 
-### El módulo del DataStore <NoDadoEnClase inline />
+### Cómo se cierra <NoDadoEnClase inline />
 
 <NoDadoEnClase>
-  No se vio en clase. Es la forma más estándar de crear el `DataStore<Preferences>` que recibe `SettingsDataStore`. Necesita la dependencia `implementation("androidx.datastore:datastore-preferences:1.3.0")`.
+  Las dos piezas que faltan (el `DataStoreModule` con `preferencesDataStore`, que necesita `androidx.datastore:datastore-preferences:1.3.0`, y pasar `darkMode` al tema desde `MainActivity`) están explicadas en [DataStore para el proyecto](/docs/2-dam/kotlin/para-el-proyecto/datastore), junto con cómo guardar el **token** del login con `stringPreferencesKey`. No se vieron en clase.
 </NoDadoEnClase>
-
-```kotlin title="core/di/DataStoreModule.kt"
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "ajustes")
-
-@Module
-@InstallIn(SingletonComponent::class)
-object DataStoreModule {
-    @Provides
-    @Singleton
-    fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
-        context.dataStore
-}
-```
-
-- `by preferencesDataStore(name = "ajustes")` crea el archivo `ajustes.preferences_pb` la primera vez que se usa.
-- La línea `private val Context.dataStore` va **fuera de cualquier clase**, arriba del archivo. Si se crean dos DataStore con el mismo nombre, la app se cae.
-
-### Llevar el modo oscuro al tema <NoDadoEnClase inline />
-
-En `MainActivity`, por encima de todo, se lee el modo oscuro y se le pasa al tema. Con las clases de clase quedaría así:
-
-```kotlin title="MainActivity.kt"
-@AndroidEntryPoint
-class MainActivity : ComponentActivity() {
-
-    private val settingsViewModel: SettingsViewModel by viewModels()
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent {
-            val uiState by settingsViewModel.uiState.collectAsStateWithLifecycle()
-            ToDoOfflineFirstTheme(darkTheme = uiState.darkMode) {
-                MainNavigation()
-            }
-        }
-    }
-}
-```
-
-- `by viewModels()` es la forma de pedir un `@HiltViewModel` desde una Activity; en un composable se usa `hiltViewModel()`. Se usó igual el 13/11 para la Splash Screen.
-- La pantalla de ajustes tiene su propio `SettingsViewModel`, pero los dos leen el mismo DataStore: el tema cambia nada más tocar el `Switch`.
-- Guardar el **token** del login es igual, con `stringPreferencesKey`: está en [DataStore para el proyecto](/docs/2-dam/kotlin/para-el-proyecto/datastore).
 
 ## Practica
 

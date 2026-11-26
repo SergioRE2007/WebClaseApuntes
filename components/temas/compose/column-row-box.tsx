@@ -149,6 +149,7 @@ ${hijosCodigo}
                 cont === 'Row' && cn('flex flex-row', JUSTIFY[arr], ITEMS[ali]),
                 cont === 'Box' && 'grid grid-cols-1 grid-rows-1',
               )}
+              role="group"
               aria-label="Vista previa"
             >
               {HIJOS.map((h) => (

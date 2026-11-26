@@ -65,7 +65,7 @@ Esto es lo que pone el documento de la actividad:
   El componente de detalle solo se ve funcionando en la solución desplegada, que enseña "Material id snapshot" y "Material id observable". No se ve su código.
 </NoSeVio>
 
-## Leer el parámetro: snapshot u observable
+## Leer el parámetro: snapshot u observable <NoDadoEnClase inline />
 
 El parámetro se lee con **`ActivatedRoute`**, que representa la ruta que ha activado el componente. Hay dos formas, y la solución desplegada enseñaba las dos a la vez para que se viera la diferencia:
 
@@ -243,7 +243,7 @@ export const routes: Routes = [
 - Dentro de `AULA_ROUTES` los `path` son relativos a `aula`: el `''` es `/aula`.
 - **Para comprobarlo** (lo pide la actividad): F12 → **Network**, recarga en `/inicio` y entra en Aula. La primera vez se descarga un fichero `chunk-XXXX.js`; las siguientes, no.
 
-## Guards: quién puede entrar y salir
+## Guards: quién puede entrar y salir <NoDadoEnClase inline />
 
 Un *guard* es una función que el router ejecuta antes de entrar en una ruta (o de salir de ella) y que decide si se puede. Se generan con `ng generate guard <nombre>`.
 
@@ -307,7 +307,7 @@ export const salirGuard: CanDeactivateFn<NuevoJuegoComponent> = (component) => {
   El guard solo esconde pantallas en el navegador; cualquiera puede saltárselo. Lo que de verdad protege los datos es que **la API** compruebe el token en cada petición.
 </Callout>
 
-## Resolvers y withComponentInputBinding
+## Resolvers y withComponentInputBinding <NoDadoEnClase inline />
 
 Un **resolver** carga datos **antes** de activar la ruta: el componente nace con los datos ya listos.
 
@@ -349,9 +349,9 @@ Como son signals, se leen con paréntesis (`this.id()`) y se actualizan solos au
     <Opcion correcta>`/aula/materiales/7`</Opcion>
     <Opcion>`/aula/materiales,7`</Opcion>
   </Pregunta>
-  <Pregunta enunciado="Estás en `/aula/materiales/1` y pulsas un enlace a `/aula/materiales/7`. ¿Qué enseña `route.snapshot.paramMap.get('id')` leído en `ngOnInit`?" explicacion="Angular reutiliza el componente, `ngOnInit` no se repite y el snapshot se queda con `'1'`. El observable `paramMap` sí emite `'7'`.">
-    <Opcion correcta>`'1'`: el componente se reutiliza y el snapshot no cambia</Opcion>
-    <Opcion>`'7'`: el snapshot se actualiza solo</Opcion>
+  <Pregunta enunciado="Estás en `/aula/materiales/1` y pulsas un enlace a `/aula/materiales/7`. ¿Qué enseña `route.snapshot.paramMap.get('id')` leído en `ngOnInit`?" explicacion="Angular reutiliza el componente y `ngOnInit` no se repite, así que lo que se leyó del snapshot sigue siendo `'1'` (el router sí cambia `route.snapshot` por dentro, pero nadie lo vuelve a leer). El observable `paramMap` sí emite `'7'`.">
+    <Opcion correcta>`'1'`: el componente se reutiliza y `ngOnInit` no se vuelve a ejecutar</Opcion>
+    <Opcion>`'7'`: `ngOnInit` se vuelve a ejecutar con el nuevo id</Opcion>
     <Opcion>`null`</Opcion>
   </Pregunta>
   <Pregunta tipo="vf" enunciado="`params.get('id')` devuelve un número si en la URL hay un número." respuesta={false} explicacion="Los parámetros siempre llegan como texto (o `null`). Hay que convertirlos con `Number(...)`." />

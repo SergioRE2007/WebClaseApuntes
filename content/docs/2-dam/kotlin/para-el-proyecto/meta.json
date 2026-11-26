@@ -4,13 +4,13 @@
   "pages": [
     "index",
     "requisitos",
-    "intent-y-localizacion",
     "room-relaciones",
     "offline-first",
     "datastore",
     "conectar-con-tu-api",
     "crud-con-retrofit",
     "navegacion-del-proyecto",
+    "intent-y-localizacion",
     "practicas-raras",
     "dependencias-gradle",
     "errores-tipicos"

@@ -1,7 +1,7 @@
 ---
 title: RxJS y gestión de errores
 description: Observable y subscribe tal como se usaron en clase, y lo que está en las guías de Patrones reactivos y Gestión de errores pero no se dio. pipe, map, switchMap, takeUntilDestroyed, async, catchError, retry, HttpErrorResponse y ErrorHandler.
-icon: TriangleAlert
+icon: TriangleExclamationPoint
 ---
 
 En clase, todas las peticiones HTTP se consumieron igual: `servicio.metodo().subscribe(datos => ...)`. Funciona, pero si la API falla no pasa nada visible: el `subscribe` no tiene qué hacer con el error. Esta página repasa lo que se vio de `Observable` y resume lo que está en las guías para tratar los datos asíncronos y los errores como en un proyecto de verdad.
@@ -52,7 +52,7 @@ El recorrido completo, como lo dibujaba el documento:
     Al suscribirse, la petición sale de verdad. El componente sigue a lo suyo: la plantilla ya se ha pintado sin productos.
   </Mensaje>
   <Mensaje de="ProductService" a="HttpClient" titulo="http.get<Product[]>(apiUrl)">
-    El servicio ya había preparado la petición con `HttpClient`.
+    El servicio ya había preparado la petición con `HttpClient`. <Dudoso nota="El cuerpo de ProductService (inject(HttpClient) y apiUrl = 'https://fakestoreapi.com/products') sale del documento de la actividad, no de la pantalla.">No se ve el cuerpo del servicio</Dudoso>.
   </Mensaje>
   <Mensaje de="HttpClient" a="Fake Store API" titulo="GET /products">
     La petición viaja a `fakestoreapi.com`.

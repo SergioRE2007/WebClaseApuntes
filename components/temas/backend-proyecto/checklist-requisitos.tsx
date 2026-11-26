@@ -133,8 +133,11 @@ export function ChecklistRequisitos({
                   {item.enlace && (
                     <>
                       <span className="text-fd-muted-foreground"> · </span>
-                      <a href={item.enlace} className="text-fd-muted-foreground underline underline-offset-2 hover:text-fd-foreground">
-                        Cómo se hace
+                      <a
+                        href={item.enlace}
+                        className="rounded-sm text-fd-muted-foreground underline underline-offset-2 hover:text-fd-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
+                      >
+                        Cómo se hace<span className="sr-only">: {item.texto}</span>
                       </a>
                     </>
                   )}

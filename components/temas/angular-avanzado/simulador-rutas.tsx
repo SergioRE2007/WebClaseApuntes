@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion, MotionConfig, useReducedMotion } from 'motion/react';
 import { CornerDownRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -102,6 +102,7 @@ export function SimuladorRutas({ titulo = 'Simulador del Portal educativo' }: { 
   const [opc, setOpc] = useState<Opciones>({ exacto: true, activoPrincipal: true, porDefecto: false, plana: false });
   const [url, setUrl] = useState('/inicio');
   const [escrita, setEscrita] = useState('/');
+  const idUrl = useId();
   const [res, setRes] = useState<Resultado>(() => resolver('/inicio', { exacto: true, activoPrincipal: true, porDefecto: false, plana: false }));
 
   const ir = (destino: string, o = opc) => {
@@ -168,11 +169,11 @@ export function SimuladorRutas({ titulo = 'Simulador del Portal educativo' }: { 
               ir(escrita);
             }}
           >
-            <label htmlFor="rutas-url" className="text-xs text-fd-muted-foreground">
+            <label htmlFor={idUrl} className="text-xs text-fd-muted-foreground">
               localhost:4200
             </label>
             <input
-              id="rutas-url"
+              id={idUrl}
               value={escrita}
               onChange={(e) => setEscrita(e.target.value)}
               className="min-h-10 min-w-0 flex-1 rounded-md border bg-fd-background px-2 py-1 font-mono text-sm sm:min-h-8"

@@ -86,6 +86,7 @@ const DESCRIPCION: Record<Pantalla, string> = {
 export function PilaNavegacion() {
   const reducir = useReducedMotion();
   const contador = useRef(1);
+  const atrasRef = useRef<HTMLButtonElement>(null);
   const [modo, setModo] = useState<Modo>('todoapp');
   const inicio = (m: Modo): Entrada[] => [{ clave: 0, pantalla: 'TaskList', grafo: m === 'grafos' ? 'TaskFeature' : undefined }];
   const [pila, setPila] = useState<Entrada[]>(inicio('todoapp'));
@@ -115,9 +116,12 @@ export function PilaNavegacion() {
   const hacer = (a: Accion) => {
     setPila((p) => a.aplicar(p, nueva));
     setUltimo(a.codigo);
+    // El botón pulsado desaparece al cambiar de pantalla: el foco pasa a Atrás.
+    atrasRef.current?.focus();
   };
 
   const atras = () => {
+    if (cerrada) return;
     if (pila.length === 1) {
       setCerrada(true);
       setUltimo('// Atrás en la pantalla de inicio: Navigation no la saca, el botón atrás le llega a la Activity y se cierra');
@@ -186,7 +190,13 @@ export function PilaNavegacion() {
                 )}
               </div>
               <div className="flex justify-center gap-2 border-t p-1.5">
-                <button type="button" onClick={atras} disabled={cerrada} className={cn(botonSecundario, 'min-h-8 text-xs')}>
+                <button
+                  ref={atrasRef}
+                  type="button"
+                  onClick={atras}
+                  aria-disabled={cerrada}
+                  className={cn(botonSecundario, 'min-h-8 text-xs aria-disabled:cursor-not-allowed aria-disabled:opacity-40')}
+                >
                   <ArrowLeft className="size-3.5" aria-hidden />
                   Atrás
                 </button>
@@ -228,6 +238,11 @@ export function PilaNavegacion() {
               <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md border bg-fd-muted/40 px-3 py-2 text-[12.5px]">
                 <code>{ultimo}</code>
               </pre>
+              <p className="sr-only">
+                {cerrada
+                  ? 'La app se ha cerrado.'
+                  : `Pantalla visible: ${nombreRuta(modo, actual)}. ${pila.length} ${pila.length === 1 ? 'entrada' : 'entradas'} en la pila.`}
+              </p>
             </div>
           </div>
         </div>

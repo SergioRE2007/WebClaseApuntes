@@ -22,14 +22,14 @@ Todos los ejemplos usan la misma app: una **tienda con categorías y productos**
 
 <Cards>
   <Card icon="ListChecks" title="Requisitos de la app" href="/docs/2-dam/kotlin/para-el-proyecto/requisitos" description="Qué piden, qué se dio y qué falta, con enlaces." />
-  <Card icon="Share2" title="Intent implícito y localización" href="/docs/2-dam/kotlin/para-el-proyecto/intent-y-localizacion" description="Abrir otras apps y tener la app en inglés y español." />
   <Card icon="Database" title="Room con relaciones (1 a N)" href="/docs/2-dam/kotlin/para-el-proyecto/room-relaciones" description="ForeignKey, índice, @Relation de Room 3 y @Upsert." />
   <Card icon="RefreshCw" title="Room como fuente de verdad" href="/docs/2-dam/kotlin/para-el-proyecto/offline-first" description="Leer de Room con Flow y refrescar desde la API." />
   <Card icon="Settings" title="DataStore" href="/docs/2-dam/kotlin/para-el-proyecto/datastore" description="El módulo, el modo oscuro en el tema y el token." />
   <Card icon="Network" title="Conectar con tu API" href="/docs/2-dam/kotlin/para-el-proyecto/conectar-con-tu-api" description="10.0.2.2, http en desarrollo y el interceptor del token." />
   <Card icon="Send" title="POST, PUT y DELETE con Retrofit" href="/docs/2-dam/kotlin/para-el-proyecto/crud-con-retrofit" description="El CRUD completo contra tu API." />
   <Card icon="Navigation" title="Navegación del proyecto" href="/docs/2-dam/kotlin/para-el-proyecto/navegacion-del-proyecto" description="Barra inferior, login sin volver atrás y volver tras guardar." />
-  <Card icon="TriangleAlert" title="Prácticas raras de clase" href="/docs/2-dam/kotlin/para-el-proyecto/practicas-raras" description="Lo que se hizo así en directo y cómo se hace bien." />
+  <Card icon="Share2" title="Intent implícito y localización" href="/docs/2-dam/kotlin/para-el-proyecto/intent-y-localizacion" description="Abrir otras apps y tener la app en inglés y español." />
+  <Card icon="TriangleExclamationPoint" title="Prácticas raras de clase" href="/docs/2-dam/kotlin/para-el-proyecto/practicas-raras" description="Lo que se hizo así en directo y cómo se hace bien." />
   <Card icon="Package" title="Dependencias de Gradle" href="/docs/2-dam/kotlin/para-el-proyecto/dependencias-gradle" description="Lo que hay que añadir y por qué cada versión." />
   <Card icon="Bug" title="Errores típicos en Android" href="/docs/2-dam/kotlin/para-el-proyecto/errores-tipicos" description="El mensaje, por qué pasa y cómo se arregla." />
 </Cards>
@@ -65,14 +65,14 @@ Los apuntes de esas clases están en el resto del módulo de [Kotlin](/docs/2-da
 
 #### Monta los datos
 
-  Room con relaciones, el repositorio que lee de Room y refresca de la API, y Retrofit contra tu API. Es lo que más cuesta y de lo que depende todo lo demás.
+  Room con relaciones, el repositorio que lee de Room y refresca de la API, DataStore (donde se guarda el token) y Retrofit contra tu API. Es lo que más cuesta y de lo que depende todo lo demás.
 
   </Step>
   <Step>
 
 #### Remata la app
 
-  Navegación con barra inferior y login, DataStore, localización e intent implícito. Son más cortos y casi independientes.
+  Navegación con barra inferior y login, localización e intent implícito. Son más cortos y casi independientes.
 
   </Step>
   <Step>

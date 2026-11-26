@@ -63,7 +63,7 @@ CMD ["dumb-init", "node", "dist/index.js"]`}
     `npm ci --only=production` deja fuera las `devDependencies` (typescript, jest, nodemon…): la imagen pesa menos.
   </Paso>
   <Paso lineas="14-16" titulo="Coger lo compilado de la otra etapa">
-    `COPY --from=builder` trae de la primera etapa solo lo necesario: `dist`, el cliente generado de Prisma y la carpeta `prisma/` (el schema y las migraciones).
+    `COPY --from=builder` trae de la primera etapa solo lo necesario: `dist` y el cliente generado de Prisma. La carpeta `prisma/` (el schema y las migraciones) se copia del proyecto con un `COPY` normal.
   </Paso>
   <Paso lineas="17-18" titulo="Producción y sin root">
     `ENV NODE_ENV=production` y `USER node`: el contenedor no corre como administrador. Si alguien encontrara un fallo en la API, tendría menos permisos.

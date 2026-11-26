@@ -26,7 +26,7 @@ La Act 11, *"Migración ReactiveForms Git Vercel"*, pide rehacer el formulario d
 | Validadores | Atributos HTML: `required`, `minlength="3"` | Funciones: `Validators.required`, `Validators.minLength(3)` |
 | Enlace en el HTML | `[(ngModel)]="game.title"` | `[formGroup]` en el `<form>` y `formControlName="title"` en cada campo |
 | Referencia del formulario | `NgForm` | `FormGroupDirective` |
-| Formularios grandes o dinámicos | Se complica | Más cómodo (`FormArray`, `FormBuilder`) |
+| Formularios grandes o dinámicos | Se complica | Más cómodo (`FormArray`, `FormBuilder`, que no se dieron en clase) |
 
 La idea: en el reactivo, **el modelo del formulario es un objeto de TypeScript** que puedes leer, cambiar y probar sin tocar el HTML. La plantilla solo se engancha a él.
 
@@ -213,6 +213,8 @@ Lo que enseña:
 - Si el formulario es inválido, `onSaveGame` hace `return` y no se manda nada a JSON Server.
 
 En la demo los mensajes de stock dicen "Stock…". En el código de clase dicen "Precio es obligatorio" y "Precio fuera de rango", copiados del precio.
+
+En la demo, precio y stock empiezan en `''`, como el stock de clase (el precio de clase empieza en `0`, aunque es dudoso). Si escribes un número y lo borras, el valor pasa a ser `null`: con `type="number"`, Angular guarda `null` cuando el input se queda vacío. Al pulsar Guardar con todo bien, `resetForm()` devuelve cada control a su valor inicial, porque son `nonNullable`.
 
 ## La clave tiene que coincidir
 

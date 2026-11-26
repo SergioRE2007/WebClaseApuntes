@@ -277,7 +277,7 @@ Ninguna pantalla conoce el `navController`. Cuando tocas una tarea, el aviso **s
   </Mensaje>
 </Flujo>
 
-El resumen en texto: `TaskCard` recibe `() -> Unit`, la lista lo construye con `{ toDetail(it.id) }`, la pantalla recibe `(Int) -> Unit` y el `NavHost` lo conecta con `controller.navigate(...)`. Así la tarjeta se puede reutilizar en cualquier sitio y la navegación está en un solo lugar. Las rutas tipadas y el `NavHost` se explican en el [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura).
+El resumen en texto: `TaskCard` recibe `() -> Unit`, la lista lo construye con `{ toDetail(it.id) }`, la pantalla recibe `(Int) -> Unit` y el `NavHost` lo conecta con `controller.navigate(...)`. Así la tarjeta se puede reutilizar en cualquier sitio y la navegación está en un solo lugar. Las rutas tipadas y el `NavHost` se explican en el [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura/navegacion).
 
 ## Lista vacía, cargando y con datos
 

@@ -1,20 +1,72 @@
 ---
 title: 2º DAM
-description: Módulos del segundo curso del ciclo de Desarrollo de Aplicaciones Multiplataforma
+description: "Los apuntes de segundo curso: lo dado en clase de Kotlin, Angular, el backend con Node, C# y el Proyecto Intermodular, y lo que piden los requisitos del proyecto y no se ha dado."
 ---
 
-En segundo curso das el salto a aplicaciones completas: persistencia, interfaces, móviles, concurrencia y sistemas empresariales, y lo cierras todo con el proyecto intermodular.
+Aquí están los apuntes de lo que se ha dado en clase en segundo, ordenados para estudiarlos de principio a fin, con la fecha de cada clase para que lo encuentres en tus notas. Al lado tienes lo que pide el proyecto intermodular y no ha salido en clase, explicado con código y con las mismas versiones que se usan en clase.
+
+## Por dónde empezar
+
+<Steps>
+  <Step>
+
+#### Mira qué te pide el proyecto
+
+  [Requisitos y dónde se dieron](/docs/2-dam/proyecto-intermodular/requisitos-y-donde-se-dieron) repasa los requisitos de la app Android, el backend y la web Angular: en qué clase salió cada uno, si se dio entero, a medias o nada, y qué te falta. Tiene una checklist que se guarda en tu navegador.
+
+  </Step>
+  <Step>
+
+#### Repasa lo dado en clase
+
+  Cada asignatura tiene sus bloques en el orden en que se dieron. Si te pierdes en algo, empieza por el primer tema del bloque: [Kotlin desde Java](/docs/2-dam/kotlin/compose/kotlin-basico), [Proyecto standalone y Angular CLI](/docs/2-dam/acceso-a-datos/angular/proyecto-y-cli), [Node, npm y TypeScript](/docs/2-dam/apis/backend/node-npm-typescript) o [De Java a C#](/docs/2-dam/desarrollo-de-interfaces/csharp/de-java-a-csharp).
+
+  </Step>
+  <Step>
+
+#### Completa lo que falta
+
+  Lo que no se dio está en las carpetas "para el proyecto": [Android para el proyecto](/docs/2-dam/kotlin/para-el-proyecto), [Backend para el proyecto](/docs/2-dam/apis/backend-proyecto) y [Listado con filtros, paginación y token](/docs/2-dam/acceso-a-datos/angular-avanzado/listado-filtros-y-token) en Angular. Qué hay que enseñar cada semana está en [Planificación por hitos](/docs/2-dam/apis/backend-proyecto/hitos).
+
+  </Step>
+</Steps>
+
+## Asignaturas
 
 <Cards>
-  <Card icon="DatabaseZap" title="Acceso a Datos" href="/docs/2-dam/acceso-a-datos" description="Ficheros, JDBC, JPA/Hibernate y NoSQL" />
-  <Card icon="LayoutDashboard" title="Desarrollo de Interfaces" href="/docs/2-dam/desarrollo-de-interfaces" description="GUI, usabilidad, informes y distribución" />
-  <Card icon="Smartphone" title="Kotlin" href="/docs/2-dam/kotlin" description="Android, procesos, hilos y red con Kotlin" />
-  <Card icon="Server" title="Infraestructuras de Servicios y APIs" href="/docs/2-dam/apis" description="Diseño, implementación y despliegue de APIs" />
-  <Card icon="Building" title="Sistemas de Gestión Empresarial" href="/docs/2-dam/sge" description="ERP-CRM y desarrollo de módulos en Odoo" />
-  <Card icon="BriefcaseBusiness" title="Itinerario Personal para la Empleabilidad II" href="/docs/2-dam/ipe-2" description="Emprendimiento y relaciones laborales" />
-  <Card icon="FolderGit2" title="Proyecto Intermodular" href="/docs/2-dam/proyecto-intermodular" description="Tu proyecto final de ciclo" />
+  <Card icon="Smartphone" title="Kotlin" href="/docs/2-dam/kotlin" description="PMDM y PSP con Kotlin: Jetpack Compose y Material 3, ViewModel, Hilt y navegación, corrutinas, Retrofit, Room y DataStore." />
+  <Card icon="Component" title="Acceso a Datos" href="/docs/2-dam/acceso-a-datos" description="Angular 19: componentes, binding, servicios y HttpClient, signals, formularios reactivos, Router y el proyecto proj-game." />
+  <Card icon="Server" title="Infraestructuras de Servicios y APIs" href="/docs/2-dam/apis" description="El backend: Node, Express 5 y TypeScript, PostgreSQL, Prisma 6, validación con Zod 4, autenticación, Docker y Swagger." />
+  <Card icon="Hash" title="Desarrollo de Interfaces" href="/docs/2-dam/desarrollo-de-interfaces" description="C# para quien viene de Java: Visual Studio, consola, arrays, delegados, lambdas, Func, Action, Predicate y eventos." />
+  <Card icon="FolderGit2" title="Proyecto Intermodular" href="/docs/2-dam/proyecto-intermodular" description="Requisitos y dónde se dieron, gestión de proyectos y SMART, Scrum y Jira, Git con ramas y tags, y despliegue en Vercel." />
 </Cards>
 
+## Qué hay en cada asignatura
+
+| Asignatura | Lo dado en clase | Para el proyecto |
+| --- | --- | --- |
+| Kotlin | [Kotlin y Compose](/docs/2-dam/kotlin/compose), [Arquitectura Android](/docs/2-dam/kotlin/arquitectura), [Datos en Android](/docs/2-dam/kotlin/datos) | [Android para el proyecto](/docs/2-dam/kotlin/para-el-proyecto) |
+| Acceso a Datos | [Componentes, plantillas y servicios](/docs/2-dam/acceso-a-datos/angular), [Signals, rutas, formularios y proyecto](/docs/2-dam/acceso-a-datos/angular-avanzado) | [Listado con filtros, paginación y token](/docs/2-dam/acceso-a-datos/angular-avanzado/listado-filtros-y-token) |
+| Infraestructuras de Servicios y APIs | [Backend con Node, Express y Prisma](/docs/2-dam/apis/backend) | [Backend para el proyecto](/docs/2-dam/apis/backend-proyecto) |
+| Desarrollo de Interfaces | [C#](/docs/2-dam/desarrollo-de-interfaces/csharp) | Sin página propia |
+| Proyecto Intermodular | [Gestión de proyectos](/docs/2-dam/proyecto-intermodular/gestion-de-proyectos-y-smart), [Scrum y Jira](/docs/2-dam/proyecto-intermodular/desarrollo-agil-y-jira), [Git](/docs/2-dam/proyecto-intermodular/git-ramas-y-tags), [Vercel](/docs/2-dam/proyecto-intermodular/despliegue-en-vercel) | [Requisitos y dónde se dieron](/docs/2-dam/proyecto-intermodular/requisitos-y-donde-se-dieron) |
+
+Los requisitos del backend y de la web los pide Acceso a Datos, pero en clase Acceso a Datos se ha dado con Angular y el backend con Node se ha dado en Infraestructuras de Servicios y APIs. Por eso el backend del proyecto está en APIs.
+
+## Cómo leer las marcas
+
+Los apuntes separan lo que salió en clase de lo que no:
+
+- **No dado en clase**: no salió en ninguna clase. Es la forma estándar de hacerlo con las versiones de clase. Si te preguntan por ello en la defensa, di que lo has buscado tú.
+- **Esto no se llega a ver en clase**: algo que se usó pero no llegó a verse (código fuera de las capturas, una explicación que se corta). Se describe el hueco y no se rellena con código inventado.
+- **Lectura dudosa**: un dato de las notas de clase que no se lee con seguridad. Se deja tal cual, avisado.
+- **Así se hizo en clase / Mejor así**: comparación entre lo que se hizo en clase y la forma más habitual de hacerlo.
+- **Visto en clase**: la fecha y el proyecto de la clase en que salió.
+
+## Otros módulos
+
+[Sistemas de Gestión Empresarial](/docs/2-dam/sge) e [Itinerario Personal para la Empleabilidad II](/docs/2-dam/ipe-2) todavía no tienen apuntes, solo el temario oficial.
+
 <Callout title="¿Te falta algo?">
-  Si tienes apuntes, capturas o enlaces útiles de cualquier módulo, compártelos desde [Aportar](/aportar) y se añadirán aquí.
+  Si ves un error o tienes apuntes, capturas o enlaces útiles de cualquier asignatura, compártelos desde [Aportar](/aportar) y se revisarán para añadirlos.
 </Callout>

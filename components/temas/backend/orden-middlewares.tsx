@@ -47,6 +47,16 @@ const ORDEN_CLASE: Id[] = ['helmet', 'cors', 'json', 'logger', 'limiter', 'rutas
 
 type EstadoPaso = 'pendiente' | 'ejecuta' | 'responde' | 'salta';
 
+const TEXTO_ESTADO: Record<EstadoPaso, string> = {
+  pendiente: '',
+  ejecuta: 'se ejecuta',
+  responde: 'responde',
+  salta: 'no se ejecuta',
+};
+
+const colorEstado = (e: EstadoPaso) =>
+  e === 'responde' ? okTexto : e === 'ejecuta' ? 'text-fd-primary' : 'text-fd-muted-foreground';
+
 interface Resultado {
   pasos: EstadoPaso[];
   status: number;
@@ -235,18 +245,13 @@ export function OrdenMiddlewares({ titulo = 'Orden de los middlewares en app.ts'
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-mono text-[13px] text-fd-foreground">{p.codigo}</p>
                   <p className="text-xs text-fd-muted-foreground">{p.para}</p>
-                </div>
-                <span
-                  className={cn(
-                    'hidden shrink-0 text-xs sm:inline',
-                    estado === 'responde' ? okTexto : estado === 'ejecuta' ? 'text-fd-primary' : 'text-fd-muted-foreground',
+                  {estado !== 'pendiente' && (
+                    <p className={cn('text-xs font-medium sm:hidden', colorEstado(estado))}>{TEXTO_ESTADO[estado]}</p>
                   )}
-                  aria-live="polite"
-                >
-                  {estado === 'ejecuta' && 'se ejecuta'}
-                  {estado === 'responde' && 'responde'}
-                  {estado === 'salta' && 'no se ejecuta'}
-                </span>
+                </div>
+                {estado !== 'pendiente' && (
+                  <span className={cn('hidden shrink-0 text-xs sm:inline', colorEstado(estado))}>{TEXTO_ESTADO[estado]}</span>
+                )}
                 <div className="flex shrink-0 gap-1">
                   <button
                     type="button"
@@ -296,13 +301,13 @@ export function OrdenMiddlewares({ titulo = 'Orden de los middlewares en app.ts'
           </label>
         </div>
 
+        <div aria-live="polite">
         {terminado && resultado && (
           <motion.div
             initial={reducir ? false : { opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
             className="space-y-3"
-            aria-live="polite"
           >
             <div className={cn('rounded-md border px-3 py-2.5', resultado.status < 400 ? okCaja : malCaja)}>
               <p className={cn('text-sm font-semibold', resultado.status < 400 ? okTexto : malTexto)}>
@@ -330,6 +335,7 @@ export function OrdenMiddlewares({ titulo = 'Orden de los middlewares en app.ts'
             </ul>
           </motion.div>
         )}
+        </div>
       </div>
     </section>
   );

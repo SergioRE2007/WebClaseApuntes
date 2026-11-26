@@ -128,10 +128,11 @@ function atender(
   const capas: Capa[] = [];
   let lista = usuarios;
 
-  // 1. express.json(): solo lee body en métodos que lo llevan.
+  // 1. express.json() va en app.use y se ejecuta en todas las peticiones, pero solo lee
+  // un body JSON; si no lo hay, llama a next() sin tocar nada.
   let body: unknown = undefined;
+  capas.push('express.json');
   if (conBody(metodo) && bodyTexto.trim()) {
-    capas.push('express.json');
     try {
       body = JSON.parse(bodyTexto);
     } catch (e) {
@@ -211,7 +212,17 @@ function atender(
         };
       }
       const u = lista.find((x) => x.id === id);
-      if (u) return { usuarios, r: { status: 200, cuerpo: json(publico(u)), capas, ruta: "router.get('/:id', getUserCtrl)" } };
+      if (u)
+        return {
+          usuarios,
+          r: {
+            status: 200,
+            cuerpo: json(publico(u)),
+            capas,
+            ruta: "router.get('/:id', getUserCtrl)",
+            nota: 'findUserById con select: sin passwordHash. El final de getUserCtrl no se vio; los tests de la v0.9.0 esperan un 200 con un id que existe.',
+          },
+        };
       return {
         usuarios,
         r: {
@@ -551,13 +562,13 @@ export function SimuladorApi({ titulo = 'Simulador de la API de clase (v0.5.0)' 
           })}
         </ol>
 
+        <div aria-live="polite">
         {listo && resp && (
           <motion.div
             initial={reducir ? false : { opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
             className={cn('rounded-md border', resp.status === null ? avisoCaja : bien ? okCaja : malCaja)}
-            aria-live="polite"
           >
             <div className="flex flex-wrap items-baseline gap-x-3 border-b px-3 py-2">
               <p className={cn('text-sm font-semibold', resp.status === null ? '' : bien ? okTexto : malTexto)}>
@@ -569,6 +580,7 @@ export function SimuladorApi({ titulo = 'Simulador de la API de clase (v0.5.0)' 
             {resp.nota && <p className="border-t px-3 py-2 text-sm">{resp.nota}</p>}
           </motion.div>
         )}
+        </div>
 
         <div className="rounded-md border">
           <div className="flex items-center gap-2 border-b px-3 py-2">

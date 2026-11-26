@@ -145,7 +145,9 @@ export function ResolverIdioma({ nombre = 'Ana' }: { nombre?: string }) {
             ? `Con ${IDIOMAS.find((i) => i.codigo === idioma)?.nombre} Android usa values-es${
                 idioma === 'es-MX' ? ' (no hay values-es-rMX, así que vale la de español general)' : ''
               }${faltaPedidos ? ', y el texto que falta lo coge de values: sale «Orders» en inglés' : ''}.`
-            : 'No hay carpeta para este idioma, así que Android usa values, la de por defecto (en inglés).'}
+            : idioma.startsWith('en')
+              ? 'Con el móvil en inglés no hay values-en, así que Android usa values, la de por defecto, que es donde está el inglés.'
+              : 'No hay carpeta para este idioma, así que Android usa values, la de por defecto (en inglés).'}
         </p>
       </section>
     </MotionConfig>

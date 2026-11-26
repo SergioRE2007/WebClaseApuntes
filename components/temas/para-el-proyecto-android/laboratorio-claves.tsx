@@ -144,8 +144,10 @@ export function LaboratorioClaves() {
       return;
     }
     setMensaje({
-      tipo: 'ok',
-      texto: '@Upsert actualiza la fila que ya existe sin borrarla: los productos siguen en su sitio.',
+      tipo: productos.length ? 'ok' : 'aviso',
+      texto: productos.length
+        ? '@Upsert actualiza la fila que ya existe sin borrarla: los productos siguen en su sitio.'
+        : '@Upsert actualiza la fila que ya existe sin borrarla. Ahora no hay productos que proteger: reinicia y pulsa @Upsert antes que REPLACE para ver la diferencia.',
       codigo: '@Upsert\nsuspend fun upsertCategorias(categorias: List<CategoriaEntity>)',
     });
   };
@@ -250,34 +252,34 @@ export function LaboratorioClaves() {
         </div>
 
         <div aria-live="polite">
-        <AnimatePresence mode="wait" initial={false}>
-          {mensaje && (
-            <motion.div
-              key={mensaje.texto}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="px-4 pb-4 sm:px-5"
-            >
-              <div
-                className={cn(
-                  'rounded-md border px-3 py-2 text-xs',
-                  mensaje.tipo === 'ok' && cn(okCaja, okTexto),
-                  mensaje.tipo === 'error' && cn(malCaja, malTexto),
-                  mensaje.tipo === 'aviso' && cn(avisoCaja, avisoTexto),
-                )}
+          <AnimatePresence mode="wait" initial={false}>
+            {mensaje && (
+              <motion.div
+                key={mensaje.texto}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="px-4 pb-4 sm:px-5"
               >
-                {mensaje.texto}
-              </div>
-              {mensaje.codigo && (
-                <pre className="mt-2 overflow-x-auto rounded-md border bg-fd-card p-3 text-xs leading-relaxed">
-                  <code>{mensaje.codigo}</code>
-                </pre>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+                <div
+                  className={cn(
+                    'rounded-md border px-3 py-2 text-xs',
+                    mensaje.tipo === 'ok' && cn(okCaja, okTexto),
+                    mensaje.tipo === 'error' && cn(malCaja, malTexto),
+                    mensaje.tipo === 'aviso' && cn(avisoCaja, avisoTexto),
+                  )}
+                >
+                  {mensaje.texto}
+                </div>
+                {mensaje.codigo && (
+                  <pre className="mt-2 overflow-x-auto rounded-md border bg-fd-card p-3 text-xs leading-relaxed">
+                    <code>{mensaje.codigo}</code>
+                  </pre>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </section>
     </MotionConfig>

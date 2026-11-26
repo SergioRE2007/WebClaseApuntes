@@ -128,7 +128,7 @@ Sin `id` (lo pone la base) y solo con el id de la categoría.
   </Lado>
 </Comparar>
 
-Es la misma idea que `Omit<Post, 'id'>` en Angular.
+Es la misma idea que el `Omit<Post, 'id'>` de TypeScript que se usa en Angular.
 
 ### La interfaz
 
@@ -229,7 +229,7 @@ class ProductoRepositoryImpl @Inject constructor(
     private val api: TiendaApi
 ) : ProductoRepository {
 
-    // productos y refresh(), como en la página anterior
+    // productos y refresh(), como en "Room como fuente de verdad"
 
     override suspend fun crear(producto: NuevoProductoDto) {
         val respuesta = api.crearProducto(producto)
@@ -294,7 +294,7 @@ suspend fun actualizarCategoria(
     <Opcion correcta>Porque el id lo pone la base de datos al crear</Opcion>
     <Opcion>Porque Retrofit lo añade solo</Opcion>
   </Pregunta>
-  <Pregunta enunciado="La API borra y responde `204` sin cuerpo. ¿Qué tipo devuelve la función?" explicacion="`Response<Unit>`: no hay cuerpo que convertir, pero sigues pudiendo mirar `isSuccessful` y `code()`.">
+  <Pregunta enunciado="La API borra y responde `204` sin cuerpo, y en el repositorio quieres mirar `isSuccessful` y `code()` como en las demás. ¿Qué tipo devuelve la función?" explicacion="`Response<Unit>`: no hay cuerpo que convertir, pero sigues pudiendo mirar `isSuccessful` y `code()`. Con `Unit` a secas no tienes la `Response` (si falla, Retrofit lanza una excepción), y `Response<ProductoDto>` promete un producto que nunca llega.">
     <Opcion>`Response<ProductoDto>`</Opcion>
     <Opcion correcta>`Response<Unit>`</Opcion>
     <Opcion>`Unit`</Opcion>
@@ -375,6 +375,10 @@ suspend fun deleteCategoriaPorId(id: Int)
 ```
 
 ```kotlin title="ProductoRepositoryImpl.kt"
+// En la interfaz ProductoRepository
+suspend fun borrarCategoria(id: Int)
+
+// En ProductoRepositoryImpl
 override suspend fun borrarCategoria(id: Int) {
     val respuesta = api.borrarCategoria(id)
     if (!respuesta.isSuccessful) {
@@ -384,7 +388,7 @@ override suspend fun borrarCategoria(id: Int) {
 }
 ```
 
-  Con `CASCADE`, al borrar la categoría en Room se borran solos sus productos, así que no hace falta borrarlos uno a uno. Lo importante es que **el backend haga lo mismo** (en Prisma, `onDelete: Cascade` en la relación). Si el backend no deja borrar una categoría con productos, responderá un error y la función lanzará la excepción antes de tocar Room.
+  Con `CASCADE`, al borrar la categoría en Room se borran solos sus productos, así que no hace falta borrarlos uno a uno. Lo importante es que Room haga **lo mismo que el backend**. El backend de ejemplo tiene `onDelete: Restrict` en esa relación: no deja borrar una categoría con productos y responde un error (`409`), así que la función lanza la excepción antes de tocar Room. Si en tu backend pusiste `onDelete: Cascade`, la API borra la categoría y sus productos, y Room hace lo mismo con su `CASCADE`.
 
   </Solucion>
 </Ejercicio>

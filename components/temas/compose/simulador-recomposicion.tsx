@@ -85,9 +85,14 @@ export function SimuladorRecomposicion() {
   const [pulso, setPulso] = useState(0);
   const [giro, setGiro] = useState(0);
   const [eventos, setEventos] = useState<Evento[]>([]);
+  /** Contador para dar a cada evento una key estable. */
+  const siguienteId = useRef(0);
 
-  const anotar = (texto: string) =>
-    setEventos((ev) => [{ id: Date.now() + Math.random(), texto }, ...ev].slice(0, 4));
+  const anotar = (texto: string) => {
+    siguienteId.current += 1;
+    const id = siguienteId.current;
+    setEventos((ev) => [{ id, texto }, ...ev].slice(0, 4));
+  };
 
   const reiniciar = (v: Variante = variante) => {
     setVariante(v);
@@ -159,7 +164,7 @@ export function SimuladorRecomposicion() {
             <div className="flex justify-center overflow-hidden py-2">
               <motion.div
                 key={giro}
-                initial={giro && !reducir ? { rotate: -90 } : false}
+                initial={giro > 0 && !reducir ? { rotate: -90 } : false}
                 animate={{ rotate: 0 }}
                 transition={{ duration: 0.6, ease: 'easeInOut' }}
                 className="w-48 rounded-[1.6rem] border-2 border-fd-foreground/20 bg-fd-background p-2"
@@ -176,7 +181,7 @@ export function SimuladorRecomposicion() {
                     />
                   )}
                   <span className="absolute top-2 left-3 font-mono text-[10px] text-fd-muted-foreground">Contador()</span>
-                  <p className="text-sm" aria-live="polite">
+                  <p className="text-sm">
                     Has pulsado <span className="font-semibold tabular-nums">{mostrado}</span> veces
                   </p>
                   <button type="button" onClick={pulsar} className={cn(botonPrimario, 'rounded-full px-5')}>
@@ -209,6 +214,11 @@ export function SimuladorRecomposicion() {
                 <dd className="font-mono text-base tabular-nums">{memoria}</dd>
               </div>
             </dl>
+
+            {/* Región viva fija: el móvil de arriba se vuelve a montar al girarlo. */}
+            <p className="sr-only" aria-live="polite">
+              {eventos[0]?.texto ?? ''}
+            </p>
 
             <ol className="space-y-1 text-xs text-fd-muted-foreground" aria-label="Qué ha pasado">
               <AnimatePresence initial={false}>

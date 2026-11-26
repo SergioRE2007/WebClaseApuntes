@@ -210,7 +210,7 @@ El listado (en `AppComponent`) y el formulario (en `CrudComponent`) son componen
     El hijo hace `form.resetForm()`, pone `edit = false` y emite el juego guardado.
   </Mensaje>
   <Mensaje de="CrudComponent" a="AppComponent" tipo="respuesta" titulo="actualizaGames.emit()">
-    El padre lo recibe en `(actualizaGames)="onActualizaGames($event)"` (el `$event` es una suposición: sale cortado). El código de `onActualizaGames` no se ve; en clase se dice que el aviso sirve para que el padre recargue la lista.
+    El padre lo recibe en `(actualizaGames)="onActualizaGames($event)"` (el `$event` es una suposición: sale cortado <Dudoso />). El código de `onActualizaGames` no se ve; en clase se dice que el aviso sirve para que el padre recargue la lista.
   </Mensaje>
 </Flujo>
 
@@ -353,7 +353,7 @@ El documento de la Act 10 proponía además que el botón cambie de texto y un b
 
 <DeClase fecha="12/11" proyecto="proj-game" />
 
-- En **VS Code** o en **DevTools → Sources** se pueden poner breakpoints en el `.ts` y también en el `.html`. En clase se paró en la línea del `if (this.edit)` para ver qué rama tomaba cada guardado.
+- En **VS Code** o en **DevTools → Sources** se pueden poner breakpoints en el `.ts` y también en el `.html`. En clase se paró dentro de `onSaveGame`, en la condición que decide entre crear y editar (en ese momento era `if (this.game.id)`), para ver qué rama tomaba cada guardado.
 - En el panel **Scope** se ven `this.game` y los objetos de Angular (`_CrudComponent`, `_NgForm`), y en **Call Stack** quién ha llamado a quién.
 - El profesor explicó el recorrido padre → hijo dibujando encima del código en **Excalidraw** y publicó la pizarra en el Tablón.
 

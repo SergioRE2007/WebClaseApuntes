@@ -1,7 +1,7 @@
 ---
 title: Errores con su código HTTP
 description: El errorHandler y los códigos de Prisma que se vieron en clase, y cómo lanzar errores con su código desde los servicios con una clase HttpError, añadir P2003 y elegir bien entre 400, 401, 403, 404, 409 y 500.
-icon: TriangleAlert
+icon: TriangleExclamationPoint
 ---
 
 Los requisitos piden que la API use **códigos HTTP adecuados** para distinguir "operaciones correctas, peticiones incorrectas, recursos inexistentes, conflictos y errores internos", y que Angular los capture y se los explique al usuario (§7). La gestión de errores **sí se dio en clase**; aquí está lo que se vio y una mejora para lanzar errores con su código desde cualquier servicio.
@@ -155,7 +155,7 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   nodos={["Cliente", "Controlador", "Servicio", "errorHandler"]}
 >
   <Mensaje de="Cliente" a="Controlador" titulo="POST /api/pedidos/1/confirmar">
-    El controlador llama al servicio. No tiene `try/catch`.
+    Llega la petición al controlador, que no tiene `try/catch`: solo llama al servicio.
   </Mensaje>
   <Mensaje de="Controlador" a="Servicio" titulo="confirmarPedido(1)">
     El servicio comprueba el pedido y el stock.

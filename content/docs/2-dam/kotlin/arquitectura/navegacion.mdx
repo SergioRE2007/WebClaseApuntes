@@ -472,7 +472,7 @@ El `NavHostController` guarda una **pila** (*back stack*): cada `navigate` mete 
 
 Cosas que se ven en la demo:
 
-- Abrir el detalle de la tarea 1 y luego volver y abrir el de la 2 deja en la pila **una entrada distinta** para cada una, cada una con su argumento.
+- Abrir el detalle de la tarea 1, volver y abrir el de la 2 crea cada vez **una entrada nueva** con su propio argumento. La de la tarea 1 ya no está: salió de la pila al volver.
 - En el modo de grafos, el engranaje llama a `navigate(Routes.SettingsFeature)` y lo que aparece en la pila es `Settings`, la pantalla de inicio de ese grafo.
 - Atrás en la primera pantalla no tiene a dónde volver: Navigation no saca la pantalla de inicio, así que el botón atrás le llega a la Activity, que se cierra.
 - Cada entrada tiene **su propio ViewModel** (el de `hiltViewModel()`), que se destruye cuando la entrada sale de la pila.

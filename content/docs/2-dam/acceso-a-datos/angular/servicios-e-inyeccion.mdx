@@ -31,7 +31,7 @@ Una de las preguntas finales de la actividad es justo esa: *¿por qué se crea `
 - Varios componentes pueden usar el mismo servicio sin repetir código.
 - Es más fácil probar el componente con un servicio falso.
 
-Si vienes de Java, es la misma idea que un `@Service` de Spring inyectado con `@Autowired`, o que Hilt en Android (ver [Kotlin](/docs/2-dam/kotlin)).
+Si vienes de Java, es la misma idea que un `@Service` de Spring inyectado con `@Autowired`, o que Hilt en Android (ver [Kotlin](/docs/2-dam/kotlin/arquitectura/hilt)).
 
 ## Crear un servicio
 
@@ -275,6 +275,13 @@ export class CarritoService {
 ```
 
 ```ts title="tienda.component.ts"
+import { Component, inject } from '@angular/core';
+import { CarritoService } from '../../services/carrito.service';
+
+@Component({
+  selector: 'app-tienda',
+  templateUrl: './tienda.component.html'
+})
 export class TiendaComponent {
   private readonly carrito = inject(CarritoService);
 
@@ -284,7 +291,19 @@ export class TiendaComponent {
 }
 ```
 
+```html title="tienda.component.html"
+<button (click)="comprar('Teclado')">Comprar teclado</button>
+<button (click)="comprar('Ratón')">Comprar ratón</button>
+```
+
 ```ts title="cabecera.component.ts"
+import { Component, inject } from '@angular/core';
+import { CarritoService } from '../../services/carrito.service';
+
+@Component({
+  selector: 'app-cabecera',
+  templateUrl: './cabecera.component.html'
+})
 export class CabeceraComponent {
   protected readonly carrito = inject(CarritoService);
 }
@@ -294,7 +313,7 @@ export class CabeceraComponent {
 <p>Carrito: {{ carrito.total() }} productos</p>
 ```
 
-Al pulsar "comprar" en la tienda, el número de la cabecera sube, porque los dos componentes tienen el mismo `CarritoService`.
+Pon `CarritoService` en `services/carrito.service.ts`, los dos componentes en `components/` y `<app-cabecera />` y `<app-tienda />` en la plantilla de `AppComponent` (con los dos en su `imports`). Al pulsar "Comprar" en la tienda, el número de la cabecera sube, porque los dos componentes tienen el mismo `CarritoService`.
 
   </Solucion>
 </Ejercicio>
@@ -311,6 +330,9 @@ export class ListaComponent implements OnInit {
   }
 }
 ```
+
+  <Pista>Fíjate en el parámetro del constructor: ¿lleva `private`? Sin modificador, ¿existe `this.gameService` fuera del constructor?</Pista>
+  <Pista>Con `inject()` el servicio se declara como una propiedad más de la clase: `private readonly nombre = inject(Clase);`.</Pista>
 
   <Solucion>
 

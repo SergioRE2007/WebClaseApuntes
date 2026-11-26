@@ -309,6 +309,10 @@ export function VisualizadorTransaccion({ titulo = 'Confirmar un pedido: con y s
   const original = Object.fromEntries(PRODUCTOS.map((x) => [x.id, x.stock])) as Record<number, number>;
   const inconsistente = actual.fase === 'sin-tx-error' && PRODUCTOS.some((x) => actual.guardado.stocks[x.id] !== original[x.id]);
 
+  const resumen = `Paso ${paso + 1} de ${pasos.length}: ${actual.titulo}. ${actual.resultado}${
+    actual.http ? ` Respuesta HTTP ${actual.http.status}.` : ''
+  }${inconsistente ? ' Datos inconsistentes: el stock ya se ha restado y el pedido sigue PENDIENTE.' : ''}`;
+
   const pastilla = 'rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring';
 
   return (
@@ -324,13 +328,12 @@ export function VisualizadorTransaccion({ titulo = 'Confirmar un pedido: con y s
           <p id={`${id}-esc`} className="mb-1.5 text-xs font-medium text-fd-muted-foreground">
             Escenario
           </p>
-          <div role="radiogroup" aria-labelledby={`${id}-esc`} className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+          <div role="group" aria-labelledby={`${id}-esc`} className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
             {ESCENARIOS.map((e) => (
               <button
                 key={e.id}
                 type="button"
-                role="radio"
-                aria-checked={escenario === e.id}
+                aria-pressed={escenario === e.id}
                 onClick={() => reiniciar(e.id)}
                 className={cn(pastilla, escenario === e.id ? 'border-fd-primary bg-fd-primary/10' : 'hover:bg-fd-accent')}
               >
@@ -344,7 +347,7 @@ export function VisualizadorTransaccion({ titulo = 'Confirmar un pedido: con y s
           <p id={`${id}-modo`} className="mb-1.5 text-xs font-medium text-fd-muted-foreground">
             Cómo se escribe
           </p>
-          <div role="radiogroup" aria-labelledby={`${id}-modo`} className="grid grid-cols-2 gap-1.5 sm:max-w-md">
+          <div role="group" aria-labelledby={`${id}-modo`} className="grid grid-cols-2 gap-1.5 sm:max-w-md">
             {[
               { tx: true, nombre: 'Con transacción', detalle: 'prisma.$transaction y tx' },
               { tx: false, nombre: 'Sin transacción', detalle: 'prisma suelto, una consulta tras otra' },
@@ -352,8 +355,7 @@ export function VisualizadorTransaccion({ titulo = 'Confirmar un pedido: con y s
               <button
                 key={String(m.tx)}
                 type="button"
-                role="radio"
-                aria-checked={conTx === m.tx}
+                aria-pressed={conTx === m.tx}
                 onClick={() => reiniciar(escenario, m.tx)}
                 className={cn(pastilla, conTx === m.tx ? 'border-fd-primary bg-fd-primary/10' : 'hover:bg-fd-accent')}
               >
@@ -371,6 +373,12 @@ export function VisualizadorTransaccion({ titulo = 'Confirmar un pedido: con y s
           <p className="border-b px-3 py-2 text-xs font-medium">Base de datos guardada</p>
           <p className="px-3 pt-1.5 text-[11px] text-fd-muted-foreground">Lo que ve cualquier otra petición</p>
           <table className="w-full text-xs sm:text-sm">
+            <thead className="sr-only">
+              <tr>
+                <th scope="col">Fila</th>
+                <th scope="col">Valor guardado</th>
+              </tr>
+            </thead>
             <tbody>
               {PRODUCTOS.map((x) => {
                 const v = actual.guardado.stocks[x.id] ?? 0;
@@ -404,6 +412,12 @@ export function VisualizadorTransaccion({ titulo = 'Confirmar un pedido: con y s
             <>
               <p className="px-3 pt-1.5 text-[11px] text-fd-muted-foreground">Cambios pendientes: solo los ve tx</p>
               <table className="w-full text-xs sm:text-sm">
+                <thead className="sr-only">
+                  <tr>
+                    <th scope="col">Fila</th>
+                    <th scope="col">Valor pendiente</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {PRODUCTOS.map((x) => {
                     const v = actual.pendiente!.stocks[x.id] ?? 0;
@@ -452,7 +466,12 @@ export function VisualizadorTransaccion({ titulo = 'Confirmar un pedido: con y s
         <p className="mb-1.5 text-xs font-medium text-fd-muted-foreground">
           Paso {paso + 1} de {pasos.length}
         </p>
-        <ol ref={listaRef} className="relative grid max-h-72 gap-1.5 overflow-y-auto" aria-live="polite">
+        <ol
+          ref={listaRef}
+          tabIndex={0}
+          aria-label="Registro de pasos"
+          className="relative grid max-h-72 gap-1.5 overflow-y-auto rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
+        >
           {pasos.slice(0, paso + 1).map((p, i) => (
             <motion.li
               key={`${escenario}-${conTx}-${i}`}
@@ -464,7 +483,7 @@ export function VisualizadorTransaccion({ titulo = 'Confirmar un pedido: con y s
               <p className="text-xs font-semibold">
                 {i + 1}. {p.titulo}
               </p>
-              <pre className="mt-1 overflow-x-auto font-mono text-[11px] leading-relaxed text-fd-foreground">{p.codigo}</pre>
+              <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-fd-foreground">{p.codigo}</pre>
               <p className={cn('mt-1 text-xs', tonoTexto[p.tono])}>{p.resultado}</p>
             </motion.li>
           ))}
@@ -512,6 +531,9 @@ export function VisualizadorTransaccion({ titulo = 'Confirmar un pedido: con y s
           </button>
         </div>
       </div>
+      <p className="sr-only" aria-live="polite">
+        {resumen}
+      </p>
     </section>
   );
 }

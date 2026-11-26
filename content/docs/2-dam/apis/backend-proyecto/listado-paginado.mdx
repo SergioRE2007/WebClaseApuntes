@@ -66,6 +66,9 @@ GET /api/productos?q=teclado&categoriaId=1&orden=precio&dir=asc&page=2&limit=10
   <Mensaje de="Prisma" a="Servicio" tipo="respuesta" titulo="[total, items]">
     El total de los que cumplen el filtro y los de la página pedida.
   </Mensaje>
+  <Mensaje de="Servicio" a="Controlador" tipo="respuesta" titulo="{ items, total, ... }">
+    El servicio calcula `totalPages` con `Math.ceil(total / limit)` y devuelve la página junto con los datos para paginar.
+  </Mensaje>
   <Mensaje de="Controlador" a="Angular" tipo="respuesta" titulo="200 OK">
     `{ items, total, page, limit, totalPages }`: Angular pinta la página y los botones.
   </Mensaje>

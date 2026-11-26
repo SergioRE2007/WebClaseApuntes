@@ -22,7 +22,7 @@ icon: Globe
 | --- | --- | --- |
 | **JSONPlaceholder** | `https://jsonplaceholder.typicode.com` | `angular-http` (27/10): `/posts` (100) y `/comments` (500). También tiene `/albums`, `/photos`, `/todos` y `/users`. |
 | **Fake Store API** | `https://fakestoreapi.com` | `proj-fakestore` (28/10): `/products`, una tienda con 20 productos. |
-| **JSON Server** | `http://localhost:3000` | `proj-game` (desde el 28/10): una API falsa en tu equipo, a partir de un `db.json`. Va en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado). |
+| **JSON Server** | `http://localhost:3000` | `proj-game` (desde el 28/10): una API falsa en tu equipo, a partir de un `db.json`. Va en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado/proj-game). |
 
 Las dos primeras son públicas y devuelven datos de prueba: aceptan `POST`, `PUT` y `DELETE`, pero **no guardan los cambios** de verdad. Antes de programar, abre la URL en el navegador o en Postman para ver qué JSON devuelve. En clase se hizo así con `/posts`, `/posts/1/comments` y los productos.
 
@@ -290,11 +290,11 @@ export class PostsComponent implements OnInit {
 }
 ```
 
-- Primero se guardó en una propiedad normal (`posts: Post[] = []`) y luego se pasó a un **signal**: se escribe con `this.posts.set(...)` y se lee llamándolo, `posts()`. Los signals se explican en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado).
+- Primero se guardó en una propiedad normal (`posts: Post[] = []`) y luego se pasó a un **signal**: se escribe con `this.posts.set(...)` y se lee llamándolo, `posts()`. Los signals se explican en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado/signals).
 - `posts` es `protected` porque la usa la plantilla (con `private` sale el error NG1). El servicio es `private`.
 - Los imports del archivo no se ven enteros en las capturas <Dudoso nota="Se reconstruyen a partir de lo que usa la clase." />. `CommonModule` daba error hasta que se importó arriba del archivo.
 - Después, para poner en la cabecera un enlace al dashboard, se añadió `RouterLink` a `imports` (`imports: [CommonModule, RouterLink]`). Sin él sale *"Can't bind to 'routerLink' since it isn't a known property of 'a'"*.
-- La página se enseña en `localhost:4200/posts` con una ruta de `app.routes.ts` (el router va en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado)).
+- La página se enseña en `localhost:4200/posts` con una ruta de `app.routes.ts` (el router va en [Angular avanzado](/docs/2-dam/acceso-a-datos/angular-avanzado/rutas)).
 
 El 27/10 se hizo también `CommentsService` y `CommentsComponent`, igual que los de posts, con los signals `loading` y `error` que generó la IA de Cursor.
 

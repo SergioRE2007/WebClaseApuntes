@@ -16,17 +16,16 @@ Esta guía es para quien mantiene la web. Todo el contenido vive en archivos **M
   <Folder name="content/docs" defaultOpen>
     <File name="index.mdx  ← portada /docs" />
     <File name="meta.json  ← orden de primer nivel" />
-    <Folder name="1-dam  ← pestaña «1º DAM»" defaultOpen>
+    <Folder name="2-dam  ← pestaña «2º DAM»" defaultOpen>
       <File name="meta.json  ← root: true" />
-      <File name="index.mdx  ← /docs/1-dam" />
-      <Folder name="programacion  ← un módulo" defaultOpen>
+      <File name="index.mdx  ← /docs/2-dam" />
+      <Folder name="desarrollo-de-interfaces  ← un módulo" defaultOpen>
         <File name="meta.json  ← título, icono y orden de los temas" />
         <File name="index.mdx  ← portada del módulo" />
-        <File name="poo-clases-objetos.mdx  ← /docs/1-dam/programacion/poo-clases-objetos" />
+        <File name="de-java-a-csharp.mdx  ← /docs/2-dam/desarrollo-de-interfaces/de-java-a-csharp" />
       </Folder>
-      <Folder name="bases-de-datos" />
+      <Folder name="kotlin" />
     </Folder>
-    <Folder name="2-dam  ← pestaña «2º DAM»" />
     <Folder name="guia-autor  ← esta guía" />
   </Folder>
   <Folder name="public">
@@ -36,9 +35,9 @@ Esta guía es para quien mantiene la web. Todo el contenido vive en archivos **M
   </Folder>
 </Files>
 
-- La **URL** de cada página sale de su ruta: `content/docs/1-dam/programacion/herencia.mdx` → `/docs/1-dam/programacion/herencia`.
+- La **URL** de cada página sale de su ruta: `content/docs/2-dam/desarrollo-de-interfaces/herencia.mdx` → `/docs/2-dam/desarrollo-de-interfaces/herencia`.
 - Usa nombres de archivo **en minúsculas, sin tildes ni espacios**, con guiones: `herencia-y-polimorfismo.mdx`.
-- Los `index.mdx` son la página de la propia carpeta (`/docs/1-dam/programacion`).
+- Los `index.mdx` son la página de la propia carpeta (`/docs/2-dam/desarrollo-de-interfaces`).
 
 ## Añadir un tema nuevo paso a paso
 
@@ -47,7 +46,7 @@ Esta guía es para quien mantiene la web. Todo el contenido vive en archivos **M
 
 ### Crea el archivo
 
-  Dentro de la carpeta del módulo, por ejemplo `content/docs/1-dam/programacion/herencia.mdx`. Lo más rápido es copiar la [plantilla](/docs/guia-autor/plantilla).
+  Dentro de la carpeta del módulo, por ejemplo `content/docs/2-dam/desarrollo-de-interfaces/herencia.mdx`. Lo más rápido es copiar la [plantilla](/docs/guia-autor/plantilla).
 
   </Step>
   <Step>
@@ -89,7 +88,7 @@ Esta guía es para quien mantiene la web. Todo el contenido vive en archivos **M
 
 ## Frontmatter de una página
 
-```mdx title="content/docs/1-dam/programacion/herencia.mdx"
+```mdx title="content/docs/2-dam/desarrollo-de-interfaces/herencia.mdx"
 ---
 title: Herencia y polimorfismo
 description: Cómo reutilizar código con extends, sobrescribir métodos y tratar objetos de forma polimórfica.
@@ -116,7 +115,7 @@ Aquí empieza el contenido...
 
 Cada carpeta puede tener un `meta.json` que define su título, su icono y el orden de sus páginas:
 
-```json title="content/docs/1-dam/programacion/meta.json"
+```json title="content/docs/2-dam/desarrollo-de-interfaces/meta.json"
 {
   "title": "Programación",
   "icon": "Code",
@@ -143,10 +142,10 @@ Cada carpeta puede tener un `meta.json` que define su título, su icono y el ord
 | `"[Texto](url)"` | Enlace en el menú (externo o interno) |
 | `"...carpeta"` | Inserta el contenido de una subcarpeta sin anidarla |
 
-Otras claves útiles del `meta.json`: `"defaultOpen": true` (la carpeta sale desplegada) y `"root": true` (la carpeta es una **pestaña** del menú, como `1-dam`, `2-dam` y esta guía).
+Otras claves útiles del `meta.json`: `"defaultOpen": true` (la carpeta sale desplegada) y `"root": true` (la carpeta es una **pestaña** del menú, como `2-dam` y esta guía).
 
 <Callout type="info" title="No listes «index» en un módulo">
-  En las carpetas de módulo **no** pongas `"index"` en `pages`: así el propio nombre de la carpeta en el menú lleva a su portada. Solo las carpetas raíz (`1-dam`, `2-dam`, `guia-autor`) lo listan para que su portada salga como primera entrada.
+  En las carpetas de módulo **no** pongas `"index"` en `pages`: así el propio nombre de la carpeta en el menú lleva a su portada. Solo las carpetas raíz (`2-dam`, `guia-autor`) lo listan para que su portada salga como primera entrada.
 </Callout>
 
 ### Añadir un módulo nuevo

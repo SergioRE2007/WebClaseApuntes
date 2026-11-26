@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { Play, RotateCcw, TriangleAlert } from 'lucide-react';
+import { Play, RotateCcw, TriangleExclamationPoint } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import {
   avisoCaja,
@@ -94,7 +94,7 @@ export function EstadosPantalla({ retardo = 1600 }: { retardo?: number }) {
             load() que va bien
           </button>
           <button type="button" onClick={() => load(true)} className={botonSecundario}>
-            <TriangleAlert className="size-3.5" aria-hidden />
+            <TriangleExclamationPoint className="size-3.5" aria-hidden />
             load() que falla
           </button>
           <button type="button" onClick={reiniciar} className={botonSecundario}>
@@ -123,25 +123,29 @@ export function EstadosPantalla({ retardo = 1600 }: { retardo?: number }) {
         </div>
 
         <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_15rem]">
-          <pre className="overflow-x-auto rounded-md border bg-fd-muted/40 py-2 text-[12.5px] leading-relaxed" aria-label="Rama del when que se ejecuta">
-            <code className="block min-w-max">
-              {WHEN.map((l, i) => {
-                const activa = l.estado === estado;
-                return (
-                  <span
-                    key={i}
-                    className={cn(
-                      'block border-l-2 px-3 transition-colors',
-                      activa ? 'border-fd-primary bg-fd-primary/10 text-fd-foreground' : 'border-transparent',
-                      !activa && l.estado && 'text-fd-muted-foreground',
-                    )}
-                  >
-                    {l.texto}
-                  </span>
-                );
-              })}
-            </code>
-          </pre>
+          <div className="min-w-0">
+            <p className="mb-1.5 text-xs font-medium text-fd-muted-foreground">Rama del when que se ejecuta</p>
+            <pre className="overflow-x-auto rounded-md border bg-fd-muted/40 py-2 text-[12.5px] leading-relaxed">
+              <code className="block min-w-max">
+                {WHEN.map((l, i) => {
+                  const activa = l.estado === estado;
+                  return (
+                    <span
+                      key={i}
+                      className={cn(
+                        'block border-l-2 px-3 transition-colors motion-reduce:transition-none',
+                        activa ? 'border-fd-primary bg-fd-primary/10 text-fd-foreground' : 'border-transparent',
+                        !activa && l.estado && 'text-fd-muted-foreground',
+                      )}
+                    >
+                      {l.texto}
+                      {activa && <span className="sr-only"> (rama que se ejecuta)</span>}
+                    </span>
+                  );
+                })}
+              </code>
+            </pre>
+          </div>
 
           <Movil estado={estado} errorHecho={errorHecho} reducir={!!reducir} onReintentar={() => load(false)} />
         </div>
@@ -160,24 +164,25 @@ export function EstadosPantalla({ retardo = 1600 }: { retardo?: number }) {
             </p>
           )}
           {estado === 'Error' && (
-            <div className="space-y-2">
-              <p className={cn('rounded-md border px-3 py-2', malCaja)}>
-                <span className={cn('font-medium', malTexto)}>Con el código de clase la app se cierra. </span>
-                La rama <code>Error</code> es <code>TODO()</code>, que lanza <code>NotImplementedError</code> en cuanto
-                se ejecuta.
-              </p>
-              <label className="flex items-center gap-2 text-fd-muted-foreground">
-                <input
-                  type="checkbox"
-                  checked={errorHecho}
-                  onChange={(e) => setErrorHecho(e.target.checked)}
-                  className="size-4 accent-current"
-                />
-                Ver una rama de error hecha (no se dio en clase)
-              </label>
-            </div>
+            <p className={cn('rounded-md border px-3 py-2', malCaja)}>
+              <span className={cn('font-medium', malTexto)}>Con el código de clase la app se cierra. </span>
+              La rama <code>Error</code> es <code>TODO()</code>, que lanza <code>NotImplementedError</code> en cuanto
+              se ejecuta.
+            </p>
           )}
         </div>
+
+        {estado === 'Error' && (
+          <label className="flex items-center gap-2 text-sm text-fd-muted-foreground">
+            <input
+              type="checkbox"
+              checked={errorHecho}
+              onChange={(e) => setErrorHecho(e.target.checked)}
+              className="size-4 accent-current"
+            />
+            Ver una rama de error hecha (no se dio en clase)
+          </label>
+        )}
       </div>
     </section>
   );
@@ -196,7 +201,7 @@ function Movil({
 }) {
   const vista = estado === 'Error' ? (errorHecho ? 'error-hecho' : 'error-clase') : estado;
   return (
-    <div className="mx-auto w-full max-w-60 rounded-2xl border p-2" aria-label="Pantalla simulada">
+    <div role="group" className="mx-auto w-full max-w-60 rounded-2xl border p-2" aria-label="Pantalla simulada">
       <div className="relative h-72 overflow-hidden rounded-xl border bg-fd-card">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
@@ -224,9 +229,12 @@ function Movil({
                     <p className="text-sm font-medium">{t.titulo}</p>
                     <p className="text-xs text-fd-muted-foreground">{t.descripcion}</p>
                     <div className="mt-1 flex items-center justify-between text-xs">
-                      <span>Completada</span>
+                      <span>
+                        Completada
+                        <span className="sr-only">: {t.completada ? 'sí' : 'no'}</span>
+                      </span>
                       <span
-                        aria-label={t.completada ? 'Sí' : 'No'}
+                        aria-hidden
                         className={cn(
                           'flex h-4 w-7 items-center rounded-full border px-0.5',
                           t.completada ? 'justify-end bg-fd-primary' : 'justify-start bg-fd-muted',

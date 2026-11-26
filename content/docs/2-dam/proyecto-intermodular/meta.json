@@ -1,6 +1,11 @@
 {
   "title": "Proyecto Intermodular",
   "pages": [
-    "..."
+    "index",
+    "requisitos-y-donde-se-dieron",
+    "gestion-de-proyectos-y-smart",
+    "desarrollo-agil-y-jira",
+    "git-ramas-y-tags",
+    "despliegue-en-vercel"
   ]
 }

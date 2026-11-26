@@ -434,7 +434,7 @@ class NoteRepositoryInMemory @Inject constructor() : NoteRepository {
 }
 ```
 
-`nextId` se declara antes de usarlo. En Kotlin las propiedades se inicializan en el orden en que están escritas, así que si hubiera un bloque `init` que llamara a `create(...)`, tendría que ir **después** de `nextId`.
+`nextId` se declara antes de usarlo. En Kotlin las propiedades se inicializan en el orden en que están escritas, así que si hubiera un bloque `init` que creara notas de prueba usando `nextId`, tendría que ir **después** de `nextId`. (Desde el `init` no se puede llamar a `create(...)` directamente, porque es `suspend`.)
 
   </Solucion>
 </Ejercicio>

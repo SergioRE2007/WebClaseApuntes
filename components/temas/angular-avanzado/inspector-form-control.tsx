@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import { RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -22,7 +22,9 @@ import {
  * los validadores de clase, sus estados (valid, touched, dirty), el objeto
  * `errors` y la condición con la que la plantilla decide si enseña el mensaje.
  * Las reglas imitan a Validators de Angular: min/max no dan error con el campo
- * vacío (de eso se encarga required).
+ * vacío (de eso se encarga required). Los numéricos empiezan en '' (como stock
+ * en clase, con nonNullable, así que resetForm() vuelve a ''); al borrar un
+ * input type="number" a mano, el accesor de Angular escribe null.
  */
 
 type Campo = 'title' | 'price' | 'stock';
@@ -78,6 +80,7 @@ export function InspectorFormControl({ titulo = 'Inspector de un formulario reac
   const [submitted, setSubmitted] = useState(false);
   const [barrera, setBarrera] = useState(false);
   const [resultado, setResultado] = useState<string | null>(null);
+  const base = useId();
 
   const errores = (c: Campo) => validar(c, campos[c].valor);
   const formValido = (Object.keys(campos) as Campo[]).every((c) => errores(c) === null);
@@ -129,7 +132,7 @@ export function InspectorFormControl({ titulo = 'Inspector de un formulario reac
             const err = errores(c);
             const invalido = err !== null;
             const ver = invalido && (s.touched || s.dirty || (d.conSubmitted && submitted));
-            const id = `inspector-${c}`;
+            const id = `${base}-${c}`;
             return (
               <div key={c} className="grid gap-2 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] sm:gap-4">
                 <div className="grid content-start gap-1.5">
@@ -139,7 +142,7 @@ export function InspectorFormControl({ titulo = 'Inspector de un formulario reac
                   <input
                     id={id}
                     type={d.tipo}
-                    step="any"
+                    step={d.tipo === 'number' ? 'any' : undefined}
                     value={s.valor}
                     onChange={(e) => cambiar(c, e.target.value)}
                     onBlur={() => tocar(c)}
@@ -161,7 +164,7 @@ export function InspectorFormControl({ titulo = 'Inspector de un formulario reac
                 </div>
                 <dl className="grid grid-cols-[auto_minmax(0,1fr)] content-start gap-x-3 gap-y-0.5 font-mono text-xs">
                   <dt className="text-fd-muted-foreground">{c}.value</dt>
-                  <dd className="truncate">{d.tipo === 'number' ? (s.valor === '' ? 'null' : Number(s.valor)) : `'${s.valor}'`}</dd>
+                  <dd className="truncate">{d.tipo === 'number' && s.valor !== '' ? Number(s.valor) : d.tipo === 'number' && s.dirty ? 'null' : `'${s.valor}'`}</dd>
                   <dt className="text-fd-muted-foreground">valid</dt>
                   <dd className={invalido ? malTexto : okTexto}>{String(!invalido)}</dd>
                   <dt className="text-fd-muted-foreground">touched</dt>

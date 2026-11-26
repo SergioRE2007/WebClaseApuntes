@@ -264,7 +264,7 @@ Renombró otra vez la tabla, ahora a `MediaElement`, y ejecutó `npx prisma db p
   </Step>
 </Steps>
 
-Repítelo tú en el simulador. Prueba el orden de clase (renombrar, `migrate status`, `migrate dev`, `migrate reset`) y después la segunda prueba con `db pull` y `generate`:
+Repítelo tú en el simulador. Prueba el orden de clase (renombrar, `migrate status`, `migrate dev`, `migrate reset`) y después la segunda prueba con `db pull` y `generate`. Para simplificar, el simulador renombra siempre a `MediaElement`, el nombre de la segunda prueba (en la primera era `MediaElements`):
 
 <SimuladorMigraciones />
 
@@ -407,6 +407,7 @@ model User {
   phone        String?
   passwordHash String
   createdAt    DateTime @default(now())
+  media        Media[]
 }
 ```
 
@@ -434,6 +435,7 @@ model User {
   name         String
   passwordHash String
   createdAt    DateTime @default(now())
+  media        Media[]
   notes        Note[]
 }
 

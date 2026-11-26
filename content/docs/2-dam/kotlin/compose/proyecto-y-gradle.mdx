@@ -61,7 +61,7 @@ En Android Studio, **New Project** y la plantilla de actividad vacía con Compos
 | `build.gradle.kts` (raíz) | Los plugins que usa el proyecto, declarados sin aplicar. |
 | `gradle/libs.versions.toml` | El **catálogo de versiones**: todas las versiones y librerías en un solo sitio. |
 
-Según crecía el proyecto, en clase se organizó **por *features***: `core/ui`, `core/di`, `features/<x>/data`, `features/<x>/ui`... Esa organización se explica en el [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura).
+Según crecía el proyecto, en clase se organizó **por *features***: `core/ui`, `core/di`, `features/<x>/data`, `features/<x>/ui`... Esa organización se explica en el [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura/capas).
 
 ## `MainActivity` y `setContent`
 
@@ -105,7 +105,7 @@ Según crecía el proyecto, en clase se organizó **por *features***: `core/ui`,
   </Paso>
 </Recorrido>
 
-En la ToDoApp, el contenido de `setContent` era `ToDoAppTheme { ToDoNavHost() }`: el tema y, dentro, la navegación, que decide qué pantalla se ve. Más adelante, la Activity llevó `@AndroidEntryPoint` (Hilt) y la pantalla de inicio (*splash*); eso es del [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura).
+En la ToDoApp, el contenido de `setContent` era `ToDoAppTheme { ToDoNavHost() }`: el tema y, dentro, la navegación, que decide qué pantalla se ve. Más adelante, la Activity llevó `@AndroidEntryPoint` (Hilt) y la pantalla de inicio (*splash*); eso es del [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura/hilt).
 
 <Callout type="info" title="El Greeting de la plantilla">
   En las capturas no sale el código de `Greeting`, solo el resultado en pantalla ("Hello Android!"). En la plantilla de Android Studio es un `Text(text = "Hello $name!", modifier = modifier)`.
@@ -134,48 +134,8 @@ Text(stringResource(id = R.string.splitLabel, splitResult))
 ### Localización en inglés y español <NoDadoEnClase inline />
 
 <NoDadoEnClase>
-  En clase solo se nombró `stringResource` el 07/10. Cómo se monta la traducción completa no se vio.
+  En clase solo se nombró `stringResource` el 07/10. Cómo se monta la traducción completa no se vio: está explicado, con las dos carpetas `values` y `values-es`, los huecos de formato y el Translations Editor, en [Intent implícito y localización](/docs/2-dam/kotlin/para-el-proyecto/intent-y-localizacion).
 </NoDadoEnClase>
-
-Android elige la carpeta de textos según el idioma del móvil: `values-es` si está en español y `values` (la de por defecto) en cualquier otro idioma.
-
-<Tabs items={['values/strings.xml', 'values-es/strings.xml', 'En la pantalla']}>
-  <Tab value="values/strings.xml">
-
-```xml
-<resources>
-    <string name="app_name">Shop</string>
-    <string name="productos">Products</string>
-    <string name="saludo">Hi, %1$s</string>
-</resources>
-```
-
-  </Tab>
-  <Tab value="values-es/strings.xml">
-
-```xml
-<resources>
-    <string name="app_name">Tienda</string>
-    <string name="productos">Productos</string>
-    <string name="saludo">Hola, %1$s</string>
-</resources>
-```
-
-  </Tab>
-  <Tab value="En la pantalla">
-
-```kotlin
-Text(stringResource(R.string.productos))
-Text(stringResource(R.string.saludo, nombreUsuario))
-```
-
-  </Tab>
-</Tabs>
-
-- `%1$s` es un hueco para un texto (el primer argumento). Para un número entero, `%1$d`.
-- La carpeta `values-es` se crea con clic derecho en `res` → New → Android Resource File, eligiendo *Locale* y *es*.
-- Con clic derecho en `strings.xml` → **Open Translations Editor** ves en rojo lo que falta por traducir.
-- No escribas textos a mano en los composables (`Text("Productos")`) si te piden la app en dos idiomas.
 
 ## Gradle: los tres archivos
 

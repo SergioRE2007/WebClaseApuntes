@@ -17,7 +17,7 @@ const TOTAL = 1000;
 const ALTO = 40;
 const VISTA = 240;
 
-function Composicion() {
+function Composicion({ anunciar }: { anunciar: (texto: string) => void }) {
   const reducir = useReducedMotion();
   const [modo, setModo] = useState<'lazy' | 'column'>('lazy');
   const [scroll, setScroll] = useState(0);
@@ -49,6 +49,11 @@ function Composicion() {
     setTotalCompuestas(m === 'column' ? TOTAL : 0);
     setScroll(0);
     if (contenedor.current) contenedor.current.scrollTop = 0;
+    anunciar(
+      m === 'column'
+        ? `Column: se han compuesto las ${TOTAL} filas de golpe.`
+        : 'LazyColumn: solo se componen las filas que se ven.',
+    );
   };
 
   const codigo =
@@ -83,24 +88,37 @@ function Composicion() {
             ref={contenedor}
             onScroll={(e) => setScroll(e.currentTarget.scrollTop)}
             tabIndex={0}
+            role="region"
             aria-label={`Lista de ${TOTAL} pokémon, desplázate para ver más`}
             className="relative overflow-y-auto rounded-md border bg-fd-card focus-visible:outline-2 focus-visible:outline-fd-ring"
             style={{ height: VISTA }}
           >
             <div style={{ height: TOTAL * ALTO }} className="relative">
-              {(modo === 'lazy' ? visibles : Array.from({ length: TOTAL }, (_, i) => i)).map((i) => (
-                <motion.div
-                  key={`${modo}-${i}`}
-                  initial={modo === 'lazy' && !reducir ? { backgroundColor: 'rgba(127,127,127,0.25)' } : false}
-                  animate={{ backgroundColor: 'rgba(127,127,127,0)' }}
-                  transition={{ duration: 0.7 }}
-                  className="absolute inset-x-0 flex items-center justify-between border-b px-3 text-sm"
-                  style={{ top: i * ALTO, height: ALTO }}
-                >
-                  <span>Pokémon #{i + 1}</span>
-                  {modo === 'lazy' && <span className="font-mono text-[10px] text-fd-muted-foreground">compuesto</span>}
-                </motion.div>
-              ))}
+              {modo === 'lazy'
+                ? visibles.map((i) => (
+                    /* El destello marca la fila que se acaba de componer. */
+                    <motion.div
+                      key={`lazy-${i}`}
+                      initial={reducir ? false : { backgroundColor: 'rgba(127,127,127,0.25)' }}
+                      animate={{ backgroundColor: 'rgba(127,127,127,0)' }}
+                      transition={{ duration: 0.7 }}
+                      className="absolute inset-x-0 flex items-center justify-between border-b px-3 text-sm"
+                      style={{ top: i * ALTO, height: ALTO }}
+                    >
+                      <span>Pokémon #{i + 1}</span>
+                      <span className="font-mono text-[10px] text-fd-muted-foreground">compuesto</span>
+                    </motion.div>
+                  ))
+                : /* Column: las 1000 filas existen siempre (divs normales, sin animar). */
+                  Array.from({ length: TOTAL }, (_, i) => (
+                    <div
+                      key={`column-${i}`}
+                      className="absolute inset-x-0 flex items-center border-b px-3 text-sm"
+                      style={{ top: i * ALTO, height: ALTO }}
+                    >
+                      Pokémon #{i + 1}
+                    </div>
+                  ))}
             </div>
           </div>
           <dl className="grid grid-cols-2 gap-2 text-center text-xs">
@@ -135,7 +153,7 @@ const POKEMON = [
   { id: 5, nombre: 'Charmeleon' },
 ];
 
-function Claves() {
+function Claves({ anunciar }: { anunciar: (texto: string) => void }) {
   const [conKey, setConKey] = useState(false);
   const [lista, setLista] = useState(POKEMON);
   /** Sin key: el estado recordado está en la posición (índice). */
@@ -153,6 +171,12 @@ function Claves() {
   const borrarPrimero = () => {
     if (!lista.length) return;
     const [quitado, ...resto] = lista;
+    const favoritos = resto.filter((p, i) => (conKey ? porId[p.id] : porPosicion[i])).map((p) => p.nombre);
+    anunciar(
+      `Has borrado ${quitado.nombre}. ${
+        favoritos.length ? `Favoritos ahora: ${favoritos.join(', ')}.` : 'Ya no queda ningún favorito.'
+      }`,
+    );
     setLista(resto);
     setPorPosicion((p) => p.slice(0, resto.length));
     setPorId((m) => {
@@ -234,7 +258,7 @@ function Claves() {
         </div>
         <div className="min-w-0 space-y-3">
           <CodigoDemo codigo={codigo} titulo="PokemonList.kt" />
-          <p className="border-l-2 border-fd-primary/60 pl-3 text-sm" aria-live="polite">
+          <p className="border-l-2 border-fd-primary/60 pl-3 text-sm">
             {conKey
               ? 'Con key, Compose sabe qué fila es cada pokémon. Al borrar Bulbasaur, su estado se va con él y el corazón no salta a otro.'
               : 'Bulbasaur es favorito. Bórralo: sin key, el estado recordado va con la posición, así que ahora Ivysaur sale como favorito aunque nadie lo ha marcado.'}
@@ -247,6 +271,8 @@ function Claves() {
 
 export function ListaPerezosa() {
   const [pestana, setPestana] = useState<'compone' | 'key'>('compone');
+  /** Única región viva de la demo: fuera de los experimentos, que se montan y desmontan. */
+  const [aviso, setAviso] = useState('');
   return (
     <MotionConfig reducedMotion="user" transition={{ type: 'spring', bounce: 0.1, duration: 0.4 }}>
       <section aria-label="Listas en Compose" className={cn(bloque, '@container')}>
@@ -262,9 +288,15 @@ export function ListaPerezosa() {
               { valor: 'key', texto: '2. Para qué sirve key' },
             ]}
             valor={pestana}
-            onCambio={setPestana}
+            onCambio={(v) => {
+              setPestana(v);
+              setAviso('');
+            }}
           />
-          {pestana === 'compone' ? <Composicion /> : <Claves />}
+          {pestana === 'compone' ? <Composicion anunciar={setAviso} /> : <Claves anunciar={setAviso} />}
+          <p className="sr-only" aria-live="polite">
+            {aviso}
+          </p>
         </div>
       </section>
     </MotionConfig>

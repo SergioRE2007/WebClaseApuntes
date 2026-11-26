@@ -1,34 +1,48 @@
 ---
 title: Kotlin
-description: "Programación Multimedia y Dispositivos Móviles + Programación de Servicios y Procesos: Android, concurrencia, red y servicios, todo con Kotlin."
+description: "Programación Multimedia y Dispositivos Móviles y Programación de Servicios y Procesos, con Kotlin: lo que se ha dado de Android del 07/10 al 18/11 y lo que necesita la app del proyecto."
 ---
 
-## De qué va
+En clase se dan juntos, con **Kotlin**, dos módulos de 2º: **Programación Multimedia y Dispositivos Móviles** (PMDM) y **Programación de Servicios y Procesos** (PSP). Lo que hay hasta ahora es **Android**: una app con Jetpack Compose, ViewModel, Hilt, navegación, Retrofit, Room y DataStore, que se fue montando en varios proyectos de clase (TipCalculator, ToDoApp, PokeApp2627, Room y ToDoOfflineFirst).
 
-En clase damos juntos, con **Kotlin**, dos módulos de 2º:
+Los apuntes están en cuatro bloques. Los tres primeros son lo dado en clase, en orden de estudio; el cuarto es lo que te falta para la app del proyecto.
 
-- **Programación Multimedia y Dispositivos Móviles** (0489): aplicaciones Android, interfaces, persistencia, multimedia y consumo de APIs.
-- **Programación de Servicios y Procesos** (0490): procesos e hilos, corrutinas, comunicaciones en red con sockets y servicios.
+<Cards>
+  <Card title="Kotlin y Jetpack Compose" href="/docs/2-dam/kotlin/compose" description="Kotlin explicado desde Java, el proyecto Android con Gradle y la interfaz: composables, Modifier, estado, Material 3 y listas." />
+  <Card title="Arquitectura Android" href="/docs/2-dam/kotlin/arquitectura" description="Capas, ViewModel con StateFlow, estados de pantalla, Hilt y navegación con rutas tipadas, con la ToDoApp como hilo conductor." />
+  <Card title="Datos: corrutinas, Retrofit, Room y DataStore" href="/docs/2-dam/kotlin/datos" description="Corrutinas y Flow, Retrofit 3 contra PokeAPI, Room 3, el repositorio offline-first y DataStore." />
+  <Card title="Android para el proyecto" href="/docs/2-dam/kotlin/para-el-proyecto" description="Lo que piden los requisitos y no se dio: Room con relaciones, CRUD contra tu API, el token, la barra inferior, intents y localización." />
+</Cards>
 
-## Temas
+## Qué se dio y cuándo
 
-### Dispositivos móviles
+| Fecha | Proyecto | Qué se vio | Dónde está |
+| --- | --- | --- | --- |
+| 07/10 | TipCalculator | Estado en Compose (`remember`, `mutableStateOf`), `TextField`, `Switch` y `Slider`, y el primer `ViewModel` con una `data class` y `copy()`. | [Estado y recomposición](/docs/2-dam/kotlin/compose/estado-y-recomposicion) y [ViewModel y StateFlow](/docs/2-dam/kotlin/arquitectura/viewmodel-y-stateflow) |
+| 09/10 | ToDoApp | `LazyColumn` con `items` y `key`, rutas tipadas con `NavHost`, Hilt con `@Binds` y `hiltViewModel()`. | [Listas con LazyColumn](/docs/2-dam/kotlin/compose/listas), [Navegación](/docs/2-dam/kotlin/arquitectura/navegacion) e [Inyección con Hilt](/docs/2-dam/kotlin/arquitectura/hilt) |
+| 16/10 | ToDoApp | `MutableStateFlow` en el ViewModel, `collectAsStateWithLifecycle()` y el formulario con `TextFieldState`. | [ViewModel y StateFlow](/docs/2-dam/kotlin/arquitectura/viewmodel-y-stateflow) |
+| 23/10 | ToDoApp | Estados sellados (`Loading`, `Success`, `Error`), pantalla con estado y sin estado, y el repositorio con `suspend` y `viewModelScope.launch`. | [Estados de pantalla](/docs/2-dam/kotlin/arquitectura/estados-de-pantalla) y [Corrutinas](/docs/2-dam/kotlin/datos/corrutinas) |
+| 26/10 | PokeApp2627 | PokeAPI y Postman, Retrofit 3 con Gson, DTO y `toModel()`, `NetworkModule` y `@HiltAndroidApp`. | [PokeAPI y Postman](/docs/2-dam/kotlin/datos/pokeapi-y-postman), [Retrofit 3 con Gson](/docs/2-dam/kotlin/datos/retrofit) y [Módulos de Hilt](/docs/2-dam/kotlin/arquitectura/hilt-modulos) |
+| 09/11 | PokeApp2627 | `Flow` y `stateIn`, el repositorio offline-first con una fuente local en memoria y la fila de la lista con `AsyncImage`. | [Flow y stateIn](/docs/2-dam/kotlin/datos/flow-y-statein), [Offline-first](/docs/2-dam/kotlin/datos/offline-first) y [Listas con LazyColumn](/docs/2-dam/kotlin/compose/listas) |
+| 13/11 | Room | Room 3 con KSP y Hilt (`@Entity`, `@Dao`, `@Database`), el catálogo `libs.versions.toml` y los SDK. | [Room 3](/docs/2-dam/kotlin/datos/room) y [El proyecto Android y Gradle](/docs/2-dam/kotlin/compose/proyecto-y-gradle) |
+| 16/11 | PokeApp2627 | La PokeApp leyendo de Room y el Database Inspector (un fragmento de 3 minutos). | [Offline-first](/docs/2-dam/kotlin/datos/offline-first) |
+| 18/11 | ToDoOfflineFirst | DataStore para el modo oscuro, la `TopAppBar` y el tema, grafos anidados y `popBackStack()`. | [DataStore](/docs/2-dam/kotlin/datos/datastore), [Material 3](/docs/2-dam/kotlin/compose/material-3) y [Navegación](/docs/2-dam/kotlin/arquitectura/navegacion) |
 
-1. Entorno Android: Android Studio, Kotlin y ciclo de vida
-2. Interfaces de usuario y navegación
-3. Persistencia local: Room y DataStore
-4. Consumo de servicios web (APIs REST)
-5. Multimedia: audio, vídeo y cámara
-6. Sensores, localización y permisos
+Cada bloque tiene su propia tabla con más detalle. Dentro de las páginas, lo que se vio en clase lleva la fecha y lo que no se dio va marcado como **No dado en clase**.
 
-### Servicios y procesos
-
-1. Programación multiproceso
-2. Hilos, corrutinas y sincronización
-3. Comunicaciones en red: sockets TCP y UDP
-4. Servicios en red
-5. Programación segura y criptografía
-
-<Callout type="info" title="Apuntes en construcción">
-  Estamos añadiendo los apuntes de este módulo poco a poco. Si tienes resúmenes, capturas de clase, ejercicios resueltos o enlaces útiles, súbelos desde [Aportar](/aportar).
+<Callout type="warn" title="No cambies las versiones">
+  El código está escrito para las versiones de clase: Hilt 2.60.1, Navigation Compose 2.10.2, Retrofit 3.0.0 con Gson y Room 3.0.3. Casi todo lo que encuentres en internet es de Room 2, que no se escribe igual.
 </Callout>
+
+## Para la app del proyecto
+
+La app Android es de tema libre, se hace junto con el proyecto intermodular y evalúa a la vez PMDM y PSP. En [Requisitos de la app Android](/docs/2-dam/kotlin/para-el-proyecto/requisitos) tienes cada requisito con la clase en la que se dio (o si no se dio) y la página que lo explica.
+
+La API a la que llama la app es la del backend, en [Infraestructuras de Servicios y APIs](/docs/2-dam/apis). Cómo llegar a ella desde el emulador y mandar el token está en [Conectar con tu API](/docs/2-dam/kotlin/para-el-proyecto/conectar-con-tu-api).
+
+## Próximamente
+
+- **Programación de Servicios y Procesos.** Todavía no hay apuntes de lo propio del módulo (procesos, hilos, sockets y servicios en red). De concurrencia, lo que se ha visto son las corrutinas de Android: [Corrutinas](/docs/2-dam/kotlin/datos/corrutinas).
+- **Multimedia y sensores.** Audio, vídeo, cámara y sensores no salen en las clases recogidas hasta el 18/11.
+
+Si tienes resúmenes, capturas o ejercicios de lo que falta, súbelos desde [Aportar](/aportar).

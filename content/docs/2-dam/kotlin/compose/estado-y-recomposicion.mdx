@@ -94,7 +94,7 @@ Con `by`, la variable tiene que ser `var` si la vas a cambiar, y necesitas los i
 
 - **`remember`** sobrevive a las **recomposiciones**, pero no a que Android recree la Activity.
 - **`rememberSaveable`** sobrevive también a la **recreación de la Activity** (giro de pantalla, cambio de modo oscuro, cambio de idioma) y a que Android mate la app en segundo plano. Lo consigue guardando el valor en el `Bundle` del estado de la Activity, así que solo vale para cosas que se puedan guardar ahí: números, textos, booleanos...
-- Para el estado de **una pantalla entera** (una lista que viene de la API, el resultado de un cálculo), en clase se pasó a un **ViewModel**, que también sobrevive al giro. Se explica en el [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura).
+- Para el estado de **una pantalla entera** (una lista que viene de la API, el resultado de un cálculo), en clase se pasó a un **ViewModel**, que también sobrevive al giro. Se explica en el [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura/viewmodel-y-stateflow).
 
 ## Campos de texto: `TextField` y `TextFieldState`
 
@@ -221,7 +221,7 @@ Un `StateFlow` sí avisa, y `collectAsStateWithLifecycle()` lo convierte en un e
   </Lado>
 </Comparar>
 
-Otro detalle de ese día: el ViewModel se creaba como **valor por defecto del parámetro**, `viewModel: TipCalculatorViewModel = TipCalculatorViewModel()`. Así es un objeto normal: Android no lo guarda ni sobrevive al giro, y se crea otro cada vez que se llama a la pantalla. Desde el 09/10 se usó `hiltViewModel()`, que sí lo hace bien (ver el [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura)).
+Otro detalle de ese día: el ViewModel se creaba como **valor por defecto del parámetro**, `viewModel: TipCalculatorViewModel = TipCalculatorViewModel()`. Así es un objeto normal: Android no lo guarda ni sobrevive al giro, y se crea otro cada vez que se llama a la pantalla. Desde el 09/10 se usó `hiltViewModel()`, que sí lo hace bien (ver el [bloque de arquitectura](/docs/2-dam/kotlin/arquitectura/hilt)).
 
 ## State hoisting: pantalla con estado y sin estado
 
@@ -449,7 +449,7 @@ Con un breakpoint dentro de un composable, el depurador de Android Studio enseñ
     Lo guardas con `remember`, que no sobrevive a la recreación de la Activity. Usa `rememberSaveable` o llévalo al ViewModel.
   </Accordion>
   <Accordion title="La pantalla se queda en blanco al arrancar (Salió en clase)">
-    El 09/11, la carga inicial de datos se hizo con `CoroutineScope(Dispatchers.IO).launch` en el `init` del repositorio, y la lista salía en blanco (con `runBlocking` funcionaba, pero congela la app). No se ve la explicación del profesor; probablemente <Dudoso nota="Interpretación de quien hizo los resúmenes, sin confirmar en clase." /> es porque el `Flow` del DataSource en memoria solo emitía una vez, antes de que llegaran los datos. La solución <NoDadoEnClase inline /> es lanzar la carga con `viewModelScope.launch` en el ViewModel; en clase no se llegó a hacer. Se explica en el [bloque de datos](/docs/2-dam/kotlin/datos).
+    El 09/11, la carga inicial de datos se hizo con `CoroutineScope(Dispatchers.IO).launch` en el `init` del repositorio, y la lista salía en blanco (con `runBlocking` funcionaba, pero congela la app). No se ve la explicación del profesor; probablemente <Dudoso nota="Interpretación de quien hizo los resúmenes, sin confirmar en clase." /> es porque el `Flow` del DataSource en memoria solo emitía una vez, antes de que llegaran los datos. La solución <NoDadoEnClase inline /> es lanzar la carga con `viewModelScope.launch` en el ViewModel; en clase no se llegó a hacer. Se explica en el [bloque de datos](/docs/2-dam/kotlin/datos/corrutinas).
   </Accordion>
 </Accordions>
 

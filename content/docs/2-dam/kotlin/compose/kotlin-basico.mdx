@@ -325,7 +325,7 @@ override suspend fun readAllPokemon(): List<Pokemon> {
 - Hay muchas funciones que reciben una lambda: `first { it.id == id }` devuelve el primer elemento que cumple la condición (y lanza una excepción si no hay ninguno; `firstOrNull` devuelve `null`), `map`, `filter`, `any`... Las lambdas se explican en la [página siguiente](/docs/2-dam/kotlin/compose/kotlin-clases-y-funciones#lambdas-y-tipos-función).
 
 <Callout type="info" title="Las !! de este código">
-  Este fragmento es el de clase y tiene dos `!!` (`body()!!` y `pokemon!!`). Si la API falla en un pokémon, la app se cierra. Cómo hacerlo bien es cosa del [bloque de datos](/docs/2-dam/kotlin/datos) (Retrofit).
+  Este fragmento es el de clase y tiene dos `!!` (`body()!!` y `pokemon!!`). Si la API falla en un pokémon, la app se cierra. Cómo hacerlo bien es cosa del [bloque de datos](/docs/2-dam/kotlin/datos/retrofit) (Retrofit).
 </Callout>
 
 ## Practica

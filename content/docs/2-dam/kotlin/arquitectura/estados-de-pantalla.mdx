@@ -236,7 +236,7 @@ En ToDoOfflineFirst se repitió el patrón con otros nombres: `TaskListUiState` 
 
 ## Pruébalo
 
-La demo reproduce la pantalla de lista con el `when` de clase. Pulsa los botones para lanzar `load()`: se publica `Loading`, la pantalla enseña el indicador y, al rato, llega `Success`. El botón "load() que falla" es un supuesto: el `load()` de clase nunca publica `Error`, pero así ves qué haría la rama. Se ilumina la rama del `when` que se ejecuta.
+La demo reproduce la pantalla de lista con el `when` de clase. Al aparecer ya está cargando, igual que el `init { load() }` del ViewModel. Después pulsa los botones para volver a lanzar `load()`: se publica `Loading`, la pantalla enseña el indicador y, al rato, llega `Success`. El botón "load() que falla" es un supuesto: el `load()` de clase nunca publica `Error`, pero así ves qué haría la rama. Se ilumina la rama del `when` que se ejecuta.
 
 <EstadosPantalla />
 

@@ -200,7 +200,7 @@ export async function loginCtrl(req: Request, res: Response) {
   <Paso lineas="14" titulo="Lo demás: 400">
     Cualquier otro error (sobre todo el de Zod) responde 400 con `e.message`. Con un `ZodError`, ese mensaje es la lista de errores convertida en texto.
   </Paso>
-  <Paso lineas="20-22" titulo="Login correcto: 200">
+  <Paso lineas="21-22" titulo="Login correcto: 200">
     `res.json(data)` con `{ user, token }`.
   </Paso>
   <Paso lineas="24-26" titulo="Credenciales inválidas: 401">
@@ -336,7 +336,7 @@ Hasheada con bcrypt.
 Como el id sale del token, **cada usuario solo puede modificar su propio perfil**: aunque cambie la URL o el body, el token dice quién es.
 
 <NoDadoEnClase titulo="Cómo se protege una ruta con el token">
-  Un middleware estándar que hace lo de la v0.6.0 (leer `Authorization: Bearer`, `jwt.verify` y pasar el id al controlador) está en [Backend para el proyecto](/docs/2-dam/apis/backend-proyecto), con lo que no se ha dado en clase.
+  Un middleware estándar que hace lo de la v0.6.0 (leer `Authorization: Bearer`, `jwt.verify` y pasar el id al controlador) está en [CORS y rutas protegidas](/docs/2-dam/apis/backend-proyecto/cors-y-token), con lo que no se ha dado en clase.
 </NoDadoEnClase>
 
 ## Practica

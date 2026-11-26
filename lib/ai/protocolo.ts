@@ -12,6 +12,7 @@
  *
  * Respuesta OK (200): `application/x-ndjson; charset=utf-8`, una línea JSON por evento:
  *   { "t": "d", "v": "texto" }                 → trozo de texto (delta) de la respuesta
+ *   { "t": "info", "v": "Leyendo «Room»" }      → qué está consultando el tutor (mientras no hay texto)
  *   { "t": "fin", "motivo": MotivoFin }        → la respuesta terminó bien
  *   { "t": "error", "mensaje": "..." }         → error a mitad de stream (mensaje para el alumno)
  * Cabecera opcional `X-Chat-Restantes`: mensajes que le quedan hoy al usuario.
@@ -47,6 +48,7 @@ export type MotivoFin = 'end_turn' | 'max_tokens' | 'refusal' | 'otro';
 
 export type EventoChat =
   | { t: 'd'; v: string }
+  | { t: 'info'; v: string }
   | { t: 'fin'; motivo: MotivoFin }
   | { t: 'error'; mensaje: string };
 

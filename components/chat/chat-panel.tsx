@@ -545,7 +545,7 @@ function Burbuja({
         {mensaje.content ? (
           <ChatMarkdown texto={mensaje.content} enStreaming={escribiendo} onNavegar={onNavegar} />
         ) : escribiendo ? (
-          <IndicadorEscribiendo />
+          <IndicadorEscribiendo texto={mensaje.actividad} />
         ) : null}
 
         {escribiendo && mensaje.content && esUltimo && (
@@ -584,10 +584,10 @@ function Burbuja({
   );
 }
 
-function IndicadorEscribiendo() {
+function IndicadorEscribiendo({ texto }: { texto?: string }) {
   return (
     <p role="status" className="text-sm text-fd-muted-foreground motion-safe:animate-pulse">
-      Escribiendo…
+      {texto ? `${texto}…` : 'Escribiendo…'}
     </p>
   );
 }

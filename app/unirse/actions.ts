@@ -42,7 +42,10 @@ export async function unirseClase(_prev: UnirseState, formData: FormData): Promi
   if (!igual(codigo, env.claseCodigo)) return { mensaje: 'Código incorrecto. Pídeselo a quien gestiona la web.' };
 
   const { error } = await admin.from('perfiles').update({ clase_ok: true, nombre }).eq('id', perfil.id);
-  if (error) return { mensaje: 'Error guardando tu perfil. Inténtalo de nuevo.' };
+  if (error) {
+    console.error('[unirse] No se pudo guardar el perfil', error);
+    return { mensaje: 'Error guardando tu perfil. Inténtalo de nuevo.' };
+  }
 
   const next = String(formData.get('next') ?? '/docs');
   redirect(rutaSegura(next));

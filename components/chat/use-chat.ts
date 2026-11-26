@@ -19,6 +19,8 @@ export interface MensajeUI {
   estado: EstadoMensaje;
   error?: string;
   motivo?: MotivoFin;
+  /** Qué está consultando el tutor antes de empezar a escribir ("Leyendo «Room»"). */
+  actividad?: string;
 }
 
 const CLAVE_STORAGE = 'dam:chat';
@@ -151,6 +153,8 @@ export function useChat(getPagina: () => string) {
           if (evento.t === 'd') {
             acumulado += evento.v;
             programar();
+          } else if (evento.t === 'info') {
+            actualizar(idRespuesta, { actividad: evento.v });
           } else {
             final = evento;
           }

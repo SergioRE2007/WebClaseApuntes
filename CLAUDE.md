@@ -44,7 +44,7 @@ content/docs/              ← TODO el contenido (MDX + meta.json)
 components/interactive/    ← componentes MDX: Quiz, Flashcards, Ejercicio, Mermaid…
 components/mdx.tsx         ← registro de componentes disponibles en cualquier .mdx
 components/chat/           ← Tutor DAM (widget, panel, hook de streaming)
-lib/ai/                    ← prompt del tutor (conocimiento = todos los apuntes), config, errores
+lib/ai/                    ← prompt e índice del tutor, herramientas para leer páginas, config, errores
 app/api/chat/route.ts      ← endpoint del chat (auth, límite diario, streaming NDJSON)
 app/aportar, app/admin     ← aportaciones de alumnos y panel del dueño
 lib/auth.ts                ← getPerfil / requireAlumno / requireAdmin
@@ -64,7 +64,7 @@ proxy.ts                   ← refresca la sesión, protege rutas y redirige al 
 - Comprueba que las respuestas de los tests y las soluciones son **correctas**, porque los alumnos estudian con ellas.
 - Valida siempre con `npm run build`: un MDX roto rompe el despliegue.
 - El Tutor IA lee automáticamente todo `content/docs`, así que no hay que tocar nada más.
-- Pendiente de decidir el dueño: el texto de los apuntes pasa de `MAX_CARACTERES_APUNTES` (280.000) en `lib/ai/conocimiento.ts`, así que el tutor solo tiene el texto completo de parte de las páginas (del resto ve el índice y la página en la que está el alumno). No cambies el límite sin preguntar.
+- El tutor no recibe todos los apuntes: tiene el índice (títulos y apartados) y la página actual, y lee otras con las herramientas `leer_pagina` y `buscar_en_apuntes` (`lib/ai/conocimiento.ts`, bucle en `app/api/chat/route.ts`, topes en `LIMITES_TURNO`).
 
 ## Diseño
 

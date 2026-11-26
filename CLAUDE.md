@@ -4,7 +4,31 @@ Web de apuntes interactivos para la clase de **2º DAM** (unos 20 alumnos). Los 
 
 Producción: https://web-clase-apuntes.vercel.app
 
-> Los apuntes de 2º DAM salen del material de clase del dueño (no está en git: `TodoTFG-Apuntes/` y `Extras para TodoTFG/` en local). Sus reglas: lo no dado va con `<NoDadoEnClase>`, lo dudoso con `<Dudoso>`, lo que no se vio con `<NoSeVio>`; ni nombres de profesores ni emojis; versiones de clase (Angular 19, Room 3, Retrofit 3, Prisma 6, Zod 4, Express 5).
+## Estado (26/11/2026)
+
+- **Rama de producción: `claude/focused-ritchie-lt6oij`.** Trabaja en ella o en una rama nueva que salga de ella. `wip/apuntes-curso-2dam` ya está fusionada entera y no tiene nada pendiente.
+- **Publicado:**
+  - Los apuntes de 2º DAM: 105 páginas en 5 asignaturas, con demos en `components/temas/<bloque>/`. 1º DAM se quitó porque ya no sirve.
+  - La portada con los módulos en tarjetas.
+  - El Tutor IA con herramientas (ver más abajo).
+- **Pendiente o por revisar:**
+  - El tutor nuevo aún no se ha probado con una conversación real. Si falla, mira los logs de Vercel de `/api/chat`.
+  - SGE e IPE II salen en el menú sin apuntes.
+
+## Material de origen de los apuntes
+
+- Los apuntes de 2º DAM salen del material de clase del dueño: `TodoTFG-Apuntes/` (resúmenes "Lo dado en clase", `Clases/`, `Requisitos/`) y `Extras para TodoTFG/`, cuyo "Contexto para la web.md" tiene las reglas.
+- **No está en git** (va en `.gitignore`). Está en el historial (commit `343b6c0`, incluido en la rama de producción). Para recuperarlo en otro PC, sin que vuelva a git:
+  ```bash
+  git restore --source=343b6c0 --worktree -- TodoTFG-Apuntes "Extras para TodoTFG"
+  ```
+  La copia original está en el PC del dueño, en `C:/Users/sergi/Documents/TFG/Primeros pasos/TodoTFG-Apuntes`.
+- **Reglas del material:**
+  - Lo no dado en clase va con `<NoDadoEnClase>`, lo dudoso con `<Dudoso>` y lo que no se vio con `<NoSeVio>`.
+  - Las prácticas raras de clase van como aviso con `<Comparar>`.
+  - Ni nombres de profesores ni emojis.
+  - Las versiones de clase no se cambian: Angular 19, Room 3, Retrofit 3 con Gson, Prisma 6, Zod 4 y Express 5.
+- Los scripts de los workflows que generaron y revisaron los apuntes están en `scripts/workflows/`.
 
 ## Asignaturas de 2º DAM (así las ha confirmado el dueño)
 
@@ -21,6 +45,7 @@ npm install          # el postinstall ejecuta fumadocs-mdx (genera .source/)
 npm run dev          # http://localhost:3000
 npm run typecheck    # tsc --noEmit
 npm run build        # compila todos los MDX: úsalo para validar contenido nuevo
+node scripts/validar-mdx.mjs content/docs   # valida los MDX en segundos, sin build
 ```
 
 - **En local sin `.env.local`** la web arranca en *modo demo*: todos sois admin y no hay Supabase. Para probar con datos reales, copia `.env.example` a `.env.local` y rellénalo.
@@ -64,7 +89,7 @@ proxy.ts                   ← refresca la sesión, protege rutas y redirige al 
 - Comprueba que las respuestas de los tests y las soluciones son **correctas**, porque los alumnos estudian con ellas.
 - Valida siempre con `npm run build`: un MDX roto rompe el despliegue.
 - El Tutor IA lee automáticamente todo `content/docs`, así que no hay que tocar nada más.
-- El tutor no recibe todos los apuntes: tiene el índice (títulos y apartados) y la página actual, y lee otras con las herramientas `leer_pagina` y `buscar_en_apuntes` (`lib/ai/conocimiento.ts`, bucle en `app/api/chat/route.ts`, topes en `LIMITES_TURNO`).
+- El tutor no recibe todos los apuntes, porque ocupan unos 1,9 millones de caracteres: tiene el índice (títulos y apartados) y la página actual, y lee otras con las herramientas `leer_pagina` y `buscar_en_apuntes` (`lib/ai/conocimiento.ts`, bucle en `app/api/chat/route.ts`, topes en `LIMITES_TURNO`).
 
 ## Diseño
 
@@ -76,6 +101,12 @@ Estilo de documentación limpia y minimalista: fondo blanco o casi negro, un sol
 - Nunca subas secretos al repo: `.env*` está en `.gitignore`. Las claves de Supabase (`SUPABASE_SERVICE_ROLE_KEY`) y de Anthropic (`ANTHROPIC_API_KEY`) solo van en Vercel o en `.env.local`.
 - El cliente de Supabase con service role solo se usa en el servidor y solo cuando RLS no basta. Las server actions vuelven a comprobar la autorización por su cuenta.
 - Si cambias la base de datos, actualiza `supabase/schema.sql`, que debe poder ejecutarse varias veces sin romper nada, y aplica el cambio en Supabase.
+
+## Trampas conocidas
+
+- **En Vercel no hay archivos `.mdx` en tiempo de ejecución.** Usa solo `page.data.getText('processed')`, que se genera al compilar. `getText('raw')` lee el disco y rompe la página con un `ENOENT`: pasó con todas las páginas de tema.
+- **El proyecto de Supabase no trae los permisos por defecto en `public`.** Cada tabla o función nueva necesita sus `grant` (mira el bloque "Permisos de tabla" de `schema.sql`). Sin ellos falla con `permission denied` aunque RLS esté bien: pasó con el código de clase y con guardar el perfil.
+- Los iconos del frontmatter tienen que existir en el objeto `icons` de `lucide-react`. Por ejemplo, `TriangleAlert` no existe: es `TriangleExclamationPoint`.
 
 ## Despliegue e infraestructura
 

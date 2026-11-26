@@ -19,7 +19,8 @@ export async function GET(request: NextRequest) {
   if (code) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(`${origin}${next}`);
+    // Pasa por /unirse: si aún no ha metido el código de clase se lo pide; si ya está dentro, /unirse redirige a `next`.
+    if (!error) return NextResponse.redirect(`${origin}/unirse?next=${encodeURIComponent(next)}`);
     console.error('[auth/callback] exchangeCodeForSession:', error.code ?? error.message);
     // Sin la cookie de verificación (otro navegador/dominio) el intercambio falla
     return NextResponse.redirect(`${origin}/login?error=navegador`);

@@ -17,7 +17,7 @@ export interface HeroProps {
 
 export function Hero({ logueado, enClase, urlCurso, curso }: HeroProps) {
   return (
-    <header>
+    <header className="lg:pt-2">
       <h1 className="text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">Apuntes de {curso} de DAM</h1>
       <p className="mt-3 max-w-xl text-[17px] leading-relaxed text-fd-muted-foreground">
         Temas, ejercicios y tests de cada módulo. Si te atascas, pregunta al tutor.

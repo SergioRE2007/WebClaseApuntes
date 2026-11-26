@@ -4,8 +4,15 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { getPerfil } from '@/lib/auth';
 import { demoPermitido, env, isSupabaseConfigured } from '@/lib/env';
 import { createServiceClient } from '@/lib/supabase/server';
-import { anthropicConfigurado, ESFUERZO_CHAT, getAnthropic, MAX_TOKENS_CHAT, MODELO_CHAT } from '@/lib/ai/config';
-import { getSistema } from '@/lib/ai/conocimiento';
+import {
+  anthropicConfigurado,
+  ESFUERZO_CHAT,
+  getAnthropic,
+  MAX_RONDAS_HERRAMIENTAS,
+  MAX_TOKENS_CHAT,
+  MODELO_CHAT,
+} from '@/lib/ai/config';
+import { crearEjecutorHerramientas, getSistema, HERRAMIENTAS } from '@/lib/ai/conocimiento';
 import { traducirError } from '@/lib/ai/errores';
 import {
   CABECERA_RESTANTES,
@@ -18,6 +25,8 @@ import {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// Hasta 4 llamadas a Claude seguidas (3 vueltas con herramientas + la respuesta): el bucle vigila este plazo
+// y, si se acerca, pide la respuesta final sin herramientas.
 export const maxDuration = 60;
 
 const esquema = z.object({
@@ -171,8 +180,12 @@ export async function POST(request: Request) {
     }
   }
 
-  // 5. Llamada a Claude en streaming
+  // 5. Llamada a Claude en streaming, con bucle de herramientas (leer_pagina / buscar_en_apuntes)
   const uso = { entrada: 0, salida: 0 };
+  const sumarUso = (u: Anthropic.Usage) => {
+    uso.entrada += (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
+    uso.salida += u.output_tokens ?? 0;
+  };
   let marcarTerminado!: () => void;
   const terminado = new Promise<void>((r) => (marcarTerminado = r));
   after(async () => {
@@ -180,21 +193,40 @@ export async function POST(request: Request) {
     await registrarUso(perfil.id, uso.entrada, uso.salida);
   });
 
-  let stream: ReturnType<Anthropic['messages']['stream']>;
-  let iterador: AsyncIterator<Anthropic.MessageStreamEvent>;
-  let primero: IteratorResult<Anthropic.MessageStreamEvent>;
-  try {
-    const system = await getSistema({ pagina: parsed.data.pagina, nombre: perfil.nombre });
-    stream = getAnthropic().messages.stream(
+  // La conversación crece dentro de este turno con las llamadas a herramientas y sus resultados.
+  // Los bloques del asistente (incluidos los de pensamiento) se devuelven tal cual, sin tocarlos.
+  const conversacion: Anthropic.MessageParam[] = [...mensajes];
+  let system: Anthropic.TextBlockParam[] = [];
+  // Topes de herramientas de este mensaje (páginas, búsquedas, texto): ver LIMITES_TURNO.
+  const ejecutarHerramienta = crearEjecutorHerramientas(parsed.data.pagina);
+  const inicio = Date.now();
+  /** Milisegundos que quedan hasta que Vercel corte la función. */
+  const restante = () => maxDuration * 1000 - (Date.now() - inicio);
+
+  const lanzar = (ultimaRonda: boolean) =>
+    getAnthropic().messages.stream(
       {
         model: MODELO_CHAT,
         max_tokens: MAX_TOKENS_CHAT,
         output_config: { effort: ESFUERZO_CHAT },
         system,
-        messages: mensajes,
+        // Siempre las mismas herramientas y en el mismo orden: forman parte del prefijo cacheado.
+        tools: HERRAMIENTAS,
+        // En la última vuelta ya no puede consultar más: responde con lo que tenga.
+        ...(ultimaRonda ? { tool_choice: { type: 'none' as const } } : {}),
+        messages: [...conversacion],
+        // Caché automática en el último bloque: cada vuelta reutiliza lo que ya se mandó en la anterior.
+        cache_control: { type: 'ephemeral' },
       },
       { signal: request.signal },
     );
+
+  let stream: ReturnType<typeof lanzar>;
+  let iterador: AsyncIterator<Anthropic.MessageStreamEvent>;
+  let primero: IteratorResult<Anthropic.MessageStreamEvent>;
+  try {
+    system = await getSistema({ pagina: parsed.data.pagina, nombre: perfil.nombre });
+    stream = lanzar(false);
     iterador = stream[Symbol.asyncIterator]();
     // Esperamos al primer evento para poder devolver un status HTTP real si falla (429, 529…).
     primero = await iterador.next();
@@ -207,91 +239,119 @@ export async function POST(request: Request) {
   }
 
   const encoder = new TextEncoder();
-  let motivo: MotivoFin = 'otro';
-  let pendiente: IteratorResult<Anthropic.MessageStreamEvent> | null = primero;
   let cerrado = false;
 
-  const procesar = (evento: Anthropic.MessageStreamEvent): EventoChat | null => {
-    switch (evento.type) {
-      case 'message_start': {
-        const u = evento.message.usage;
-        uso.entrada +=
-          (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
-        uso.salida += u.output_tokens ?? 0;
-        return null;
-      }
-      case 'message_delta': {
-        // output_tokens en message_delta es acumulado
-        if (evento.usage?.output_tokens != null) uso.salida = evento.usage.output_tokens;
-        const sr = evento.delta.stop_reason;
-        motivo = sr === 'end_turn' || sr === 'max_tokens' || sr === 'refusal' ? sr : sr ? 'otro' : motivo;
-        return null;
-      }
-      case 'content_block_delta':
-        return evento.delta.type === 'text_delta' && evento.delta.text ? { t: 'd', v: evento.delta.text } : null;
-      default:
-        return null;
-    }
-  };
-
   const cuerpo = new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      if (cerrado) return;
-      try {
-        while (true) {
-          const r: IteratorResult<Anthropic.MessageStreamEvent> = pendiente ?? (await iterador.next());
-          pendiente = null;
-          if (r.done) {
-            // El iterador del SDK se cierra en silencio si llega un error SSE o se corta la
-            // conexión; stream.done() rechaza con ese error para que lo veamos abajo.
-            await stream.done();
-            if (motivo === 'refusal') {
-              controller.enqueue(
-                encoder.encode(
-                  serializarEvento({
-                    t: 'd',
-                    v: '\n\nLo siento, no puedo ayudarte con eso. Prueba a reformular la pregunta o pregúntame sobre los apuntes.',
-                  }),
-                ),
-              );
-            }
-            controller.enqueue(encoder.encode(serializarEvento({ t: 'fin', motivo })));
-            cerrado = true;
-            controller.close();
-            marcarTerminado();
-            return;
-          }
-          const salida = procesar(r.value);
-          if (salida) {
-            controller.enqueue(encoder.encode(serializarEvento(salida)));
-            return;
-          }
+    async start(controller) {
+      const enviar = (evento: EventoChat) => {
+        if (cerrado) return;
+        try {
+          controller.enqueue(encoder.encode(serializarEvento(evento)));
+        } catch {
+          cerrado = true; // el cliente ya se fue
         }
-      } catch (e) {
+      };
+      const cerrar = () => {
+        if (cerrado) return;
         cerrado = true;
-        const { mensaje } = traducirError(e);
-        if (!request.signal.aborted) console.error('[chat] Error a mitad de respuesta', e);
-        if (!request.signal.aborted) {
-          try {
-            controller.enqueue(encoder.encode(serializarEvento({ t: 'error', mensaje })));
-            controller.close();
-          } catch {
-            // el cliente ya se fue
-          }
-        } else {
-          try {
-            controller.close();
-          } catch {
-            // ya cerrado
-          }
+        try {
+          controller.close();
+        } catch {
+          // ya cerrado
         }
+      };
+
+      let pendiente: IteratorResult<Anthropic.MessageStreamEvent> | null = primero;
+      let huboTexto = false; // ya se ha mandado texto al alumno
+      let separar = false; // hubo herramientas desde el último texto: separa los párrafos
+      let motivo: MotivoFin = 'otro';
+
+      try {
+        for (let ronda = 0; ; ronda++) {
+          // Reenvía el texto de esta vuelta según llega.
+          while (true) {
+            const r: IteratorResult<Anthropic.MessageStreamEvent> = pendiente ?? (await iterador.next());
+            pendiente = null;
+            if (r.done) break;
+            const ev = r.value;
+            if (ev.type === 'content_block_delta' && ev.delta.type === 'text_delta' && ev.delta.text) {
+              if (separar && huboTexto) enviar({ t: 'd', v: '\n\n' });
+              separar = false;
+              huboTexto = true;
+              enviar({ t: 'd', v: ev.delta.text });
+            }
+          }
+
+          // El iterador se cierra en silencio si llega un error SSE o se corta la conexión;
+          // finalMessage() rechaza con ese error para que lo veamos abajo.
+          const mensaje = await stream.finalMessage();
+          sumarUso(mensaje.usage);
+
+          const sr = mensaje.stop_reason;
+          const usos = mensaje.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
+          // Solo se ejecutan herramientas si la vuelta terminó pidiéndolas (nunca tras refusal o max_tokens).
+          if (sr !== 'tool_use' || usos.length === 0) {
+            motivo = sr === 'end_turn' || sr === 'max_tokens' || sr === 'refusal' ? sr : 'otro';
+            break;
+          }
+
+          // Sin tiempo para otra llamada: se corta aquí con lo que haya.
+          if (restante() < 12_000) {
+            enviar({
+              t: 'd',
+              v: `${huboTexto ? '\n\n' : ''}No me ha dado tiempo a consultar los apuntes. Vuelve a preguntármelo, mejor algo más concreto.`,
+            });
+            motivo = 'otro';
+            break;
+          }
+          // Última vuelta si se agotan las vueltas o queda poco tiempo: ya no podrá usar herramientas.
+          const ultima = ronda + 1 >= MAX_RONDAS_HERRAMIENTAS || restante() < 35_000;
+
+          conversacion.push({ role: 'assistant', content: mensaje.content });
+          // Todas las respuestas a herramientas van juntas en un único mensaje del usuario.
+          const resultados = await Promise.all(
+            usos.map(async (u): Promise<Anthropic.ToolResultBlockParam> => {
+              const res = await ejecutarHerramienta(u.name, u.input);
+              if (!huboTexto) enviar({ t: 'info', v: res.etiqueta });
+              return { type: 'tool_result', tool_use_id: u.id, content: res.contenido, ...(res.error ? { is_error: true } : {}) };
+            }),
+          );
+          conversacion.push({
+            role: 'user',
+            content: ultima
+              ? [...resultados, { type: 'text', text: '(Ya no puedes consultar más los apuntes: responde ahora con lo que tienes.)' }]
+              : resultados,
+          });
+          separar = true;
+
+          stream = lanzar(ultima);
+          iterador = stream[Symbol.asyncIterator]();
+        }
+
+        if (motivo === 'refusal') {
+          enviar({
+            t: 'd',
+            v: `${huboTexto ? '\n\n' : ''}Lo siento, no puedo ayudarte con eso. Prueba a reformular la pregunta o pregúntame sobre los apuntes.`,
+          });
+        }
+        enviar({ t: 'fin', motivo });
+        cerrar();
+      } catch (e) {
+        const { mensaje } = traducirError(e);
+        // Si falló una vuelta antes de escribir nada al alumno, ese mensaje no cuenta para el límite de hoy.
+        if (!huboTexto && cupoContado && !request.signal.aborted) await devolverCupo(perfil.id);
+        if (!request.signal.aborted) {
+          console.error('[chat] Error a mitad de respuesta', e);
+          enviar({ t: 'error', mensaje });
+        }
+        cerrar();
+      } finally {
         marcarTerminado();
       }
     },
     cancel() {
       cerrado = true;
       stream.abort();
-      marcarTerminado();
     },
   });
 

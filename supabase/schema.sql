@@ -245,6 +245,14 @@ revoke all on function public.unirse_intento(uuid, int) from public, anon, authe
 -- Solo el servidor (service role) las llama; sin este grant falla con "permission denied".
 grant execute on function public.unirse_intento(uuid, int) to service_role;
 
+-- Permisos de tabla. En proyectos de Supabase sin los permisos por defecto en `public`,
+-- sin esto todo falla con "permission denied" aunque RLS esté bien. RLS sigue decidiendo las filas.
+grant select, insert, update, delete on public.perfiles, public.aportaciones, public.chat_uso, public.unirse_intentos to service_role;
+grant select on public.perfiles to authenticated;
+grant update (nombre) on public.perfiles to authenticated;
+grant select, insert, update, delete on public.aportaciones to authenticated;
+grant select on public.chat_uso to authenticated;
+
 -- ---------- Storage: bucket privado para aportaciones ----------
 -- Mantén esta lista igual que MIMES_PERMITIDOS en lib/aportaciones.ts
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

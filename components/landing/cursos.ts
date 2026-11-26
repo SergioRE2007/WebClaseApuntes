@@ -47,11 +47,30 @@ function profundidad(url: string): number {
   return url.replace(/^\/docs\/?/, '').split('/').filter(Boolean).length;
 }
 
+function todasLasUrls(node: PageTree.Node): string[] {
+  if (node.type === 'page') return node.external ? [] : [node.url];
+  if (node.type === 'folder') return [...(node.index ? [node.index.url] : []), ...node.children.flatMap(todasLasUrls)];
+  return [];
+}
+
+/**
+ * Portada de una carpeta. Si su meta.json lista "index" en `pages`, Fumadocs la deja como un hijo
+ * normal en vez de en `folder.index`: es la página cuya url es prefijo de todas las demás.
+ */
+function portadaDe(node: PageTree.Folder): PageTree.Item | undefined {
+  if (node.index) return node.index;
+  const resto = node.children.flatMap(todasLasUrls);
+  return node.children.find(
+    (c): c is PageTree.Item =>
+      c.type === 'page' && resto.length > 1 && resto.every((u) => u === c.url || u.startsWith(`${c.url}/`)),
+  );
+}
+
 function urlsDe(node: PageTree.Node): string[] {
   if (node.type === 'page') return node.external ? [] : [node.url];
   // Las portadas de carpeta (index) no son temas: nunca se marcan como completadas.
   if (node.type === 'folder') {
-    const indice = node.index?.url;
+    const indice = portadaDe(node)?.url;
     return node.children.flatMap(urlsDe).filter((u) => u !== indice);
   }
   return [];
@@ -59,13 +78,14 @@ function urlsDe(node: PageTree.Node): string[] {
 
 function aModulo(node: PageTree.Folder | PageTree.Item, i: number): ModuloResumen | null {
   const paginas = urlsDe(node);
+  const portada = node.type === 'folder' ? portadaDe(node) : undefined;
   // Un módulo vacío sigue apareciendo (con su portada) y se marca como "Próximamente".
-  const url = node.type === 'page' ? node.url : (node.index?.url ?? paginas[0]);
+  const url = node.type === 'page' ? node.url : (portada?.url ?? paginas[0]);
   if (!url) return null;
   return {
     id: node.$id ?? `${url}-${i}`,
     nombre: texto(node.name) || 'Módulo',
-    descripcion: texto(node.description) || (node.type === 'folder' ? texto(node.index?.description) : '') || null,
+    descripcion: texto(node.description) || texto(portada?.description) || null,
     icono: node.icon ?? null,
     url,
     paginas,
@@ -125,11 +145,11 @@ export function getCursos(): CursoResumen[] {
       cerrarActual();
       // La portada del curso (/docs/1-dam) no es un módulo.
       const hijos = node.children.filter(
-        (c) => c.type !== 'separator' && !(c.type === 'page' && (c.url === node.index?.url || profundidad(c.url) <= 1)),
+        (c) => c.type !== 'separator' && !(c.type === 'page' && (c.url === portadaDe(node)?.url || profundidad(c.url) <= 1)),
       );
       // Si el curso no tiene subcarpetas, sus páginas hacen de módulos.
       cursos.push(
-        cursoDesdeNodos(node.$id ?? `curso-${cursos.length}`, texto(node.name), hijos, node.index?.url ?? null),
+        cursoDesdeNodos(node.$id ?? `curso-${cursos.length}`, texto(node.name), hijos, portadaDe(node)?.url ?? null),
       );
       continue;
     }

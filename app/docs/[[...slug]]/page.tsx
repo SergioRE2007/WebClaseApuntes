@@ -21,7 +21,9 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
   const MDX = page.data.body;
   const tema = esTema(page);
   // Si el autor ya puso <MarcarCompletado /> en el MDX, no lo duplicamos.
-  const conMarcar = tema && !(await page.data.getText('raw')).includes('<MarcarCompletado');
+  // Ojo: 'processed' se genera al compilar; 'raw' lee el .mdx del disco y en Vercel ese archivo
+  // no existe (la página fallaba con ENOENT).
+  const conMarcar = tema && !(await page.data.getText('processed')).includes('<MarcarCompletado');
 
   return (
     <DocsPage
